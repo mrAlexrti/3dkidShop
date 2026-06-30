@@ -1,0 +1,188 @@
+// Prisma schema — интернет-магазин
+// Запуск: npx prisma db push  &&  npm run db:seed
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Auth (Auth.js) ----------
+
+enum Role {
+  ADMIN
+  MANAGER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  passwordHash  String?
+  role          Role      @default(MANAGER)
+  createdAt     DateTime  @default(now())
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------- Каталог ----------
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  imageUrl    String?
+  order       Int       @default(0)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+}
+
+model Product {
+  id            String          @id @default(cuid())
+  name          String
+  slug          String          @unique
+  description   String          @db.Text
+  price         Decimal         @db.Decimal(10, 2)
+  oldPrice      Decimal?        @db.Decimal(10, 2)
+  sku           String?         @unique
+  stock         Int             @default(0)
+  isFeatured    Boolean         @default(false)
+  isNew         Boolean         @default(false)
+  isActive      Boolean         @default(true)
+  categoryId    String
+  category      Category        @relation(fields: [categoryId], references: [id])
+  images        ProductImage[]
+  options       ProductOption[]
+  attributes    ProductAttribute[]
+  orderItems    OrderItem[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([categoryId])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  order     Int     @default(0)
+}
+
+// Опции товара, напр. "Размер" -> ["10cm","15cm"], "Материал" -> ["Глянец","Матовый"]
+model ProductOption {
+  id        String              @id @default(cuid())
+  productId String
+  product   Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  values    ProductOptionValue[]
+}
+
+model ProductOptionValue {
+  id              String        @id @default(cuid())
+  optionId        String
+  option          ProductOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  value           String
+  priceModifier   Decimal       @default(0) @db.Decimal(10, 2)
+}
+
+// Характеристики товара (ключ-значение), напр. "Материал" / "Винил"
+model ProductAttribute {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  key       String
+  value     String
+}
+
+// ---------- Отзывы ----------
+
+model Review {
+  id        String   @id @default(cuid())
+  author    String
+  rating    Int
+  text      String   @db.Text
+  avatarUrl String?
+  createdAt DateTime @default(now())
+}
+
+// ---------- Заказы ----------
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  number          String      @unique
+  status          OrderStatus @default(PENDING)
+  customerName    String
+  customerEmail   String
+  customerPhone   String
+  shippingAddress String
+  city            String
+  postalCode      String
+  comment         String?
+  paymentMethod   String
+  subtotal        Decimal     @db.Decimal(10, 2)
+  shippingCost    Decimal     @default(0) @db.Decimal(10, 2)
+  total           Decimal     @db.Decimal(10, 2)
+  items           OrderItem[]
+  createdAt       DateTime    @default(now())
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+  productName String
+  optionsJson String? // JSON-строка выбранных опций
+  price       Decimal @db.Decimal(10, 2)
+  quantity    Int
+}
+
+// ---------- Контент сайта (управляется из админки) ----------
+
+model SiteContent {
+  id    String @id @default(cuid())
+  key   String @unique // напр. "hero_title", "hero_subtitle", "hero_image"
+  value String @db.Text
+}

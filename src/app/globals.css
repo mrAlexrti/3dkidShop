@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --header-h: 104px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #fbf7f2;
+  background-image:
+    linear-gradient(rgba(255, 77, 129, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 77, 129, 0.14) 1px, transparent 1px);
+  background-size: 28px 28px;
+  color: #221a1d;
+}
+
+/* Стеклянный эффект (glassmorphism) для хедера, фильтров, бейджей */
+.glass {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.glass-pink {
+  background: rgba(255, 77, 129, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #ffc4d4;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.container-shop {
+  max-width: 1320px;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
