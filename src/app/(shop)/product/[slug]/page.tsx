@@ -48,7 +48,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         <AnimatedSection delay={0.1}>
           <p className="text-xs uppercase tracking-wide text-pink-600">{product.category.name}</p>
           <h1 className="mt-2 font-display text-3xl text-ink">{product.name}</h1>
-          <p className="mt-2 text-2xl font-semibold text-pink-600">{formatPrice(product.price)}</p>
+          <p className="mt-2 text-2xl font-semibold text-pink-600">{formatPrice(Number(product.price))}</p>
 
           <p className="mt-5 text-sm leading-relaxed text-ink/70">{product.description}</p>
 
