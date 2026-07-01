@@ -6,7 +6,8 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
   return (
     <>
       <Header />
-      <main className="pt-[var(--header-h)]">{children}</main>
+      {/* pt — отступ под фиксированный хедер (розовая шапка + навигация) */}
+      <main className="pt-[128px]">{children}</main>
       <Footer />
       <CartDrawer />
     </>

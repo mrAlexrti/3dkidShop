@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --header-h: 104px;
+  --header-h: 128px;
 }
 
 html {

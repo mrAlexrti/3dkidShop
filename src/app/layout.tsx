@@ -24,8 +24,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ru">
-      <body className={`${manrope.variable} ${fraunces.variable} font-sans antialiased`}>
+    // suppressHydrationWarning на html+body устраняет Hydration Error от
+    // браузерных расширений (LastPass, Bitwarden, Google Translate и др.),
+    // которые добавляют свои атрибуты вроде bis_register прямо в DOM.
+    <html lang="ru" suppressHydrationWarning>
+      <body
+        className={`${manrope.variable} ${fraunces.variable} font-sans antialiased`}
+        suppressHydrationWarning
+      >
         <Providers>
           {children}
           <Toaster position="bottom-right" richColors />
