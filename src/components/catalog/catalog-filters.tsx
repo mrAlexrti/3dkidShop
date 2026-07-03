@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Search } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 
 type Category = { id: string; name: string; slug: string };
@@ -19,19 +19,45 @@ export function CatalogFilters({ categories }: { categories: Category[] }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+
+  // Синхронизируем search с URL каждый раз при изменении searchParams
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
+  useEffect(() => {
+    setSearch(searchParams.get("q") ?? "");
+  }, [searchParams]);
 
   const activeCategory = searchParams.get("category") ?? "";
   const activeSort = searchParams.get("sort") ?? "newest";
 
   function updateParams(updates: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
+    // Строим новые параметры с нуля от текущего URL
+    const current = new URLSearchParams(searchParams.toString());
+    
     Object.entries(updates).forEach(([key, value]) => {
-      if (value) params.set(key, value);
-      else params.delete(key);
+      if (value !== null && value !== "") {
+        current.set(key, value);
+      } else {
+        current.delete(key);
+      }
     });
-    params.delete("page");
-    startTransition(() => router.push(`${pathname}?${params.toString()}`));
+    
+    // Всегда сбрасываем страницу при смене фильтра
+    current.delete("page");
+    
+    const newUrl = `${pathname}?${current.toString()}`;
+    startTransition(() => router.push(newUrl));
+  }
+
+  function handleCategoryClick(slug: string | null) {
+    // При сбросе категории явно строим чистый URL
+    if (!slug) {
+      const current = new URLSearchParams(searchParams.toString());
+      current.delete("category");
+      current.delete("page");
+      startTransition(() => router.push(`${pathname}?${current.toString()}`));
+    } else {
+      updateParams({ category: slug });
+    }
   }
 
   return (
@@ -54,7 +80,7 @@ export function CatalogFilters({ categories }: { categories: Category[] }) {
 
       <div className="flex flex-wrap items-center gap-2">
         <button
-          onClick={() => updateParams({ category: null })}
+          onClick={() => handleCategoryClick(null)}
           className={cn(
             "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
             !activeCategory ? "bg-pink-500 text-white" : "bg-white text-ink/70 hover:bg-pink-50"
@@ -65,7 +91,7 @@ export function CatalogFilters({ categories }: { categories: Category[] }) {
         {categories.map((c) => (
           <button
             key={c.id}
-            onClick={() => updateParams({ category: c.slug })}
+            onClick={() => handleCategoryClick(c.slug)}
             className={cn(
               "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
               activeCategory === c.slug ? "bg-pink-500 text-white" : "bg-white text-ink/70 hover:bg-pink-50"

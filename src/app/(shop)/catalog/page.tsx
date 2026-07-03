@@ -7,7 +7,7 @@ import type { Prisma } from "@prisma/client";
 
 export const metadata: Metadata = {
   title: "Каталог",
-  description: "Все товары STIKR: стикеры, постеры, открытки и мерч.",
+  description: "Всі товари 3D Kid: іграшки, брелоки, курси.",
 };
 
 const PAGE_SIZE = 12;
@@ -27,18 +27,20 @@ export default async function CatalogPage({
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
 
+  // Строим where без лишних полей чтобы "Все" = пустой where
   const where: Prisma.ProductWhereInput = { isActive: true };
-  if (params.category) where.category = { slug: params.category };
-  if (params.q) where.name = { contains: params.q, mode: "insensitive" };
+  if (params.category && params.category !== "") {
+    where.category = { slug: params.category };
+  }
+  if (params.q && params.q !== "") {
+    where.name = { contains: params.q, mode: "insensitive" };
+  }
 
   const orderBy: Prisma.ProductOrderByWithRelationInput =
-    params.sort === "price_asc"
-      ? { price: "asc" }
-      : params.sort === "price_desc"
-      ? { price: "desc" }
-      : params.sort === "name"
-      ? { name: "asc" }
-      : { createdAt: "desc" };
+    params.sort === "price_asc"  ? { price: "asc" }      :
+    params.sort === "price_desc" ? { price: "desc" }     :
+    params.sort === "name"       ? { name: "asc" }       :
+                                   { createdAt: "desc" };
 
   const [products, total, categories] = await Promise.all([
     prisma.product.findMany({
@@ -57,7 +59,7 @@ export default async function CatalogPage({
   return (
     <div className="container-shop py-10">
       <h1 className="font-display text-3xl">Каталог</h1>
-      <p className="mt-2 text-ink/60">{total} товаров</p>
+      <p className="mt-1 text-ink/50 text-sm">{total} товарів</p>
 
       <div className="mt-6">
         <CatalogFilters categories={categories} />
@@ -65,17 +67,21 @@ export default async function CatalogPage({
 
       <ProductGrid
         products={products.map((p) => ({
-          id: p.id,
-          slug: p.slug,
-          name: p.name,
-          price: Number(p.price),
+          id:       p.id,
+          slug:     p.slug,
+          name:     p.name,
+          price:    Number(p.price),
           oldPrice: p.oldPrice ? Number(p.oldPrice) : null,
-          image: p.images[0]?.url ?? "/images/placeholder.svg",
-          isNew: p.isNew,
+          image:    p.images[0]?.url ?? "/images/placeholder.svg",
+          isNew:    p.isNew,
         }))}
       />
 
-      <Pagination currentPage={page} totalPages={totalPages} searchParams={params} />
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        searchParams={params}
+      />
     </div>
   );
 }

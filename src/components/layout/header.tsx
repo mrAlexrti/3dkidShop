@@ -3,110 +3,175 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, ShoppingBag, X, Menu } from "lucide-react";
+import { ShoppingBag, X, Menu } from "lucide-react";
 import { useCartStore } from "@/store/cart-store";
+import { useLangStore } from "@/store/lang-store";
+import { LangSwitcher } from "@/components/layout/lang-switcher";
 import { cn } from "@/lib/utils";
 
-const NAV_LINKS = [
-  { href: "/catalog?category=stickers", label: "Стікери", emoji: "🏷️" },
-  { href: "/catalog?category=merch",    label: "Брелоки",  emoji: "🔑" },
-  { href: "/catalog?category=posters",  label: "Постери",  emoji: "🎨" },
-  { href: "/catalog?category=cards",    label: "Курси",    emoji: "⭐" },
-  { href: "/catalog",                   label: "Усе",      emoji: "🛍️" },
-];
-
-// SVG-персонажи вдоль волны (inline, без внешних зависимостей)
-function WaveCharacters() {
+/* ─── SVG логотип "3D Kid" ─────────────────────────────── */
+function Logo3DKid({ className }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 1440 120"
+      viewBox="0 0 160 90"
+      fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className="absolute bottom-0 left-0 w-full"
-      preserveAspectRatio="none"
-      aria-hidden="true"
+      className={className}
+      aria-label="3D Kid"
     >
-      {/* Волна */}
-      <path
-        d="M0,60 C200,110 400,20 600,70 C800,120 1000,30 1200,75 C1320,100 1380,55 1440,60 L1440,120 L0,120 Z"
-        fill="#FBF7F2"
-      />
-      {/* Маленькие кружочки-персонажи, высовывающиеся из волны */}
-      <circle cx="180" cy="62" r="28" fill="#FFD6E0" stroke="#FF7099" strokeWidth="2"/>
-      <text x="180" y="70" textAnchor="middle" fontSize="22">🌸</text>
-
-      <circle cx="420" cy="48" r="26" fill="#C7F0FF" stroke="#7DD3FC" strokeWidth="2"/>
-      <text x="420" y="56" textAnchor="middle" fontSize="20">⭐</text>
-
-      <circle cx="720" cy="34" r="30" fill="#FFE4C4" stroke="#FB923C" strokeWidth="2"/>
-      <text x="720" y="43" textAnchor="middle" fontSize="24">☀️</text>
-
-      <circle cx="1020" cy="44" r="26" fill="#E0D4FF" stroke="#A78BFA" strokeWidth="2"/>
-      <text x="1020" y="53" textAnchor="middle" fontSize="20">💜</text>
-
-      <circle cx="1260" cy="56" r="28" fill="#D4F7D4" stroke="#4ADE80" strokeWidth="2"/>
-      <text x="1260" y="65" textAnchor="middle" fontSize="22">🌻</text>
+      {/* Тень / глубина для объёма */}
+      <text
+        x="12" y="60"
+        fontFamily="'Arial Rounded MT Bold', 'Arial Black', sans-serif"
+        fontSize="60"
+        fontWeight="900"
+        fill="rgba(0,0,0,0.18)"
+        transform="translate(3,3)"
+      >3D</text>
+      {/* Основной текст "3D" */}
+      <text
+        x="12" y="60"
+        fontFamily="'Arial Rounded MT Bold', 'Arial Black', sans-serif"
+        fontSize="60"
+        fontWeight="900"
+        fill="white"
+      >3D</text>
+      {/* Тень "kid" */}
+      <text
+        x="28" y="82"
+        fontFamily="'Arial Rounded MT Bold', 'Arial Black', sans-serif"
+        fontSize="28"
+        fontWeight="900"
+        fill="rgba(0,0,0,0.18)"
+        letterSpacing="6"
+        transform="translate(3,3)"
+      >kid</text>
+      {/* "kid" */}
+      <text
+        x="28" y="82"
+        fontFamily="'Arial Rounded MT Bold', 'Arial Black', sans-serif"
+        fontSize="28"
+        fontWeight="900"
+        fill="white"
+        letterSpacing="6"
+      >kid</text>
+      {/* Декоративные искры */}
+      <text x="108" y="24" fontSize="16" opacity="0.9">✨</text>
+      <text x="4"   y="20" fontSize="12" opacity="0.8">⭐</text>
+      <text x="140" y="55" fontSize="11" opacity="0.7">•</text>
     </svg>
   );
 }
 
+/* ─── Декоративные персонажи + SVG волна ───────────────── */
+function WaveSection() {
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 bottom-0 select-none overflow-hidden"
+      style={{ height: "80px" }}
+      aria-hidden
+    >
+      {/* Персонажи */}
+      <span className="absolute text-[44px] drop-shadow-md" style={{ left: "6%",  bottom: "38px" }}>😤</span>
+      <span className="absolute text-[44px] drop-shadow-md" style={{ left: "20%", bottom: "30px" }}>🌼</span>
+      <span className="absolute text-[42px] drop-shadow-md" style={{ right: "26%",bottom: "36px" }}>☀️</span>
+      <span className="absolute text-[44px] drop-shadow-md" style={{ right: "6%", bottom: "28px" }}>❤️</span>
+
+      {/* Декоративные белые точки — имитация снега/текстуры */}
+      {[
+        [15,65],[30,75],[46,60],[60,78],[72,62],[87,72],[95,58],
+        [10,45],[22,50],[38,42],[54,48],[70,44],[83,50],[94,40],
+      ].map(([x, y], i) => (
+        <span
+          key={i}
+          className="absolute rounded-full bg-white/50"
+          style={{ left: `${x}%`, top: `${y}%`, width: "5px", height: "5px" }}
+        />
+      ))}
+
+      {/* Волна */}
+      <svg
+        viewBox="0 0 1440 60"
+        xmlns="http://www.w3.org/2000/svg"
+        className="absolute bottom-0 left-0 w-full"
+        preserveAspectRatio="none"
+        style={{ height: "60px" }}
+      >
+        <path
+          d="M0,22 C100,50 220,4 360,30 C500,56 620,6 740,34 
+             C860,60 980,8 1100,32 C1220,56 1340,14 1440,28 
+             L1440,60 L0,60 Z"
+          fill="#FBF7F2"
+        />
+      </svg>
+    </div>
+  );
+}
+
+/* ─── Главный компонент Header ──────────────────────────── */
 export function Header() {
-  const [scrolled, setScrolled]   = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQ, setSearchQ]     = useState("");
-  const count   = useCartStore((s) => s.count());
+  const [scrolled,   setScrolled]   = useState(false);
+  const count    = useCartStore((s) => s.count());
   const openCart = useCartStore((s) => s.openCart);
+  const { t }    = useLangStore();
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 10);
-    onScroll();
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
+    const fn = () => setScrolled(window.scrollY > 6);
+    fn();
+    window.addEventListener("scroll", fn, { passive: true });
+    return () => window.removeEventListener("scroll", fn);
   }, []);
+
+  const navLinks = [
+    { href: "/catalog",                   label: t.nav.all       },
+    { href: "/catalog?category=stickers", label: t.nav.toys      },
+    { href: "/catalog?category=merch",    label: t.nav.keychains },
+    { href: "/catalog?category=cards",    label: t.nav.courses   },
+  ];
 
   return (
     <header className="fixed inset-x-0 top-0 z-50">
-      {/* ── РОЗОВА ШАПКА з хвилею ── */}
-      <div className="relative bg-pink-500 pb-[68px] pt-3">
-        {/* Логотип по центру */}
-        <div className="container-shop flex items-center justify-between">
-          {/* Ліва частина: бургер (mobile) */}
+
+      {/* ══ РОЗОВА ШАПКА ══════════════════════════════════ */}
+      <div
+        className="relative w-full bg-pink-400 overflow-hidden"
+        style={{ minHeight: "136px" }}
+      >
+        {/* Верхняя строка: бургер | логотип | корзина+язык */}
+        <div className="relative z-10 container-shop flex items-start justify-between pt-4 pb-16">
+
+          {/* Мобильный бургер */}
           <button
-            className="grid h-9 w-9 place-items-center rounded-full bg-white/20 text-white md:hidden"
+            className="mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/25 text-white md:invisible"
             onClick={() => setMobileOpen((v) => !v)}
             aria-label="Меню"
           >
             {mobileOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
 
-          {/* Логотип */}
-          <Link
-            href="/"
-            className="absolute left-1/2 -translate-x-1/2 font-display text-2xl font-bold tracking-tight text-white drop-shadow"
-          >
-            STIKR<span className="opacity-70">.</span>
-          </Link>
+          {/* Центральный логотип */}
+          <div className="absolute left-1/2 -translate-x-1/2 top-3">
+            <Link href="/" aria-label="3D Kid — на головну">
+              <Logo3DKid className="h-[78px] w-auto drop-shadow-lg hover:scale-105 transition-transform" />
+            </Link>
+          </div>
 
-          {/* Права частина: пошук + кошик */}
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={() => setSearchOpen((v) => !v)}
-              className="grid h-9 w-9 place-items-center rounded-full bg-white/20 text-white transition-colors hover:bg-white/30"
-              aria-label="Пошук"
-            >
-              <Search size={18} />
-            </button>
+          {/* Правый блок: переключатель языка + корзина */}
+          <div className="mt-1 flex items-center gap-2">
+            <LangSwitcher />
             <button
               onClick={openCart}
-              className="relative grid h-9 w-9 place-items-center rounded-full bg-white/20 text-white transition-colors hover:bg-white/30"
+              className="relative grid h-9 w-9 place-items-center rounded-full bg-white/25 text-white transition-colors hover:bg-white/40"
               aria-label="Кошик"
             >
-              <ShoppingBag size={18} />
+              <ShoppingBag size={20} />
               {count > 0 && (
                 <motion.span
                   key={count}
-                  initial={{ scale: 0.4 }}
+                  initial={{ scale: 0.3 }}
                   animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 18 }}
                   className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-ink text-[10px] font-bold text-white"
                 >
                   {count}
@@ -116,92 +181,57 @@ export function Header() {
           </div>
         </div>
 
-        {/* Хвиля з персонажами */}
-        <WaveCharacters />
+        {/* Персонажи + волна */}
+        <WaveSection />
       </div>
 
-      {/* ── НАВІГАЦІЯ КАТЕГОРІЙ ── */}
+      {/* ══ НАВИГАЦИЯ КАТЕГОРИЙ (desktop) ════════════════ */}
       <div
         className={cn(
-          "hidden border-b border-pink-100 bg-cream/95 backdrop-blur transition-shadow md:block",
-          scrolled && "shadow-soft"
+          "hidden border-b border-pink-100 bg-[#FBF7F2]/95 backdrop-blur-sm md:block",
+          "transition-shadow duration-200",
+          scrolled && "shadow-md shadow-pink-100/60"
         )}
       >
         <nav className="container-shop flex items-center justify-center gap-1 py-2">
-          {NAV_LINKS.map((l) => (
+          {navLinks.map((l) => (
             <Link
               key={l.href}
               href={l.href}
-              className="group flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium text-ink/70 transition-colors hover:bg-pink-100 hover:text-pink-600"
+              className="group relative rounded-full px-5 py-1.5 text-sm font-semibold tracking-wide text-ink/70 transition-colors hover:bg-pink-100 hover:text-pink-600"
             >
-              <span>{l.emoji}</span>
               {l.label}
+              <span className="absolute bottom-1 left-4 right-4 h-[2px] scale-x-0 rounded-full bg-pink-400 transition-transform duration-300 group-hover:scale-x-100" />
             </Link>
           ))}
         </nav>
       </div>
 
-      {/* ── МОБІЛЬНЕ МЕНЮ ── */}
+      {/* ══ МОБИЛЬНОЕ МЕНЮ ════════════════════════════════ */}
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden border-b border-pink-100 bg-cream/98 md:hidden"
+            transition={{ duration: 0.22 }}
+            className="overflow-hidden border-b border-pink-100 bg-[#FBF7F2]/98 md:hidden"
           >
             <nav className="container-shop flex flex-col gap-1 py-4">
-              {NAV_LINKS.map((l) => (
+              {navLinks.map((l) => (
                 <Link
                   key={l.href}
                   href={l.href}
                   onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium hover:bg-pink-50"
+                  className="rounded-xl px-4 py-3 text-sm font-semibold hover:bg-pink-50 hover:text-pink-600 transition-colors"
                 >
-                  <span className="text-xl">{l.emoji}</span>
                   {l.label}
                 </Link>
               ))}
+              <div className="mt-3 px-4">
+                <LangSwitcher />
+              </div>
             </nav>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── РЯДОК ПОШУКУ ── */}
-      <AnimatePresence>
-        {searchOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="border-b border-pink-100 bg-white/95 backdrop-blur"
-          >
-            <form
-              className="container-shop flex items-center gap-3 py-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (searchQ.trim()) {
-                  window.location.href = `/catalog?q=${encodeURIComponent(searchQ.trim())}`;
-                }
-                setSearchOpen(false);
-              }}
-            >
-              <Search size={18} className="shrink-0 text-ink/40" />
-              <input
-                autoFocus
-                value={searchQ}
-                onChange={(e) => setSearchQ(e.target.value)}
-                placeholder="Пошук товарів..."
-                className="flex-1 bg-transparent py-1 text-sm outline-none placeholder:text-ink/40"
-              />
-              <button
-                type="button"
-                onClick={() => setSearchOpen(false)}
-                className="rounded-full p-1 hover:bg-pink-50"
-              >
-                <X size={18} />
-              </button>
-            </form>
           </motion.div>
         )}
       </AnimatePresence>
