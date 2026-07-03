@@ -14,19 +14,15 @@ import { formatPrice } from "@/lib/utils";
 import { MapPin, Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// ─── Нова Пошта API ───────────────────────────────────────────────
-const NP_API = "https://api.novaposhta.ua/v2.0/json/";
-
 async function npRequest(body: object) {
-  const key = process.env.NEXT_PUBLIC_NP_API_KEY ?? "";
   try {
-    const res = await fetch(NP_API, {
+    const res = await fetch("/api/novaposhta", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiKey: key, ...body }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
-    return data.success ? data.data : [];
+    return res.ok && data.success ? data.data : [];
   } catch {
     return [];
   }
