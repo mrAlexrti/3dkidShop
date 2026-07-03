@@ -6,8 +6,12 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
   return (
     <>
       <Header />
-      {/* pt — отступ под фиксированный хедер (розовая шапка + навигация) */}
-      <main className="pt-[128px]">{children}</main>
+      {/* 
+        Высота хедера: 
+        - розовая шапка (~130px) + навигация (~44px) = ~174px desktop
+        - мобильный (без полоски категорий): ~130px
+      */}
+      <main className="pt-[174px] md:pt-[174px]">{children}</main>
       <Footer />
       <CartDrawer />
     </>
