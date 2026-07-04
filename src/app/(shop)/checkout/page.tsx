@@ -1,15 +1,43 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { CheckoutForm } from "@/components/checkout/checkout-form";
+import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { formatPrice } from "@/lib/utils";
 
 export default function CheckoutPage() {
   const { items, total } = useCartStore();
-  const { t, locale } = useLangStore();
-  const currency = locale === "ua" ? "UAH" : "USD";
+  const { t } = useLangStore();
+  const currency = "UAH";
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <div className="container-shop py-20 text-center text-ink/40">
+        {t.common.loading}
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="container-shop flex flex-col items-center py-32 text-center">
+        <h1 className="font-display text-3xl">{t.cart.empty}</h1>
+        <p className="mt-2 text-ink/60">{t.cart.emptyDesc}</p>
+        <Link href="/catalog" className="mt-6">
+          <Button size="lg">{t.cart.toCatalog}</Button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="container-shop py-10">

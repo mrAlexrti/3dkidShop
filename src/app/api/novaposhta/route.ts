@@ -4,6 +4,10 @@ const NOVA_POSHTA_API_URL = "https://api.novaposhta.ua/v2.0/json/";
 const NP_WAREHOUSE_TYPE = "9a68df70-0267-42a8-bb5c-37f427e36ee4";
 const NP_LOCKER_TYPE = "841339c7-591a-42e2-8233-7a0a00f0ed6f";
 const ALLOWED_WAREHOUSE_TYPES = new Set([NP_WAREHOUSE_TYPE, NP_LOCKER_TYPE]);
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 60;
+
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
 type NovaPoshtaRequestBody = {
   modelName?: unknown;
@@ -31,6 +35,24 @@ function readPositiveInt(value: unknown, fallback: number, max: number) {
   return Math.min(Math.floor(parsed), max);
 }
 
+function getClientKey(req: Request) {
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+}
+
+function isRateLimited(req: Request) {
+  const key = getClientKey(req);
+  const now = Date.now();
+  const current = rateLimitStore.get(key);
+
+  if (!current || current.resetAt <= now) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+
+  current.count += 1;
+  return current.count > RATE_LIMIT_MAX_REQUESTS;
+}
+
 function makeSearchSettlementsRequest(body: NovaPoshtaRequestBody) {
   const source = getMethodProperties(body);
   const cityName = readString(source.CityName);
@@ -52,6 +74,7 @@ function makeWarehousesRequest(body: NovaPoshtaRequestBody) {
   const source = getMethodProperties(body);
   const cityRef = readString(source.CityRef);
   const typeOfWarehouseRef = readString(source.TypeOfWarehouseRef);
+  const findByString = readString(source.FindByString);
 
   if (!cityRef) {
     return { error: "CityRef is required for warehouse search." };
@@ -64,8 +87,9 @@ function makeWarehousesRequest(body: NovaPoshtaRequestBody) {
   return {
     methodProperties: {
       CityRef: cityRef,
+      ...(findByString ? { FindByString: findByString } : {}),
       ...(typeOfWarehouseRef ? { TypeOfWarehouseRef: typeOfWarehouseRef } : {}),
-      Limit: readPositiveInt(source.Limit, 300, 500),
+      Limit: readPositiveInt(source.Limit, 50, 100),
       Page: readPositiveInt(source.Page, 1, 100),
     },
   };
@@ -108,6 +132,10 @@ function makeAllowedRequest(body: NovaPoshtaRequestBody, apiKey: string) {
 }
 
 export async function POST(req: Request) {
+  if (isRateLimited(req)) {
+    return NextResponse.json({ success: false, error: "Too many Nova Poshta requests." }, { status: 429 });
+  }
+
   const apiKey = process.env.NP_API_KEY;
   if (!apiKey) {
     return NextResponse.json(

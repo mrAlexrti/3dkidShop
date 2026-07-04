@@ -8,6 +8,8 @@ type Product = {
   price: number;
   image: string;
   isNew?: boolean;
+  hasOptions?: boolean;
+  stock?: number;
 };
 
 export function RelatedProducts({ products }: { products: Product[] }) {

@@ -11,12 +11,12 @@ async function getHomeData() {
     prisma.category.findMany({ orderBy: { order: "asc" }, take: 4 }),
     prisma.product.findMany({
       where: { isFeatured: true, isActive: true },
-      include: { images: true },
+      include: { images: true, _count: { select: { options: true } } },
       take: 8,
     }),
     prisma.product.findMany({
       where: { isNew: true, isActive: true },
-      include: { images: true },
+      include: { images: true, _count: { select: { options: true } } },
       take: 4,
       orderBy: { createdAt: "desc" },
     }),
@@ -38,6 +38,8 @@ export default async function HomePage() {
     oldPrice: p.oldPrice ? Number(p.oldPrice) : null,
     image: p.images[0]?.url ?? "/images/placeholder.svg",
     isNew: p.isNew,
+    hasOptions: p._count.options > 0,
+    stock: p.stock,
   });
 
   return (

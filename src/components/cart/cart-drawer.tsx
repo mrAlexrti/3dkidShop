@@ -11,8 +11,8 @@ import { Button } from "@/components/ui/button";
 
 export function CartDrawer() {
   const { items, isOpen, closeCart, removeItem, updateQuantity, total } = useCartStore();
-  const { t, locale } = useLangStore();
-  const currency = locale === "ua" ? "UAH" : "USD";
+  const { t } = useLangStore();
+  const currency = "UAH";
 
   return (
     <AnimatePresence>
@@ -86,7 +86,8 @@ export function CartDrawer() {
                           <div className="flex items-center gap-2 rounded-full border border-ink/10 px-2 py-0.5">
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                              className="rounded-full p-0.5 hover:bg-pink-50 transition-colors"
+                              disabled={item.quantity <= 1}
+                              className="rounded-full p-0.5 transition-colors hover:bg-pink-50 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Minus size={13} />
                             </button>

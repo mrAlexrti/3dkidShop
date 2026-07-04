@@ -12,13 +12,14 @@ type OptionValue = { id: string; value: string; priceModifier: number };
 type Option      = { id: string; name: string; values: OptionValue[] };
 
 export function ProductOptions({
-  productId, name, slug, basePrice, image, options,
+  productId, name, slug, basePrice, image, stock, options,
 }: {
   productId: string;
   name:      string;
   slug:      string;
   basePrice: number;
   image:     string;
+  stock:     number;
   options:   Option[];
 }) {
   const [selected, setSelected] = useState<Record<string, OptionValue>>(() =>
@@ -27,8 +28,8 @@ export function ProductOptions({
   const [quantity, setQuantity] = useState(1);
   const addItem  = useCartStore((s) => s.addItem);
   const openCart = useCartStore((s) => s.openCart);
-  const { t, locale } = useLangStore();
-  const currency = locale === "ua" ? "UAH" : "USD";
+  const { t } = useLangStore();
+  const currency = "UAH";
 
   const finalPrice = useMemo(() => {
     const mod = Object.values(selected).reduce((s, v) => s + (v?.priceModifier ?? 0), 0);
@@ -41,6 +42,10 @@ export function ProductOptions({
   }, [productId, selected]);
 
   function handleAddToCart() {
+    if (stock <= 0) {
+      toast.error("Товару немає в наявності");
+      return;
+    }
     addItem({
       id:        cartLineId,
       productId,
@@ -90,7 +95,8 @@ export function ProductOptions({
           </button>
           <span className="w-6 text-center font-medium tabular-nums">{quantity}</span>
           <button
-            onClick={() => setQuantity((q) => q + 1)}
+            onClick={() => setQuantity((q) => Math.min(stock, q + 1))}
+            disabled={quantity >= stock}
             className="transition-colors hover:text-pink-600"
           >
             <Plus size={16} />
@@ -101,9 +107,9 @@ export function ProductOptions({
         </span>
       </div>
 
-      <Button size="lg" className="w-full text-base" onClick={handleAddToCart}>
+      <Button size="lg" className="w-full text-base" onClick={handleAddToCart} disabled={stock <= 0}>
         <ShoppingBag size={18} />
-        {t.product.addToCart}
+        {stock > 0 ? t.product.addToCart : "Немає в наявності"}
       </Button>
     </div>
   );

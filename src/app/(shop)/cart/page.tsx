@@ -11,8 +11,8 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity, total } = useCartStore();
-  const { t, locale } = useLangStore();
-  const currency = locale === "ua" ? "UAH" : "USD";
+  const { t } = useLangStore();
+  const currency = "UAH";
 
   if (items.length === 0) {
     return (
@@ -63,7 +63,11 @@ export default function CartPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 rounded-full border border-ink/10 px-3 py-1">
-                      <button onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                      <button
+                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                        disabled={item.quantity <= 1}
+                        className="disabled:cursor-not-allowed disabled:opacity-40"
+                      >
                         <Minus size={14} />
                       </button>
                       <span className="w-5 text-center text-sm tabular-nums">{item.quantity}</span>

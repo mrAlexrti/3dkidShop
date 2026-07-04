@@ -9,11 +9,16 @@ import { formatPrice } from "@/lib/utils";
 
 // slug в URL может прийти в закодированном виде (кириллица) — декодируем
 async function getProduct(rawSlug: string) {
-  const slug = decodeURIComponent(rawSlug);
+  let slug: string;
+  try {
+    slug = decodeURIComponent(rawSlug);
+  } catch {
+    return null;
+  }
   
   // Сначала пробуем точное совпадение
-  let product = await prisma.product.findUnique({
-    where: { slug },
+  let product = await prisma.product.findFirst({
+    where: { slug, isActive: true },
     include: {
       images: true,
       options: { include: { values: true } },
@@ -30,6 +35,7 @@ async function getProduct(rawSlug: string) {
           equals: slug,
           mode: "insensitive",
         },
+        isActive: true,
       },
       include: {
         images: true,
@@ -86,7 +92,7 @@ export default async function ProductPage({
       id: { not: product.id },
       isActive: true,
     },
-    include: { images: true },
+    include: { images: true, _count: { select: { options: true } } },
     take: 4,
   });
 
@@ -123,6 +129,7 @@ export default async function ProductPage({
             slug={product.slug}
             basePrice={Number(product.price)}
             image={product.images[0]?.url ?? "/images/placeholder.svg"}
+            stock={product.stock}
             options={product.options.map((o) => ({
               id: o.id,
               name: o.name,
@@ -161,6 +168,8 @@ export default async function ProductPage({
           price: Number(p.price),
           image: p.images[0]?.url ?? "/images/placeholder.svg",
           isNew: p.isNew,
+          hasOptions: p._count.options > 0,
+          stock: p.stock,
         }))}
       />
     </div>

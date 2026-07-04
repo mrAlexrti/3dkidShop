@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ShoppingBag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -18,15 +19,27 @@ type Props = {
   oldPrice?: number | null;
   image: string;
   isNew?: boolean;
+  hasOptions?: boolean;
+  stock?: number;
 };
 
-export function ProductCard({ id, slug, name, price, oldPrice, image, isNew }: Props) {
+export function ProductCard({ id, slug, name, price, oldPrice, image, isNew, hasOptions = false, stock }: Props) {
+  const router = useRouter();
   const addItem  = useCartStore((s) => s.addItem);
-  const { t, locale } = useLangStore();
-  const currency = locale === "ua" ? "UAH" : "USD";
+  const { t } = useLangStore();
+  const currency = "UAH";
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
+    if (stock !== undefined && stock <= 0) {
+      toast.error("Товару немає в наявності");
+      return;
+    }
+    if (hasOptions) {
+      toast.message("Оберіть опції товару");
+      router.push(`/product/${slug}`);
+      return;
+    }
     addItem({ id, productId: id, name, slug, price, image, quantity: 1 });
     toast.success(`${name} ${t.cart.addedToCart}`);
   };

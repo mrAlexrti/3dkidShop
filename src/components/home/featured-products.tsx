@@ -11,6 +11,8 @@ type Product = {
   oldPrice?: number | null;
   image: string;
   isNew?: boolean;
+  hasOptions?: boolean;
+  stock?: number;
 };
 
 export function FeaturedProducts({ products, title = "Популярные товары" }: { products: Product[]; title?: string }) {

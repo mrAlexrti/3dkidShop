@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { requireAdmin } from "@/lib/actions/require-admin";
 
 const productSchema = z.object({
   name: z.string().min(2),
@@ -19,6 +20,8 @@ const productSchema = z.object({
 });
 
 export async function createProduct(formData: FormData) {
+  await requireAdmin();
+
   const raw = Object.fromEntries(formData.entries());
   const parsed = productSchema.parse({
     ...raw,
@@ -48,6 +51,8 @@ export async function createProduct(formData: FormData) {
 }
 
 export async function updateProduct(id: string, formData: FormData) {
+  await requireAdmin();
+
   const raw = Object.fromEntries(formData.entries());
   const parsed = productSchema.parse({
     ...raw,
@@ -78,6 +83,8 @@ export async function updateProduct(id: string, formData: FormData) {
 }
 
 export async function deleteProduct(id: string) {
+  await requireAdmin();
+
   await prisma.product.delete({ where: { id } });
   revalidatePath("/admin/products");
   revalidatePath("/catalog");

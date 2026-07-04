@@ -125,9 +125,10 @@ export function Header() {
 
   const navLinks = [
     { href: "/catalog",                   label: t.nav.all       },
-    { href: "/catalog?category=stickers", label: t.nav.toys      },
-    { href: "/catalog?category=merch",    label: t.nav.keychains },
-    { href: "/catalog?category=cards",    label: t.nav.courses   },
+    { href: "/catalog?category=stickers", label: t.nav.stickers  },
+    { href: "/catalog?category=posters",  label: t.nav.posters   },
+    { href: "/catalog?category=merch",    label: t.nav.merch     },
+    { href: "/catalog?category=cards",    label: t.nav.cards     },
   ];
 
   return (

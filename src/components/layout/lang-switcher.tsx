@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { useLangStore } from "@/store/lang-store";
 import type { Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -20,10 +21,9 @@ export function LangSwitcher({ className }: { className?: string }) {
       )}
     >
       {options.map((o, i) => (
-        <>
+        <Fragment key={o.id}>
           {i > 0 && <span key={`sep-${o.id}`} className="text-ink/20">|</span>}
           <button
-            key={o.id}
             onClick={() => setLocale(o.id)}
             className={cn(
               "rounded-full px-2.5 py-1 transition-colors",
@@ -34,7 +34,7 @@ export function LangSwitcher({ className }: { className?: string }) {
           >
             {o.label}
           </button>
-        </>
+        </Fragment>
       ))}
     </div>
   );

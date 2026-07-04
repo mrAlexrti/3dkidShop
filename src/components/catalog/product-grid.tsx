@@ -12,6 +12,8 @@ type GridProduct = {
   oldPrice?: number | null;
   image: string;
   isNew?: boolean;
+  hasOptions?: boolean;
+  stock?: number;
 };
 
 export function ProductGrid({ products }: { products: GridProduct[] }) {

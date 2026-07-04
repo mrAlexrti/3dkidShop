@@ -12,6 +12,14 @@ function SuccessContent() {
   const { t } = useLangStore();
   const searchParams = useSearchParams();
   const order = searchParams.get("order");
+  const emailStatus = searchParams.get("email");
+  const paymentStatus = searchParams.get("payment");
+  const description =
+    paymentStatus === "return"
+      ? "Дякуємо! Якщо оплата пройшла успішно, ми підтвердимо замовлення email-листом і зв'яжемося щодо доставки."
+      : emailStatus === "sent"
+        ? t.success.desc
+        : "Замовлення прийнято. Ми зв'яжемося з вами щодо доставки.";
 
   return (
     <div className="container-shop flex flex-col items-center py-32 text-center">
@@ -34,7 +42,7 @@ function SuccessContent() {
             <span className="font-semibold text-ink">{order}</span>
           </p>
         )}
-        <p className="mt-3 max-w-md text-ink/60">{t.success.desc}</p>
+        <p className="mt-3 max-w-md text-ink/60">{description}</p>
         <Link href="/catalog" className="mt-8 inline-block">
           <Button size="lg">{t.success.continue}</Button>
         </Link>

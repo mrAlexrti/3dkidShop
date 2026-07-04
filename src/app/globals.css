@@ -4,6 +4,8 @@
 
 :root {
   --header-h: 174px;
+  --font-manrope: "Manrope", "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-fraunces: "Fraunces", Georgia, "Times New Roman", serif;
 }
 
 html {

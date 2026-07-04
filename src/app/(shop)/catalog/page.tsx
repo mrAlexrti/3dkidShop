@@ -4,6 +4,7 @@ import { ProductGrid } from "@/components/catalog/product-grid";
 import { Pagination } from "@/components/catalog/pagination";
 import type { Metadata } from "next";
 import type { Prisma } from "@prisma/client";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Каталог",
@@ -46,7 +47,7 @@ export default async function CatalogPage({
     prisma.product.findMany({
       where,
       orderBy,
-      include: { images: true },
+      include: { images: true, _count: { select: { options: true } } },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
@@ -55,6 +56,14 @@ export default async function CatalogPage({
   ]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
+  if (totalPages > 0 && page > totalPages) {
+    const nextParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) nextParams.set(key, value);
+    });
+    nextParams.set("page", String(totalPages));
+    redirect(`/catalog?${nextParams.toString()}`);
+  }
 
   return (
     <div className="container-shop py-10">
@@ -74,6 +83,8 @@ export default async function CatalogPage({
           oldPrice: p.oldPrice ? Number(p.oldPrice) : null,
           image:    p.images[0]?.url ?? "/images/placeholder.svg",
           isNew:    p.isNew,
+          hasOptions: p._count.options > 0,
+          stock: p.stock,
         }))}
       />
 

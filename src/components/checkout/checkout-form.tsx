@@ -22,70 +22,165 @@ async function npRequest(body: object) {
       body: JSON.stringify(body),
     });
     const data = await res.json();
-    return res.ok && data.success ? data.data : [];
-  } catch {
-    return [];
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "Сервіс Нової Пошти тимчасово недоступний");
+    }
+    return data.data ?? [];
+  } catch (error) {
+    throw error instanceof Error ? error : new Error("Сервіс Нової Пошти тимчасово недоступний");
   }
 }
 
 type NPCity      = { Ref: string; Description: string };
-type NPWarehouse = { Ref: string; Description: string; Number: string };
+type NPWarehouse = {
+  Ref: string;
+  Description: string;
+  Number: string;
+  ShortAddress?: string;
+  TypeOfWarehouseRef?: string;
+};
 
 function useCitySearch() {
   const [cities, setCities]   = useState<NPCity[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const search = useCallback((q: string) => {
     clearTimeout(timer.current);
-    if (q.length < 2) { setCities([]); return; }
+    if (q.length < 2) { setCities([]); setError(null); return; }
     timer.current = setTimeout(async () => {
       setLoading(true);
-      const data = await npRequest({
-        modelName: "Address",
-        calledMethod: "searchSettlements",
-        methodProperties: { CityName: q, Limit: 12, Page: 1 },
-      });
-      const addresses = data?.[0]?.Addresses ?? [];
-      const flat: NPCity[] = addresses.map((a: { DeliveryCity: string; Present: string }) => ({
-        Ref: a.DeliveryCity,
-        Description: a.Present,
-      }));
-      setCities(flat);
-      setLoading(false);
+      try {
+        const data = await npRequest({
+          modelName: "Address",
+          calledMethod: "searchSettlements",
+          methodProperties: { CityName: q, Limit: 12, Page: 1 },
+        });
+        const addresses = data?.[0]?.Addresses ?? [];
+        const flat: NPCity[] = addresses.map((a: { DeliveryCity: string; Present: string }) => ({
+          Ref: a.DeliveryCity,
+          Description: a.Present,
+        }));
+        setCities(flat);
+        setError(null);
+      } catch (requestError) {
+        setCities([]);
+        setError(requestError instanceof Error ? requestError.message : "Сервіс Нової Пошти тимчасово недоступний");
+      } finally {
+        setLoading(false);
+      }
     }, 380);
   }, []);
 
-  return { cities, loading, search, clear: () => setCities([]) };
+  return { cities, loading, error, search, clear: () => { setCities([]); setError(null); } };
 }
 
 function useWarehouses() {
   const [warehouses, setWarehouses] = useState<NPWarehouse[]>([]);
   const [loading, setLoading]       = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const search = useCallback(async (
+    cityRef: string,
+    q: string,
+    deliveryType: Extract<CheckoutInput["deliveryType"], "np_warehouse" | "np_parcel_locker">,
+  ) => {
+    clearTimeout(timer.current);
+    const query = q.trim();
+    if (!cityRef || query.length < 1) {
+      setWarehouses([]);
+      setError(null);
+      return;
+    }
+
+    timer.current = setTimeout(async () => {
+      setLoading(false);
+      try {
+        const data: NPWarehouse[] = await npRequest({
+          modelName: "Address",
+          calledMethod: "getWarehouses",
+          methodProperties: {
+            CityRef: cityRef,
+            FindByString: query,
+            Limit: 50,
+            Page: 1,
+          },
+        });
+        setWarehouses(filterWarehousesByDelivery(data ?? [], deliveryType));
+        setError(null);
+      } catch (requestError) {
+        setWarehouses([]);
+        setError(requestError instanceof Error ? requestError.message : "РЎРµСЂРІС–СЃ РќРѕРІРѕС— РџРѕС€С‚Рё С‚РёРјС‡Р°СЃРѕРІРѕ РЅРµРґРѕСЃС‚СѓРїРЅРёР№");
+      } finally {
+        setLoading(false);
+      }
+    }, 350);
+  }, []);
 
   const load = useCallback(async (cityRef: string, typeRef?: string) => {
     if (!cityRef) return;
     setLoading(true);
-    const data: NPWarehouse[] = await npRequest({
-      modelName: "Address",
-      calledMethod: "getWarehouses",
-      methodProperties: {
-        CityRef: cityRef,
-        ...(typeRef ? { TypeOfWarehouseRef: typeRef } : {}),
-        Limit: 300,
-        Page: 1,
-      },
-    });
-    setWarehouses(data ?? []);
-    setLoading(false);
+    try {
+      const data: NPWarehouse[] = await npRequest({
+        modelName: "Address",
+        calledMethod: "getWarehouses",
+        methodProperties: {
+          CityRef: cityRef,
+          ...(typeRef ? { TypeOfWarehouseRef: typeRef } : {}),
+          Limit: 100,
+          Page: 1,
+        },
+      });
+      setWarehouses(data ?? []);
+      setError(null);
+    } catch (requestError) {
+      setWarehouses([]);
+      setError(requestError instanceof Error ? requestError.message : "Сервіс Нової Пошти тимчасово недоступний");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return { warehouses, loading, load, clear: () => setWarehouses([]) };
+  return {
+    warehouses,
+    loading,
+    error,
+    search,
+    load,
+    clear: () => {
+      clearTimeout(timer.current);
+      setWarehouses([]);
+      setError(null);
+    },
+  };
 }
 
 // NP TypeOfWarehouseRef
 const NP_WAREHOUSE_TYPE  = "9a68df70-0267-42a8-bb5c-37f427e36ee4";
 const NP_LOCKER_TYPE     = "841339c7-591a-42e2-8233-7a0a00f0ed6f";
+
+function getWarehouseText(w: NPWarehouse) {
+  return `${w.Description ?? ""} ${w.ShortAddress ?? ""} ${w.TypeOfWarehouseRef ?? ""}`.toLowerCase();
+}
+
+function isParcelLocker(w: NPWarehouse) {
+  const text = getWarehouseText(w);
+  return w.TypeOfWarehouseRef === NP_LOCKER_TYPE || /поштомат|postomat|parcel locker/.test(text);
+}
+
+function isWarehouseBranch(w: NPWarehouse) {
+  const text = getWarehouseText(w);
+  return w.TypeOfWarehouseRef === NP_WAREHOUSE_TYPE || (/відділення|отделение|warehouse/.test(text) && !isParcelLocker(w));
+}
+
+function filterWarehousesByDelivery(
+  warehouses: NPWarehouse[],
+  deliveryType: Extract<CheckoutInput["deliveryType"], "np_warehouse" | "np_parcel_locker">,
+) {
+  return warehouses.filter((w) => (deliveryType === "np_parcel_locker" ? isParcelLocker(w) : isWarehouseBranch(w)));
+}
 
 // ─── Маленький компонент кнопки оплаты (чтобы не вызывать useWatch в map) ──
 function PaymentBtn({
@@ -148,6 +243,24 @@ const inp =
 
 const NUM_STYLES = "flex h-7 w-7 items-center justify-center rounded-full bg-pink-500 text-xs font-bold text-white";
 
+function submitLiqPayForm(payment: { action: string; data: string; signature: string }) {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = payment.action;
+  form.acceptCharset = "utf-8";
+
+  for (const [name, value] of Object.entries({ data: payment.data, signature: payment.signature })) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  }
+
+  document.body.appendChild(form);
+  form.submit();
+}
+
 export function CheckoutForm() {
   const { items, total, clear } = useCartStore();
   const router = useRouter();
@@ -158,6 +271,8 @@ export function CheckoutForm() {
 
   const [cityText, setCityText] = useState("");
   const [cityPicked, setCityPicked] = useState(false);
+  const [warehouseText, setWarehouseText] = useState("");
+  const [warehousePicked, setWarehousePicked] = useState(false);
 
   const {
     register,
@@ -175,17 +290,20 @@ export function CheckoutForm() {
 
   const deliveryType = useWatch({ control, name: "deliveryType" });
   const npCityRef    = useWatch({ control, name: "npCityRef" }) ?? "";
+  const warehouseDeliveryType = deliveryType === "np_parcel_locker" ? "np_parcel_locker" : "np_warehouse";
 
   function pickCity(c: NPCity) {
     setValue("npCityRef",  c.Ref,         { shouldValidate: true });
     setValue("npCityName", c.Description, { shouldValidate: true });
+    setValue("npWarehouseRef", "");
+    setValue("npWarehouseAddress", "");
     setCityText(c.Description);
     setCityPicked(true);
+    setWarehouseText("");
+    setWarehousePicked(false);
     citySearch.clear();
     wh.clear();
     // Загружаем отделения в зависимости от выбранного типа
-    const typeRef = deliveryType === "np_parcel_locker" ? NP_LOCKER_TYPE : NP_WAREHOUSE_TYPE;
-    wh.load(c.Ref, typeRef);
   }
 
   // При смене типа доставки — перезагружаем отделения если город уже выбран
@@ -193,10 +311,18 @@ export function CheckoutForm() {
     setValue("deliveryType", id);
     setValue("npWarehouseRef", "");
     setValue("npWarehouseAddress", "");
-    if (npCityRef) {
-      const typeRef = id === "np_parcel_locker" ? NP_LOCKER_TYPE : NP_WAREHOUSE_TYPE;
-      if (id !== "np_courier") wh.load(npCityRef, typeRef);
-    }
+    setWarehouseText("");
+    setWarehousePicked(false);
+    wh.clear();
+  }
+
+  function pickWarehouse(w: NPWarehouse) {
+    const label = `${w.Number ? `№${w.Number} — ` : ""}${w.Description}`;
+    setValue("npWarehouseRef", w.Ref, { shouldValidate: true });
+    setValue("npWarehouseAddress", label, { shouldValidate: true });
+    setWarehouseText(label);
+    setWarehousePicked(true);
+    wh.clear();
   }
 
   const onSubmit = async (data: CheckoutInput) => {
@@ -205,8 +331,14 @@ export function CheckoutForm() {
     setSubmitting(false);
     if (result.success) {
       clear();
-      toast.success("Замовлення оформлено! 🎉");
-      router.push(`/checkout/success?order=${result.orderNumber}`);
+      if (result.payment) {
+        toast.success("Замовлення створено. Переходимо до оплати...");
+        submitLiqPayForm(result.payment);
+        return;
+      }
+
+      toast.success(result.emailSent ? "Замовлення оформлено, лист відправлено! 🎉" : "Замовлення оформлено! 🎉");
+      router.push(`/checkout/success?order=${result.orderNumber}&email=${result.emailSent ? "sent" : "pending"}`);
     } else {
       toast.error(result.error);
     }
@@ -222,7 +354,7 @@ export function CheckoutForm() {
         </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink/60">Ім'я</label>
+            <label className="mb-1 block text-xs font-medium text-ink/60">Ім&apos;я</label>
             <input placeholder="Олександр" className={inp} {...register("customerName")} />
             {errors.customerName && <p className="mt-1 text-xs text-pink-600">{errors.customerName.message}</p>}
           </div>
@@ -269,6 +401,13 @@ export function CheckoutForm() {
               onChange={(e) => {
                 setCityText(e.target.value);
                 setCityPicked(false);
+                setValue("npCityRef", "");
+                setValue("npCityName", e.target.value, { shouldValidate: true });
+                setValue("npWarehouseRef", "");
+                setValue("npWarehouseAddress", "");
+                setWarehouseText("");
+                setWarehousePicked(false);
+                wh.clear();
                 citySearch.search(e.target.value);
               }}
               placeholder="Почніть вводити місто..."
@@ -280,6 +419,7 @@ export function CheckoutForm() {
             )}
           </div>
           {errors.npCityName && <p className="mt-1 text-xs text-pink-600">{errors.npCityName.message}</p>}
+          {citySearch.error && <p className="mt-1 text-xs text-pink-600">{citySearch.error}. Можна продовжити з ручним введенням.</p>}
 
           {citySearch.cities.length > 0 && !cityPicked && (
             <ul className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-xl border border-pink-100 bg-white shadow-lg">
@@ -299,7 +439,7 @@ export function CheckoutForm() {
         </div>
 
         {/* Відділення / поштомат */}
-        {npCityRef && deliveryType !== "np_courier" && (
+        {(npCityRef || cityText.trim().length >= 2) && deliveryType !== "np_courier" && (
           <div className="mb-3">
             <label className="mb-1 block text-xs font-medium text-ink/60">
               {deliveryType === "np_parcel_locker" ? "Поштомат" : "Відділення"}
@@ -309,8 +449,58 @@ export function CheckoutForm() {
                 <Loader2 size={14} className="animate-spin text-pink-400" />
                 Завантаження...
               </div>
+            ) : wh.error || !npCityRef ? (
+              <input
+                className={inp}
+                placeholder={deliveryType === "np_parcel_locker" ? "Введіть поштомат вручну" : "Введіть відділення вручну"}
+                onChange={(e) => {
+                  setValue("npWarehouseRef", e.target.value ? "manual" : "", { shouldValidate: true });
+                  setValue("npWarehouseAddress", e.target.value, { shouldValidate: true });
+                }}
+              />
             ) : (
+              <>
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/30" />
+                  <input
+                    value={warehouseText}
+                    className={cn(inp, "pl-9")}
+                    placeholder={
+                      deliveryType === "np_parcel_locker"
+                        ? "Почніть вводити адресу або номер поштомата..."
+                        : "Почніть вводити адресу або номер відділення..."
+                    }
+                    autoComplete="off"
+                    onChange={(e) => {
+                      const nextValue = e.target.value;
+                      setWarehouseText(nextValue);
+                      setWarehousePicked(false);
+                      setValue("npWarehouseRef", "");
+                      setValue("npWarehouseAddress", nextValue, { shouldValidate: true });
+                      wh.search(npCityRef, nextValue, warehouseDeliveryType);
+                    }}
+                  />
+                  {wh.warehouses.length > 0 && !warehousePicked && (
+                    <ul className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-xl border border-pink-100 bg-white shadow-lg">
+                      {wh.warehouses.map((w) => (
+                        <li key={w.Ref}>
+                          <button
+                            type="button"
+                            className="w-full px-4 py-2.5 text-left text-sm hover:bg-pink-50"
+                            onClick={() => pickWarehouse(w)}
+                          >
+                            {w.Number ? `№${w.Number} — ` : ""}{w.Description}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                {warehouseText.trim().length > 0 && !wh.loading && !warehousePicked && wh.warehouses.length === 0 && !wh.error && (
+                  <p className="mt-1 text-xs text-ink/40">Нічого не знайдено. Спробуйте іншу частину адреси або номер.</p>
+                )}
               <select
+                hidden
                 className={inp}
                 defaultValue=""
                 onChange={(e) => {
@@ -328,6 +518,13 @@ export function CheckoutForm() {
                   </option>
                 ))}
               </select>
+              </>
+            )}
+            {wh.error && <p className="mt-1 text-xs text-pink-600">{wh.error}. Введіть дані вручну.</p>}
+            {(errors.npWarehouseRef || errors.npWarehouseAddress) && (
+              <p className="mt-1 text-xs text-pink-600">
+                {errors.npWarehouseRef?.message || errors.npWarehouseAddress?.message}
+              </p>
             )}
           </div>
         )}
@@ -340,6 +537,7 @@ export function CheckoutForm() {
               className={inp}
               {...register("npCourierAddress")}
             />
+            {errors.npCourierAddress && <p className="mt-1 text-xs text-pink-600">{errors.npCourierAddress.message}</p>}
           </div>
         )}
 

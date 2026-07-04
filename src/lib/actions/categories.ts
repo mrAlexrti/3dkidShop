@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { requireAdmin } from "@/lib/actions/require-admin";
 
 const categorySchema = z.object({
   name: z.string().min(2),
@@ -12,6 +13,8 @@ const categorySchema = z.object({
 });
 
 export async function createCategory(formData: FormData) {
+  await requireAdmin();
+
   const raw = Object.fromEntries(formData.entries());
   const parsed = categorySchema.parse(raw);
   await prisma.category.create({
@@ -22,12 +25,16 @@ export async function createCategory(formData: FormData) {
 }
 
 export async function deleteCategory(id: string) {
+  await requireAdmin();
+
   await prisma.category.delete({ where: { id } });
   revalidatePath("/admin/categories");
   revalidatePath("/");
 }
 
 export async function updateSiteContent(formData: FormData) {
+  await requireAdmin();
+
   const entries = Object.fromEntries(formData.entries()) as Record<string, string>;
   await Promise.all(
     Object.entries(entries).map(([key, value]) =>
