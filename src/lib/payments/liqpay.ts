@@ -135,7 +135,7 @@ export function createLiqPayCheckout({
     action: "pay",
     amount: Number(amount.toFixed(2)),
     currency: "UAH",
-    description: `Оплата замовлення ${orderNumber} в 3D Kid`,
+    description: `3D Kid order ${orderNumber}`,
     order_id: orderNumber,
     server_url: `${siteUrl}/api/payments/liqpay/callback`,
     result_url: `${siteUrl}/checkout/success?order=${encodeURIComponent(orderNumber)}&payment=return`,
