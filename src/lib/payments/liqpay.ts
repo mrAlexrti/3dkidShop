@@ -22,6 +22,10 @@ type LiqPayPaymentPayload = {
   sandbox?: 1;
 };
 
+type PublicLiqPayPaymentPayload = Omit<LiqPayPaymentPayload, "public_key"> & {
+  public_key: string;
+};
+
 export type LiqPayCallbackPayload = {
   order_id?: string;
   status?: string;
@@ -30,12 +34,47 @@ export type LiqPayCallbackPayload = {
   transaction_id?: number;
 };
 
+function readEnv(name: string) {
+  const rawValue = process.env[name];
+  const trimmedValue = rawValue?.trim() ?? "";
+
+  if (
+    (trimmedValue.startsWith('"') && trimmedValue.endsWith('"')) ||
+    (trimmedValue.startsWith("'") && trimmedValue.endsWith("'"))
+  ) {
+    return trimmedValue.slice(1, -1).trim();
+  }
+
+  return trimmedValue;
+}
+
 function getPrivateKey() {
-  return process.env.LIQPAY_PRIVATE_KEY?.trim() ?? "";
+  return readEnv("LIQPAY_PRIVATE_KEY");
 }
 
 function getPublicKey() {
-  return process.env.LIQPAY_PUBLIC_KEY?.trim() ?? "";
+  return readEnv("LIQPAY_PUBLIC_KEY");
+}
+
+function isSandboxEnabled() {
+  return readEnv("LIQPAY_SANDBOX") === "1" || readEnv("liqpay_sandbox") === "1";
+}
+
+function isDebugEnabled() {
+  return readEnv("LIQPAY_DEBUG") === "1";
+}
+
+function maskValue(value: string) {
+  if (!value) return "";
+  if (value.length <= 12) return `${value.slice(0, 4)}...`;
+  return `${value.slice(0, 10)}...${value.slice(-4)}`;
+}
+
+function sanitizePayload(payload: LiqPayPaymentPayload): PublicLiqPayPaymentPayload {
+  return {
+    ...payload,
+    public_key: maskValue(payload.public_key),
+  };
 }
 
 export function isLiqPayConfigured() {
@@ -46,8 +85,10 @@ export function getLiqPayConfigStatus() {
   return {
     hasPublicKey: Boolean(getPublicKey()),
     hasPrivateKey: Boolean(getPrivateKey()),
-    hasSiteUrl: Boolean(process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.VERCEL_URL),
-    sandbox: process.env.LIQPAY_SANDBOX === "1",
+    hasSiteUrl: Boolean(readEnv("NEXT_PUBLIC_SITE_URL") || readEnv("SITE_URL") || readEnv("VERCEL_URL")),
+    publicKeyLooksSandbox: getPublicKey().startsWith("sandbox_"),
+    privateKeyLooksSandbox: getPrivateKey().startsWith("sandbox_"),
+    sandbox: isSandboxEnabled(),
   };
 }
 
@@ -60,10 +101,10 @@ export function getMissingLiqPayEnvNames() {
 }
 
 function getSiteUrl() {
-  const explicitUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL;
+  const explicitUrl = readEnv("NEXT_PUBLIC_SITE_URL") || readEnv("SITE_URL");
   if (explicitUrl) return explicitUrl.replace(/\/$/, "");
 
-  const vercelUrl = process.env.VERCEL_URL;
+  const vercelUrl = readEnv("VERCEL_URL");
   if (vercelUrl) return `https://${vercelUrl}`.replace(/\/$/, "");
 
   return "http://localhost:3000";
@@ -92,16 +133,20 @@ export function createLiqPayCheckout({
     version: 3,
     public_key: getPublicKey(),
     action: "pay",
-    amount,
+    amount: Number(amount.toFixed(2)),
     currency: "UAH",
     description: `Оплата замовлення ${orderNumber} в 3D Kid`,
     order_id: orderNumber,
     server_url: `${siteUrl}/api/payments/liqpay/callback`,
     result_url: `${siteUrl}/checkout/success?order=${encodeURIComponent(orderNumber)}&payment=return`,
-    ...(process.env.LIQPAY_SANDBOX === "1" ? { sandbox: 1 } : {}),
+    ...(isSandboxEnabled() ? { sandbox: 1 } : {}),
   };
 
-  const data = Buffer.from(JSON.stringify(payload)).toString("base64");
+  if (isDebugEnabled()) {
+    console.info("LiqPay checkout payload", sanitizePayload(payload));
+  }
+
+  const data = Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
 
   return {
     provider: "liqpay",

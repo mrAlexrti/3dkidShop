@@ -51,6 +51,7 @@ NP_API_KEY="your_nova_poshta_api_key"
 LIQPAY_PUBLIC_KEY="your_liqpay_public_key"
 LIQPAY_PRIVATE_KEY="your_liqpay_private_key"
 LIQPAY_SANDBOX="1"
+LIQPAY_DEBUG="0"
 NEXT_PUBLIC_SITE_URL="https://your-domain.example"
 
 RESEND_API_KEY="your_resend_api_key"
