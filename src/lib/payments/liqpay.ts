@@ -42,6 +42,23 @@ export function isLiqPayConfigured() {
   return Boolean(getPublicKey() && getPrivateKey());
 }
 
+export function getLiqPayConfigStatus() {
+  return {
+    hasPublicKey: Boolean(getPublicKey()),
+    hasPrivateKey: Boolean(getPrivateKey()),
+    hasSiteUrl: Boolean(process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.VERCEL_URL),
+    sandbox: process.env.LIQPAY_SANDBOX === "1",
+  };
+}
+
+export function getMissingLiqPayEnvNames() {
+  const status = getLiqPayConfigStatus();
+  return [
+    !status.hasPublicKey ? "LIQPAY_PUBLIC_KEY" : null,
+    !status.hasPrivateKey ? "LIQPAY_PRIVATE_KEY" : null,
+  ].filter(Boolean);
+}
+
 function getSiteUrl() {
   const explicitUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL;
   if (explicitUrl) return explicitUrl.replace(/\/$/, "");

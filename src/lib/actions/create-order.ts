@@ -5,7 +5,12 @@ import { checkoutSchema } from "@/lib/validations/checkout";
 import type { CartItem } from "@/types";
 import { DELIVERY_LABELS, PAYMENT_LABELS } from "@/lib/validations/checkout";
 import { sendOrderConfirmationEmail } from "@/lib/email";
-import { createLiqPayCheckout, isLiqPayConfigured, type LiqPayCheckout } from "@/lib/payments/liqpay";
+import {
+  createLiqPayCheckout,
+  getMissingLiqPayEnvNames,
+  isLiqPayConfigured,
+  type LiqPayCheckout,
+} from "@/lib/payments/liqpay";
 import { toPaymentAmount } from "@/lib/utils";
 
 export type CreateOrderResult =
@@ -120,9 +125,10 @@ export async function createOrder(
   const d = parsed.data;
 
   if (d.paymentMethod === "card_online" && !isLiqPayConfigured()) {
+    const missingEnv = getMissingLiqPayEnvNames();
     return {
       success: false,
-      error: "Онлайн-оплата тимчасово недоступна. Оберіть оплату при отриманні або налаштуйте LiqPay.",
+      error: `Онлайн-оплата тимчасово недоступна. Runtime не бачить: ${missingEnv.join(", ") || "LiqPay env"}.`,
     };
   }
 
