@@ -190,22 +190,29 @@ NP_DESCRIPTION="3D printed goods"
 5. Після успіху в замовленні збережуться `novaPoshtaTtn`, `novaPoshtaTtnRef`, `novaPoshtaCreatedAt`; у UI зʼявиться посилання на трекінг.
 
 Обмеження першої версії: автоматичне створення ТТН розраховане на замовлення з відділенням або поштоматом, де checkout зберігає `novaPoshtaBranchRef`. Курʼєрська доставка може потребувати окремої логіки адрес одержувача.
-## Nova Poshta status sync cron
+## Nova Poshta status sync via external cron
 
-Проєкт має Vercel Cron для синхронізації статусів ТТН і післяплати: `GET /api/cron/novaposhta`. Розклад задається у `vercel.json` і зараз запускається щогодини за UTC: `0 * * * *`.
+Проєкт більше не використовує Vercel Cron, щоб деплой працював на Vercel Hobby. Endpoint синхронізації залишається доступним як захищений HTTP-виклик:
 
-### Env для cron
+```text
+GET /api/cron/novaposhta
+Authorization: Bearer <CRON_SECRET>
+```
+
+Його можна запускати вручну або через зовнішній cron-сервіс: cron-job.org, EasyCron, GitHub Actions, серверний cron тощо.
+
+### Env для синхронізації
 
 ```bash
 CRON_SECRET="replace_with_random_secret"
 NP_STATUS_SYNC_LIMIT=50
 ```
 
-`CRON_SECRET` захищає endpoint від ручного публічного запуску. У Vercel Cron endpoint має викликатися з заголовком `Authorization: Bearer <CRON_SECRET>`. `NP_STATUS_SYNC_LIMIT` обмежує кількість замовлень з ТТН за один запуск, щоб не перевантажувати API Нової Пошти.
+Також мають залишатися налаштованими всі env Нової Пошти: `NP_API_KEY`, `NP_SENDER_REF`, `NP_CONTACT_SENDER_REF`, `NP_SENDER_CITY_REF`, `NP_SENDER_ADDRESS_REF`, `NP_SENDER_PHONE` та інші `NP_*` параметри створення ТТН.
 
 ### Що синхронізується
 
-Cron бере замовлення з `novaPoshtaTtn`, викликає `TrackingDocument/getStatusDocuments` батчем і оновлює:
+Endpoint бере замовлення з `novaPoshtaTtn`, викликає `TrackingDocument/getStatusDocuments` батчем і оновлює:
 
 - `novaPoshtaStatus`
 - `novaPoshtaStatusCode`
@@ -216,4 +223,33 @@ Cron бере замовлення з `novaPoshtaTtn`, викликає `Trackin
 - `novaPoshtaCodAmount`
 - `novaPoshtaError`
 
-Після зміни Prisma schema потрібно виконати `npm run db:push` або застосувати міграцію БД перед деплоєм. Для ручної перевірки можна викликати endpoint з header `Authorization: Bearer <CRON_SECRET>` і перевірити JSON-відповідь `{ checked, updated, errors }`.
+### Ручний виклик через curl
+
+```bash
+curl -X GET "https://3dkid-shop-y8ut.vercel.app/api/cron/novaposhta" \
+  -H "Authorization: Bearer YOUR_CRON_SECRET"
+```
+
+Успішна відповідь має виглядати приблизно так:
+
+```json
+{ "success": true, "checked": 10, "updated": 10, "errors": 0 }
+```
+
+### Ручний виклик через PowerShell
+
+```powershell
+$headers = @{ Authorization = "Bearer YOUR_CRON_SECRET" }
+Invoke-RestMethod -Method Get -Uri "https://3dkid-shop-y8ut.vercel.app/api/cron/novaposhta" -Headers $headers
+```
+
+### Приклад налаштування cron-job.org
+
+1. Створіть новий cron job.
+2. URL: `https://3dkid-shop-y8ut.vercel.app/api/cron/novaposhta`.
+3. Method: `GET`.
+4. Schedule: наприклад кожні 30–60 хвилин або за вашим операційним графіком.
+5. У Headers додайте `Authorization` зі значенням `Bearer YOUR_CRON_SECRET`.
+6. Увімкніть job і перевірте відповідь `{ checked, updated, errors }` у логах cron-job.org.
+
+Після зміни Prisma schema потрібно виконати `npm run db:push` або застосувати міграцію БД перед деплоєм. Для цієї конкретної переробки з Vercel Cron на зовнішній cron нові поля БД не додавались.

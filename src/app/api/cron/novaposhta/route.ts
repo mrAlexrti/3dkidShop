@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: getCronSecret() ? "Unauthorized cron request." : "CRON_SECRET is not configured.",
+        error: getCronSecret() ? "Unauthorized sync request." : "CRON_SECRET is not configured.",
       },
       { status: getCronSecret() ? 401 : 503 },
     );
@@ -107,6 +107,5 @@ export async function GET(request: Request) {
     checked: ttns.length,
     updated,
     errors,
-    schedule: request.headers.get("x-vercel-cron-schedule") || null,
   });
 }
