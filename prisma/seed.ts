@@ -39,18 +39,18 @@ async function main() {
 
   // --- Товары ---
   const productSeed = [
-    { name: "Набор стикеров «Котики»", price: 6.5, cat: "stickers", featured: true, isNew: false, img: "photo-1517960413843-0aee8e2b3285" },
-    { name: "Стикер «Растение монстера»", price: 3.2, cat: "stickers", featured: true, isNew: true, img: "photo-1485955900006-10f4d324d411" },
-    { name: "Постер «Минимализм #1»", price: 14.0, cat: "posters", featured: true, isNew: false, img: "photo-1547826039-bfc35e0f1ea8" },
-    { name: "Постер «Город ночью»", price: 16.5, cat: "posters", featured: false, isNew: true, img: "photo-1480714378408-67cf0d13bc1b" },
-    { name: "Открытка «С днём рождения»", price: 2.8, cat: "cards", featured: false, isNew: true, img: "photo-1513201099705-a9746e1e201f" },
-    { name: "Открытка «Спасибо»", price: 2.4, cat: "cards", featured: false, isNew: false, img: "photo-1521017432531-fbd92d768814" },
-    { name: "Холщовая сумка с принтом", price: 11.0, cat: "merch", featured: true, isNew: false, img: "photo-1591561954557-26941169b49e" },
-    { name: "Набор значков «Эмоции»", price: 7.9, cat: "merch", featured: false, isNew: true, img: "photo-1611930022073-b7a4ba5fcccd" },
-    { name: "Стикер «Облако радуга»", price: 2.9, cat: "stickers", featured: false, isNew: true, img: "photo-1499781350541-7783f6c6a0c8" },
-    { name: "Постер «Ботаника»", price: 15.2, cat: "posters", featured: false, isNew: false, img: "photo-1462275646964-a0e3386b89fa" },
-    { name: "Кружка «Доброе утро»", price: 9.4, cat: "merch", featured: true, isNew: false, img: "photo-1495474472287-4d71bcdd2085" },
-    { name: "Набор стикеров «Еда»", price: 5.6, cat: "stickers", featured: false, isNew: false, img: "photo-1606107557195-0e29a4b5b4aa" },
+    { name: "Набор стикеров «Котики»", price: 249, cat: "stickers", featured: true, isNew: false, img: "photo-1517960413843-0aee8e2b3285" },
+    { name: "Стикер «Растение монстера»", price: 133, cat: "stickers", featured: true, isNew: true, img: "photo-1485955900006-10f4d324d411" },
+    { name: "Постер «Минимализм #1»", price: 349, cat: "posters", featured: true, isNew: false, img: "photo-1547826039-bfc35e0f1ea8" },
+    { name: "Постер «Город ночью»", price: 449, cat: "posters", featured: false, isNew: true, img: "photo-1480714378408-67cf0d13bc1b" },
+    { name: "Открытка «С днём рождения»", price: 119, cat: "cards", featured: false, isNew: true, img: "photo-1513201099705-a9746e1e201f" },
+    { name: "Открытка «Спасибо»", price: 99, cat: "cards", featured: false, isNew: false, img: "photo-1521017432531-fbd92d768814" },
+    { name: "Холщовая сумка с принтом", price: 499, cat: "merch", featured: true, isNew: false, img: "photo-1591561954557-26941169b49e" },
+    { name: "Набор значков «Эмоции»", price: 299, cat: "merch", featured: false, isNew: true, img: "photo-1611930022073-b7a4ba5fcccd" },
+    { name: "Стикер «Облако радуга»", price: 129, cat: "stickers", featured: false, isNew: true, img: "photo-1499781350541-7783f6c6a0c8" },
+    { name: "Постер «Ботаника»", price: 399, cat: "posters", featured: false, isNew: false, img: "photo-1462275646964-a0e3386b89fa" },
+    { name: "Кружка «Доброе утро»", price: 349, cat: "merch", featured: true, isNew: false, img: "photo-1495474472287-4d71bcdd2085" },
+    { name: "Набор стикеров «Еда»", price: 219, cat: "stickers", featured: false, isNew: false, img: "photo-1606107557195-0e29a4b5b4aa" },
   ];
 
   for (const p of productSeed) {
@@ -58,7 +58,7 @@ async function main() {
     const category = categories.find((c) => c.slug === p.cat)!;
     const product = await prisma.product.upsert({
       where: { slug },
-      update: {},
+      update: { price: p.price },
       create: {
         name: p.name,
         slug,
@@ -74,7 +74,7 @@ async function main() {
           create: [
             {
               name: "Размер",
-              values: { create: [{ value: "Маленький" }, { value: "Средний", priceModifier: 1.5 }, { value: "Большой", priceModifier: 3 }] },
+              values: { create: [{ value: "Маленький" }, { value: "Средний", priceModifier: 50 }, { value: "Большой", priceModifier: 100 }] },
             },
           ],
         },
@@ -85,6 +85,14 @@ async function main() {
           ],
         },
       },
+    });
+    await prisma.productOptionValue.updateMany({
+      where: { option: { productId: product.id }, priceModifier: 1.5 },
+      data: { priceModifier: 50 },
+    });
+    await prisma.productOptionValue.updateMany({
+      where: { option: { productId: product.id }, priceModifier: 3 },
+      data: { priceModifier: 100 },
     });
     void product;
   }

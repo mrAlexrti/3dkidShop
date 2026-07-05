@@ -11,7 +11,6 @@ import {
   isLiqPayConfigured,
   type LiqPayCheckout,
 } from "@/lib/payments/liqpay";
-import { toPaymentAmount } from "@/lib/utils";
 
 export type CreateOrderResult =
   | { success: true; orderNumber: string; emailSent: boolean; payment?: LiqPayCheckout }
@@ -207,7 +206,7 @@ export async function createOrder(
       emailSent: false,
       payment: createLiqPayCheckout({
         orderNumber,
-        amount: toPaymentAmount(total),
+        amount: total,
       }),
     };
   }

@@ -69,11 +69,11 @@ export function ProductForm({
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">Цена (€)</label>
+          <label className="mb-1 block text-sm font-medium">Цена (грн)</label>
           <input name="price" type="number" step="0.01" defaultValue={defaults?.price} required className={inputClass} />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">Старая цена (€)</label>
+          <label className="mb-1 block text-sm font-medium">Старая цена (грн)</label>
           <input name="oldPrice" type="number" step="0.01" defaultValue={defaults?.oldPrice ?? ""} className={inputClass} />
         </div>
       </div>
