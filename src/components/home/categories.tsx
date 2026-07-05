@@ -6,7 +6,7 @@ type Category = { id: string; name: string; slug: string; imageUrl: string | nul
 
 export function Categories({ categories }: { categories: Category[] }) {
   return (
-    <section className="container-shop mt-24">
+    <section className="container-shop mt-10 md:mt-16">
       <AnimatedSection>
         <h2 className="font-display text-3xl text-ink">Категории</h2>
         <p className="mt-2 text-ink/60">Найдите то, что поднимет настроение</p>
@@ -39,3 +39,4 @@ export function Categories({ categories }: { categories: Category[] }) {
     </section>
   );
 }
+

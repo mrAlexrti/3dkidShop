@@ -59,15 +59,58 @@ EMAIL_FROM="3D Kid <orders@your-domain.example>"
 ADMIN_EMAIL="admin@your-domain.example"
 ```
 
+## Админ-авторизация, TEST_MODE и 2FA
+
+Админка `/admin` защищена Auth.js credentials-login. Режим работы задаётся env-переменной `TEST_MODE`; если она не задана, приложение считает `TEST_MODE=0`.
+
+### TEST_MODE=1 — режим разработки
+
+Используйте только локально или для временного тестового деплоя. В этом режиме:
+- вход разрешён по тестовым данным `admin` / `Pass12345`;
+- Google Authenticator / TOTP не требуется;
+- на странице `/login` и внутри `/admin` отображается предупреждение `ВНИМАНИЕ: включен TEST_MODE`.
+
+### TEST_MODE=0 — боевой режим
+
+Это режим для production. В этом режиме:
+- тестовые данные `admin` / `Pass12345` полностью отключены;
+- вход работает только через `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` и `ADMIN_TOTP_SECRET`;
+- пароль хранится только как bcrypt-hash;
+- TOTP-код из Google Authenticator обязателен.
+
+### Env для Vercel
+
+```bash
+TEST_MODE=0
+ADMIN_USERNAME="admin"
+ADMIN_PASSWORD_HASH="$2a$12$replace_with_bcrypt_hash"
+ADMIN_TOTP_SECRET="BASE32_SECRET_FROM_AUTHENTICATOR"
+AUTH_SECRET="your_auth_secret"
+NEXTAUTH_URL="https://3dkid-shop-y8ut.vercel.app"
+```
+
+### Как сгенерировать hash пароля
+
+```bash
+node -e "const bcrypt=require('bcryptjs'); bcrypt.hash(process.argv[1], 12).then(console.log)" "your-strong-password"
+```
+
+Скопируйте результат в `ADMIN_PASSWORD_HASH`. Сам пароль в `.env` или Vercel не храните.
+
+### Как сгенерировать TOTP secret
+
+```bash
+node -e "const crypto=require('crypto');const a='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';const b=crypto.randomBytes(20);let bits='',out='';for(const x of b)bits+=x.toString(2).padStart(8,'0');for(let i=0;i<bits.length;i+=5)out+=a[parseInt(bits.slice(i,i+5).padEnd(5,'0'),2)];console.log(out)"
+```
+
+В Google Authenticator нажмите `+` → `Enter a setup key`, задайте имя `3D Kid Admin`, вставьте `ADMIN_TOTP_SECRET` и выберите time-based code. После изменения env сделайте Redeploy в Vercel.
 ## Шаг 5. Создайте таблицы в базе данных и заполните демо-данными
 
 ```bash
 npm run db:push
 npm run db:seed
 ```
-После этого в базе появятся товары, категории, отзывы и тестовый админ-пользователь:
-- **Email:** admin@stikr.shop
-- **Пароль:** admin12345
+После этого в базе появятся товары, категории и отзывы. Админ-доступ настраивается отдельно через env-переменные; демо-пароль в коде не хранится.
 
 ## Шаг 6. Запустите сайт
 
@@ -105,7 +148,8 @@ prisma/seed.ts         — демо-данные
 Проще всего на **Vercel** (бесплатно для старта):
 1. Загрузите проект на GitHub.
 2. Зайдите на https://vercel.com, "Import Project", выберите репозиторий.
-3. В настройках добавьте переменные окружения `DATABASE_URL`, `AUTH_SECRET` и `NP_API_KEY` (те же, что в `.env`).
+3. В настройках добавьте переменные окружения `DATABASE_URL`, `AUTH_SECRET`, `NEXTAUTH_URL`, `TEST_MODE`, `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, `ADMIN_TOTP_SECRET`, `NP_API_KEY` (те же, что в `.env`).
 4. Нажмите Deploy.
 
 Если что-то не получается на любом из шагов — пришлите мне точный текст ошибки из терминала, и я подскажу решение.
+

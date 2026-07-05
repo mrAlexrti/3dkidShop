@@ -1,5 +1,4 @@
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -7,18 +6,21 @@ const img = (seed: string) =>
   `https://images.unsplash.com/${seed}?auto=format&fit=crop&w=1200&q=80`;
 
 async function main() {
-  // --- Админ-пользователь ---
-  const passwordHash = await bcrypt.hash("admin12345", 10);
-  await prisma.user.upsert({
-    where: { email: "admin@stikr.shop" },
-    update: {},
-    create: {
-      email: "admin@stikr.shop",
-      name: "Admin",
-      role: "ADMIN",
-      passwordHash,
-    },
-  });
+  // --- Admin user for local DB tools (optional, auth uses env credentials) ---
+  const adminUsername = process.env.ADMIN_USERNAME;
+  const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH;
+  if (adminUsername?.includes("@") && adminPasswordHash) {
+    await prisma.user.upsert({
+      where: { email: adminUsername },
+      update: { passwordHash: adminPasswordHash, role: "ADMIN" },
+      create: {
+        email: adminUsername,
+        name: "Admin",
+        role: "ADMIN",
+        passwordHash: adminPasswordHash,
+      },
+    });
+  }
 
   // --- Категории ---
   const categoriesData = [

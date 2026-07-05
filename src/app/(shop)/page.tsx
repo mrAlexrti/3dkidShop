@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { Hero } from "@/components/home/hero";
 import { Categories } from "@/components/home/categories";
 import { FeaturedProducts } from "@/components/home/featured-products";
 import { Benefits } from "@/components/home/benefits";
@@ -7,7 +6,7 @@ import { Benefits } from "@/components/home/benefits";
 export const revalidate = 60;
 
 async function getHomeData() {
-  const [categories, featured, newest, content] = await Promise.all([
+  const [categories, featured, newest] = await Promise.all([
     prisma.category.findMany({ orderBy: { order: "asc" }, take: 4 }),
     prisma.product.findMany({
       where: { isFeatured: true, isActive: true },
@@ -20,34 +19,28 @@ async function getHomeData() {
       take: 4,
       orderBy: { createdAt: "desc" },
     }),
-    prisma.siteContent.findMany({ where: { key: { in: ["hero_title", "hero_subtitle"] } } }),
   ]);
 
-  const contentMap = Object.fromEntries(content.map((c) => [c.key, c.value]));
-  return { categories, featured, newest, contentMap };
+  return { categories, featured, newest };
 }
 
 export default async function HomePage() {
-  const { categories, featured, newest, contentMap } = await getHomeData();
+  const { categories, featured, newest } = await getHomeData();
 
-  const mapProduct = (p: (typeof featured)[number]) => ({
-    id: p.id,
-    slug: p.slug,
-    name: p.name,
-    price: Number(p.price),
-    oldPrice: p.oldPrice ? Number(p.oldPrice) : null,
-    image: p.images[0]?.url ?? "/images/placeholder.svg",
-    isNew: p.isNew,
-    hasOptions: p._count.options > 0,
-    stock: p.stock,
+  const mapProduct = (product: (typeof featured)[number]) => ({
+    id: product.id,
+    slug: product.slug,
+    name: product.name,
+    price: Number(product.price),
+    oldPrice: product.oldPrice ? Number(product.oldPrice) : null,
+    image: product.images[0]?.url ?? "/images/placeholder.svg",
+    isNew: product.isNew,
+    hasOptions: product._count.options > 0,
+    stock: product.stock,
   });
 
   return (
     <>
-      <Hero
-        title={contentMap.hero_title ?? "Наклей немного радости"}
-        subtitle={contentMap.hero_subtitle ?? "Стикеры, постеры и мерч, которые поднимают настроение"}
-      />
       <Categories categories={categories} />
       <FeaturedProducts products={featured.map(mapProduct)} />
       <FeaturedProducts products={newest.map(mapProduct)} title="Новинки" />
