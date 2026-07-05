@@ -156,3 +156,37 @@ prisma/seed.ts         — демо-данные
 
 Если что-то не получается на любом из шагов — пришлите мне точный текст ошибки из терминала, и я подскажу решение.
 
+
+## Nova Poshta TTN automation
+
+Адмінка підтримує напівавтоматичне створення ТТН для замовлень із доставкою Новою Поштою. Кнопка доступна на сторінці замовлення `/admin/orders/[id]`, якщо checkout зберіг `City Ref` і `Warehouse Ref`.
+
+### Env для Vercel
+
+```bash
+NP_API_KEY="your_nova_poshta_api_key"
+NP_SENDER_REF="sender_ref_from_np_cabinet"
+NP_CONTACT_SENDER_REF="contact_sender_ref_from_np_cabinet"
+NP_SENDER_CITY_REF="sender_city_ref"
+NP_SENDER_ADDRESS_REF="sender_warehouse_or_address_ref"
+NP_SENDER_PHONE="380XXXXXXXXX"
+NP_PAYER_TYPE="Recipient"
+NP_PAYMENT_METHOD="Cash"
+NP_DEFAULT_WEIGHT="0.5"
+NP_DEFAULT_SERVICE_TYPE="WarehouseWarehouse"
+NP_DEFAULT_CARGO_TYPE="Parcel"
+NP_DEFAULT_SEATS_AMOUNT="1"
+NP_DESCRIPTION="3D printed goods"
+```
+
+`NP_API_KEY` не має бути `NEXT_PUBLIC_` і не повинен потрапляти в браузер. Після зміни env зробіть redeploy. Якщо Prisma schema вже оновлена, застосуйте зміни БД командою `npm run db:push` або відповідною migration-командою у вашому деплой-процесі.
+
+### Як перевірити
+
+1. Створіть тестове замовлення з доставкою у відділення або поштомат Нової Пошти.
+2. Увійдіть в `/admin` і відкрийте сторінку замовлення.
+3. Перевірте блок `Нова Пошта`: мають бути місто, City Ref, відділення/поштомат і Branch Ref.
+4. Натисніть `Створити ТТН`.
+5. Після успіху в замовленні збережуться `novaPoshtaTtn`, `novaPoshtaTtnRef`, `novaPoshtaCreatedAt`; у UI зʼявиться посилання на трекінг.
+
+Обмеження першої версії: автоматичне створення ТТН розраховане на замовлення з відділенням або поштоматом, де checkout зберігає `novaPoshtaBranchRef`. Курʼєрська доставка може потребувати окремої логіки адрес одержувача.

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { prisma } from "@/lib/prisma";
 import { updateSiteContent } from "@/lib/actions/categories";
 import { Button } from "@/components/ui/button";

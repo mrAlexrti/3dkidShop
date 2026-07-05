@@ -18,14 +18,14 @@ enum Role {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  passwordHash  String?
-  role          Role      @default(MANAGER)
-  createdAt     DateTime  @default(now())
-  accounts      Account[]
-  sessions      Session[]
+  id           String    @id @default(cuid())
+  name         String?
+  email        String    @unique
+  passwordHash String?
+  role         Role      @default(MANAGER)
+  createdAt    DateTime  @default(now())
+  accounts     Account[]
+  sessions     Session[]
 }
 
 model Account {
@@ -68,25 +68,25 @@ model Category {
 }
 
 model Product {
-  id            String          @id @default(cuid())
-  name          String
-  slug          String          @unique
-  description   String          @db.Text
-  price         Decimal         @db.Decimal(10, 2)
-  oldPrice      Decimal?        @db.Decimal(10, 2)
-  sku           String?         @unique
-  stock         Int             @default(0)
-  isFeatured    Boolean         @default(false)
-  isNew         Boolean         @default(false)
-  isActive      Boolean         @default(true)
-  categoryId    String
-  category      Category        @relation(fields: [categoryId], references: [id])
-  images        ProductImage[]
-  options       ProductOption[]
-  attributes    ProductAttribute[]
-  orderItems    OrderItem[]
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id          String             @id @default(cuid())
+  name        String
+  slug        String             @unique
+  description String             @db.Text
+  price       Decimal            @db.Decimal(10, 2)
+  oldPrice    Decimal?           @db.Decimal(10, 2)
+  sku         String?            @unique
+  stock       Int                @default(0)
+  isFeatured  Boolean            @default(false)
+  isNew       Boolean            @default(false)
+  isActive    Boolean            @default(true)
+  categoryId  String
+  category    Category           @relation(fields: [categoryId], references: [id])
+  images      ProductImage[]
+  options     ProductOption[]
+  attributes  ProductAttribute[]
+  orderItems  OrderItem[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
   @@index([categoryId])
 }
@@ -102,19 +102,19 @@ model ProductImage {
 
 // Опции товара, напр. "Размер" -> ["10cm","15cm"], "Материал" -> ["Глянец","Матовый"]
 model ProductOption {
-  id        String              @id @default(cuid())
+  id        String               @id @default(cuid())
   productId String
-  product   Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product   Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
   name      String
   values    ProductOptionValue[]
 }
 
 model ProductOptionValue {
-  id              String        @id @default(cuid())
-  optionId        String
-  option          ProductOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-  value           String
-  priceModifier   Decimal       @default(0) @db.Decimal(10, 2)
+  id            String        @id @default(cuid())
+  optionId      String
+  option        ProductOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  value         String
+  priceModifier Decimal       @default(0) @db.Decimal(10, 2)
 }
 
 // Характеристики товара (ключ-значение), напр. "Материал" / "Винил"
@@ -149,22 +149,35 @@ enum OrderStatus {
 }
 
 model Order {
-  id              String      @id @default(cuid())
-  number          String      @unique
-  status          OrderStatus @default(PENDING)
-  customerName    String
-  customerEmail   String
-  customerPhone   String
-  shippingAddress String
-  city            String
-  postalCode      String
-  comment         String?
-  paymentMethod   String
-  subtotal        Decimal     @db.Decimal(10, 2)
-  shippingCost    Decimal     @default(0) @db.Decimal(10, 2)
-  total           Decimal     @db.Decimal(10, 2)
-  items           OrderItem[]
-  createdAt       DateTime    @default(now())
+  id                   String      @id @default(cuid())
+  number               String      @unique
+  status               OrderStatus @default(PENDING)
+  customerName         String
+  customerFirstName    String?
+  customerLastName     String?
+  customerEmail        String
+  customerPhone        String
+  shippingAddress      String
+  deliveryMethod       String?
+  city                 String
+  postalCode           String
+  novaPoshtaCity       String?
+  novaPoshtaCityRef    String?
+  novaPoshtaBranch     String?
+  novaPoshtaBranchRef  String?
+  comment              String?
+  paymentMethod        String
+  subtotal             Decimal     @db.Decimal(10, 2)
+  shippingCost         Decimal     @default(0) @db.Decimal(10, 2)
+  total                Decimal     @db.Decimal(10, 2)
+  novaPoshtaTtn        String?
+  novaPoshtaTtnRef     String?
+  novaPoshtaStatus     String?
+  novaPoshtaStatusCode String?
+  novaPoshtaCreatedAt  DateTime?
+  novaPoshtaError      String?
+  items                OrderItem[]
+  createdAt            DateTime    @default(now())
 }
 
 model OrderItem {

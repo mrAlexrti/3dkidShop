@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/lib/utils";
 import { Package, FolderTree, ShoppingCart, TrendingUp } from "lucide-react";
