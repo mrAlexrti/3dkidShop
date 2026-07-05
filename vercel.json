@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/novaposhta",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

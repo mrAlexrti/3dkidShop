@@ -190,3 +190,30 @@ NP_DESCRIPTION="3D printed goods"
 5. Після успіху в замовленні збережуться `novaPoshtaTtn`, `novaPoshtaTtnRef`, `novaPoshtaCreatedAt`; у UI зʼявиться посилання на трекінг.
 
 Обмеження першої версії: автоматичне створення ТТН розраховане на замовлення з відділенням або поштоматом, де checkout зберігає `novaPoshtaBranchRef`. Курʼєрська доставка може потребувати окремої логіки адрес одержувача.
+## Nova Poshta status sync cron
+
+Проєкт має Vercel Cron для синхронізації статусів ТТН і післяплати: `GET /api/cron/novaposhta`. Розклад задається у `vercel.json` і зараз запускається щогодини за UTC: `0 * * * *`.
+
+### Env для cron
+
+```bash
+CRON_SECRET="replace_with_random_secret"
+NP_STATUS_SYNC_LIMIT=50
+```
+
+`CRON_SECRET` захищає endpoint від ручного публічного запуску. У Vercel Cron endpoint має викликатися з заголовком `Authorization: Bearer <CRON_SECRET>`. `NP_STATUS_SYNC_LIMIT` обмежує кількість замовлень з ТТН за один запуск, щоб не перевантажувати API Нової Пошти.
+
+### Що синхронізується
+
+Cron бере замовлення з `novaPoshtaTtn`, викликає `TrackingDocument/getStatusDocuments` батчем і оновлює:
+
+- `novaPoshtaStatus`
+- `novaPoshtaStatusCode`
+- `novaPoshtaSyncedAt`
+- `novaPoshtaDeliveredAt`
+- `novaPoshtaCodStatus`
+- `novaPoshtaCodStatusCode`
+- `novaPoshtaCodAmount`
+- `novaPoshtaError`
+
+Після зміни Prisma schema потрібно виконати `npm run db:push` або застосувати міграцію БД перед деплоєм. Для ручної перевірки можна викликати endpoint з header `Authorization: Bearer <CRON_SECRET>` і перевірити JSON-відповідь `{ checked, updated, errors }`.

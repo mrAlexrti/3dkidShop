@@ -35,11 +35,30 @@ type StatusData = {
   Number?: string;
   Status?: string;
   StatusCode?: string;
+  ActualDeliveryDate?: string;
+  DateScan?: string;
+  Redelivery?: string;
+  RedeliverySum?: string;
+  RedeliveryStatus?: string;
+  RedeliveryStatusCode?: string;
+  RedeliveryNum?: string;
+  RedeliveryPaymentCardDescription?: string;
+  AfterpaymentOnGoodsCost?: string;
 };
 
 export type NovaPoshtaWaybillResult =
   | { success: true; ttn: string; ref: string; status?: string; statusCode?: string }
   | { success: false; error: string; missingFields?: string[] };
+
+export type NovaPoshtaDocumentStatus = {
+  ttn: string;
+  status: string;
+  statusCode: string;
+  deliveredAt: Date | null;
+  codStatus: string;
+  codStatusCode: string;
+  codAmount: number | null;
+};
 
 function readEnv(name: string) {
   const value = process.env[name]?.trim() ?? "";
@@ -68,6 +87,35 @@ function normalizePhone(value: string) {
 function isCashOnDelivery(paymentMethod: string) {
   const normalized = paymentMethod.toLowerCase();
   return normalized.includes("наклад") || normalized.includes("cash_on_delivery") || normalized.includes("cod");
+}
+
+function parseNovaPoshtaMoney(value: string | number | undefined) {
+  if (!value) return null;
+
+  const parsed = Number(String(value).replace(",", ".").replace(/[^\d.]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseNovaPoshtaDate(value: string | undefined) {
+  if (!value) return null;
+
+  const normalized = value.trim();
+  const parsedDate = normalized.match(/^(\d{2})[.\-/](\d{2})[.\-/](\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (parsedDate) {
+    const [, day, month, year, hour = "00", minute = "00", second = "00"] = parsedDate;
+    const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function normalizeRedeliveryStatus(data: StatusData) {
+  if (data.RedeliveryStatus) return data.RedeliveryStatus;
+  if (data.RedeliveryPaymentCardDescription) return data.RedeliveryPaymentCardDescription;
+  if (data.Redelivery === "1" || data.RedeliveryNum) return "Очікується післяплата";
+  return "";
 }
 
 function getConfig() {
@@ -145,6 +193,18 @@ function buildBackwardDeliveryData(order: NovaPoshtaOrderInput) {
   ];
 }
 
+function normalizeDocumentStatus(data: StatusData, fallbackTtn: string): NovaPoshtaDocumentStatus {
+  return {
+    ttn: data.Number || fallbackTtn,
+    status: data.Status || "",
+    statusCode: data.StatusCode || "",
+    deliveredAt: parseNovaPoshtaDate(data.ActualDeliveryDate || (data.StatusCode === "9" ? data.DateScan : undefined)),
+    codStatus: normalizeRedeliveryStatus(data),
+    codStatusCode: data.RedeliveryStatusCode || "",
+    codAmount: parseNovaPoshtaMoney(data.RedeliverySum || data.AfterpaymentOnGoodsCost),
+  };
+}
+
 export async function createNovaPoshtaWaybill(order: NovaPoshtaOrderInput): Promise<NovaPoshtaWaybillResult> {
   const configValidation = validateNovaPoshtaConfig();
   if (!configValidation.ok) {
@@ -209,7 +269,12 @@ export async function createNovaPoshtaWaybill(order: NovaPoshtaOrderInput): Prom
   };
 }
 
-export async function getNovaPoshtaDocumentStatus(ttn: string) {
+export async function getNovaPoshtaDocumentStatuses(ttns: string[]) {
+  const uniqueTtns = Array.from(new Set(ttns.map((ttn) => ttn.trim()).filter(Boolean)));
+  if (uniqueTtns.length === 0) {
+    return { success: true as const, statuses: [] as NovaPoshtaDocumentStatus[] };
+  }
+
   const configValidation = validateNovaPoshtaConfig();
   if (!configValidation.ok) {
     return {
@@ -219,15 +284,29 @@ export async function getNovaPoshtaDocumentStatus(ttn: string) {
   }
 
   const result = await callNovaPoshta<StatusData>(configValidation.config.apiKey, "TrackingDocument", "getStatusDocuments", {
-    Documents: [{ DocumentNumber: ttn }],
+    Documents: uniqueTtns.map((ttn) => ({ DocumentNumber: ttn })),
   });
   if (!result.success) return result;
 
-  const status = result.data[0];
   return {
     success: true as const,
-    ttn: status?.Number ?? ttn,
-    status: status?.Status ?? "",
-    statusCode: status?.StatusCode ?? "",
+    statuses: result.data.map((status, index) => normalizeDocumentStatus(status, uniqueTtns[index] ?? "")),
+  };
+}
+
+export async function getNovaPoshtaDocumentStatus(ttn: string) {
+  const result = await getNovaPoshtaDocumentStatuses([ttn]);
+  if (!result.success) return result;
+
+  const status = result.statuses[0];
+  return {
+    success: true as const,
+    ttn: status?.ttn ?? ttn,
+    status: status?.status ?? "",
+    statusCode: status?.statusCode ?? "",
+    codStatus: status?.codStatus ?? "",
+    codStatusCode: status?.codStatusCode ?? "",
+    codAmount: status?.codAmount ?? null,
+    deliveredAt: status?.deliveredAt ?? null,
   };
 }

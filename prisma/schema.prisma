@@ -149,35 +149,40 @@ enum OrderStatus {
 }
 
 model Order {
-  id                   String      @id @default(cuid())
-  number               String      @unique
-  status               OrderStatus @default(PENDING)
-  customerName         String
-  customerFirstName    String?
-  customerLastName     String?
-  customerEmail        String
-  customerPhone        String
-  shippingAddress      String
-  deliveryMethod       String?
-  city                 String
-  postalCode           String
-  novaPoshtaCity       String?
-  novaPoshtaCityRef    String?
-  novaPoshtaBranch     String?
-  novaPoshtaBranchRef  String?
-  comment              String?
-  paymentMethod        String
-  subtotal             Decimal     @db.Decimal(10, 2)
-  shippingCost         Decimal     @default(0) @db.Decimal(10, 2)
-  total                Decimal     @db.Decimal(10, 2)
-  novaPoshtaTtn        String?
-  novaPoshtaTtnRef     String?
-  novaPoshtaStatus     String?
-  novaPoshtaStatusCode String?
-  novaPoshtaCreatedAt  DateTime?
-  novaPoshtaError      String?
-  items                OrderItem[]
-  createdAt            DateTime    @default(now())
+  id                      String      @id @default(cuid())
+  number                  String      @unique
+  status                  OrderStatus @default(PENDING)
+  customerName            String
+  customerFirstName       String?
+  customerLastName        String?
+  customerEmail           String
+  customerPhone           String
+  shippingAddress         String
+  deliveryMethod          String?
+  city                    String
+  postalCode              String
+  novaPoshtaCity          String?
+  novaPoshtaCityRef       String?
+  novaPoshtaBranch        String?
+  novaPoshtaBranchRef     String?
+  comment                 String?
+  paymentMethod           String
+  subtotal                Decimal     @db.Decimal(10, 2)
+  shippingCost            Decimal     @default(0) @db.Decimal(10, 2)
+  total                   Decimal     @db.Decimal(10, 2)
+  novaPoshtaTtn           String?
+  novaPoshtaTtnRef        String?
+  novaPoshtaStatus        String?
+  novaPoshtaStatusCode    String?
+  novaPoshtaCreatedAt     DateTime?
+  novaPoshtaSyncedAt      DateTime?
+  novaPoshtaDeliveredAt   DateTime?
+  novaPoshtaCodStatus     String?
+  novaPoshtaCodStatusCode String?
+  novaPoshtaCodAmount     Decimal?    @db.Decimal(10, 2)
+  novaPoshtaError         String?
+  items                   OrderItem[]
+  createdAt               DateTime    @default(now())
 }
 
 model OrderItem {

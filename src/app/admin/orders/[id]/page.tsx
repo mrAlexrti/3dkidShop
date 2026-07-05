@@ -121,7 +121,12 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
               <div><dt className="text-ink/50">Відділення / поштомат</dt><dd>{order.novaPoshtaBranch || order.shippingAddress || "—"}</dd></div>
               <div><dt className="text-ink/50">Branch Ref</dt><dd className="break-all">{order.novaPoshtaBranchRef || "—"}</dd></div>
               <div><dt className="text-ink/50">Статус</dt><dd>{order.novaPoshtaStatus || "—"}</dd></div>
+              <div><dt className="text-ink/50">Код статусу</dt><dd>{order.novaPoshtaStatusCode || "—"}</dd></div>
+              <div><dt className="text-ink/50">Післяплата</dt><dd>{order.novaPoshtaCodStatus || "—"}</dd></div>
+              <div><dt className="text-ink/50">Сума післяплати</dt><dd>{order.novaPoshtaCodAmount ? formatPrice(Number(order.novaPoshtaCodAmount)) : "—"}</dd></div>
+              <div><dt className="text-ink/50">Доставлено</dt><dd>{formatDateTime(order.novaPoshtaDeliveredAt)}</dd></div>
               <div><dt className="text-ink/50">Створено</dt><dd>{formatDateTime(order.novaPoshtaCreatedAt)}</dd></div>
+              <div><dt className="text-ink/50">Остання синхронізація</dt><dd>{formatDateTime(order.novaPoshtaSyncedAt)}</dd></div>
             </dl>
 
             {order.novaPoshtaTtn ? (
