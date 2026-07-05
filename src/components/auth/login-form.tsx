@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -34,7 +34,6 @@ function getRedirectTarget(responseUrl: string | null | undefined, fallbackUrl: 
 }
 
 export function LoginForm({ isTestMode }: { isTestMode: boolean }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [username, setUsername] = useState(isTestMode ? "admin" : "");
   const [password, setPassword] = useState("");
@@ -69,8 +68,7 @@ export function LoginForm({ isTestMode }: { isTestMode: boolean }) {
         return;
       }
 
-      router.replace(getRedirectTarget(response.url, callbackUrl));
-      router.refresh();
+      window.location.assign(getRedirectTarget(response.url, callbackUrl));
     } catch (signInError) {
       console.error("Admin sign-in failed", signInError);
       const message = "Помилка входу. Перевірте env, cookies та /api/auth/diagnostics";

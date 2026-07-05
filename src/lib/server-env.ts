@@ -32,5 +32,6 @@ export function getAuthDiagnostics() {
     hasAnyAuthSecret: Boolean(getAuthSecret()),
     hasNextAuthUrl: Boolean(readServerEnv("NEXTAUTH_URL")),
     hasAuthUrl: Boolean(readServerEnv("AUTH_URL")),
+    authDebugEnabled: readServerEnv("AUTH_DEBUG") === "1",
   };
 }

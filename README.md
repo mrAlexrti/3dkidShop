@@ -82,6 +82,7 @@ ADMIN_EMAIL="admin@your-domain.example"
 
 ```bash
 TEST_MODE=0
+AUTH_DEBUG=0
 ADMIN_USERNAME="admin"
 ADMIN_PASSWORD_HASH="$2a$12$replace_with_bcrypt_hash"
 ADMIN_TOTP_SECRET="BASE32_SECRET_FROM_AUTHENTICATOR"
@@ -105,7 +106,7 @@ node -e "const bcrypt=require('bcryptjs'); bcrypt.hash(process.argv[1], 12).then
 node -e "const crypto=require('crypto');const a='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';const b=crypto.randomBytes(20);let bits='',out='';for(const x of b)bits+=x.toString(2).padStart(8,'0');for(let i=0;i<bits.length;i+=5)out+=a[parseInt(bits.slice(i,i+5).padEnd(5,'0'),2)];console.log(out)"
 ```
 
-В Google Authenticator нажмите `+` → `Enter a setup key`, задайте имя `3D Kid Admin`, вставьте `ADMIN_TOTP_SECRET` и выберите time-based code. После изменения env сделайте Redeploy в Vercel. Для безопасной проверки production env откройте `/api/auth/diagnostics`: endpoint показывает только boolean/value-флаги без паролей, hash, TOTP secret, cookies или session token.
+В Google Authenticator нажмите `+` → `Enter a setup key`, задайте имя `3D Kid Admin`, вставьте `ADMIN_TOTP_SECRET` и выберите time-based code. После изменения env сделайте Redeploy в Vercel. Для безопасной проверки production env откройте `/api/auth/diagnostics`: endpoint показывает только boolean/value-флаги без паролей, hash, TOTP secret, cookies или session token. Если нужно проверить middleware, временно выставьте `AUTH_DEBUG=1`: в Vercel logs появятся только `path`, `hasToken`, `tokenKeys` и `cookieNames` без значений cookie/token.
 ## Шаг 5. Создайте таблицы в базе данных и заполните демо-данными
 
 ```bash

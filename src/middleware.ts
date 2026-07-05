@@ -27,6 +27,32 @@ function shouldRedirectToCanonical(req: NextRequest) {
   );
 }
 
+function isSecureRequest(req: NextRequest) {
+  const forwardedProto = req.headers.get("x-forwarded-proto");
+  return req.nextUrl.protocol === "https:" || forwardedProto === "https";
+}
+
+function getCookieNames(req: NextRequest) {
+  return req.cookies.getAll().map((cookie) => cookie.name).sort();
+}
+
+function logAuthDebug(req: NextRequest, token: unknown) {
+  if (readServerEnv("AUTH_DEBUG") !== "1") return;
+
+  const tokenObject = token && typeof token === "object" ? (token as Record<string, unknown>) : null;
+
+  console.info(
+    "[auth middleware]",
+    JSON.stringify({
+      path: req.nextUrl.pathname,
+      secureCookie: isSecureRequest(req),
+      hasToken: Boolean(tokenObject),
+      tokenKeys: tokenObject ? Object.keys(tokenObject).sort() : [],
+      cookieNames: getCookieNames(req),
+    }),
+  );
+}
+
 export default async function middleware(req: NextRequest) {
   if (shouldRedirectToCanonical(req)) {
     const canonicalUrl = new URL(req.nextUrl.pathname + req.nextUrl.search, `https://${getCanonicalHost()}`);
@@ -36,7 +62,13 @@ export default async function middleware(req: NextRequest) {
   const isAdminRoute = req.nextUrl.pathname.startsWith("/admin");
 
   if (isAdminRoute) {
-    const token = await getToken({ req, secret: getAuthSecret() });
+    const token = await getToken({
+      req,
+      secret: getAuthSecret(),
+      secureCookie: isSecureRequest(req),
+    });
+    logAuthDebug(req, token);
+
     const isAdmin = token?.role === "ADMIN";
 
     if (!isAdmin) {

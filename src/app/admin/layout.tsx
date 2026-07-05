@@ -1,13 +1,7 @@
-import { auth } from "@/lib/auth";
 import { isTestModeEnabled } from "@/lib/server-env";
-import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
-  const role = (session?.user as { role?: string } | undefined)?.role;
-  if (role !== "ADMIN") redirect("/login?callbackUrl=/admin");
-
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-cream">
       <AdminSidebar />
