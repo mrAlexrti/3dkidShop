@@ -1,11 +1,7 @@
 import { auth } from "@/lib/auth";
+import { isTestModeEnabled } from "@/lib/server-env";
 import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
-
-function isTestMode() {
-  const value = process.env.TEST_MODE?.trim() ?? "";
-  return value.replace(/^['"]|['"]$/g, "") === "1";
-}
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -16,7 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="flex min-h-screen bg-cream">
       <AdminSidebar />
       <div className="flex-1 overflow-y-auto p-8">
-        {isTestMode() && (
+        {isTestModeEnabled() && (
           <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 shadow-sm">
             ВНИМАНИЕ: включен TEST_MODE
             <span className="mt-1 block text-xs font-normal text-amber-700">

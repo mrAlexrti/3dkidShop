@@ -10,11 +10,27 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   invalid_credentials: "Невірний логін або пароль",
   invalid_totp: "Невірний код Google Authenticator",
   admin_config_missing: "Авторизацію адміністратора не налаштовано на сервері",
+  auth_secret_missing: "Auth secret не налаштований на сервері",
+  Configuration: "Auth.js налаштований некоректно. Перевірте env у Vercel",
+  CallbackRouteError: "Помилка callback авторизації. Перевірте env та diagnostics endpoint",
   CredentialsSignin: "Невірні дані для входу",
 };
 
 function getSafeCallbackUrl(value: string | null) {
   return value?.startsWith("/") ? value : "/admin";
+}
+
+function getRedirectTarget(responseUrl: string | null | undefined, fallbackUrl: string) {
+  if (!responseUrl) return fallbackUrl;
+
+  try {
+    const parsedUrl = new URL(responseUrl, window.location.origin);
+    if (parsedUrl.origin !== window.location.origin) return fallbackUrl;
+
+    return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+  } catch {
+    return fallbackUrl;
+  }
 }
 
 export function LoginForm({ isTestMode }: { isTestMode: boolean }) {
@@ -32,25 +48,37 @@ export function LoginForm({ isTestMode }: { isTestMode: boolean }) {
     setLoading(true);
 
     const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl"));
-    const response = await signIn("credentials", {
-      username,
-      password,
-      totp,
-      redirect: false,
-      callbackUrl,
-    });
 
-    setLoading(false);
+    try {
+      const response = await signIn("credentials", {
+        username,
+        password,
+        totp,
+        redirect: false,
+        callbackUrl,
+      });
 
-    if (response?.error) {
-      const message = AUTH_ERROR_MESSAGES[response.code ?? response.error] ?? "Не вдалося увійти";
+      if (!response) {
+        throw new Error("empty_signin_response");
+      }
+
+      if (response.error || response.ok === false) {
+        const message = AUTH_ERROR_MESSAGES[response.code ?? response.error ?? ""] ?? "Не вдалося увійти";
+        setError(message);
+        toast.error(message);
+        return;
+      }
+
+      router.replace(getRedirectTarget(response.url, callbackUrl));
+      router.refresh();
+    } catch (signInError) {
+      console.error("Admin sign-in failed", signInError);
+      const message = "Помилка входу. Перевірте env, cookies та /api/auth/diagnostics";
       setError(message);
       toast.error(message);
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    router.replace(callbackUrl);
-    router.refresh();
   };
 
   return (

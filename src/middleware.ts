@@ -1,9 +1,10 @@
 import { getToken } from "next-auth/jwt";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { getAuthSecret, readServerEnv } from "@/lib/server-env";
 
 function getCanonicalHost() {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL;
+  const siteUrl = readServerEnv("NEXT_PUBLIC_SITE_URL") || readServerEnv("SITE_URL") || readServerEnv("NEXTAUTH_URL") || readServerEnv("AUTH_URL");
   if (!siteUrl) return "";
 
   try {
@@ -35,7 +36,7 @@ export default async function middleware(req: NextRequest) {
   const isAdminRoute = req.nextUrl.pathname.startsWith("/admin");
 
   if (isAdminRoute) {
-    const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+    const token = await getToken({ req, secret: getAuthSecret() });
     const isAdmin = token?.role === "ADMIN";
 
     if (!isAdmin) {

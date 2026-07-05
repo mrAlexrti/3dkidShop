@@ -86,6 +86,8 @@ ADMIN_USERNAME="admin"
 ADMIN_PASSWORD_HASH="$2a$12$replace_with_bcrypt_hash"
 ADMIN_TOTP_SECRET="BASE32_SECRET_FROM_AUTHENTICATOR"
 AUTH_SECRET="your_auth_secret"
+# Optional fallback for older NextAuth naming. Use the same value as AUTH_SECRET if needed.
+NEXTAUTH_SECRET="your_auth_secret"
 NEXTAUTH_URL="https://3dkid-shop-y8ut.vercel.app"
 ```
 
@@ -103,7 +105,7 @@ node -e "const bcrypt=require('bcryptjs'); bcrypt.hash(process.argv[1], 12).then
 node -e "const crypto=require('crypto');const a='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';const b=crypto.randomBytes(20);let bits='',out='';for(const x of b)bits+=x.toString(2).padStart(8,'0');for(let i=0;i<bits.length;i+=5)out+=a[parseInt(bits.slice(i,i+5).padEnd(5,'0'),2)];console.log(out)"
 ```
 
-В Google Authenticator нажмите `+` → `Enter a setup key`, задайте имя `3D Kid Admin`, вставьте `ADMIN_TOTP_SECRET` и выберите time-based code. После изменения env сделайте Redeploy в Vercel.
+В Google Authenticator нажмите `+` → `Enter a setup key`, задайте имя `3D Kid Admin`, вставьте `ADMIN_TOTP_SECRET` и выберите time-based code. После изменения env сделайте Redeploy в Vercel. Для безопасной проверки production env откройте `/api/auth/diagnostics`: endpoint показывает только boolean/value-флаги без паролей, hash, TOTP secret, cookies или session token.
 ## Шаг 5. Создайте таблицы в базе данных и заполните демо-данными
 
 ```bash
@@ -148,7 +150,7 @@ prisma/seed.ts         — демо-данные
 Проще всего на **Vercel** (бесплатно для старта):
 1. Загрузите проект на GitHub.
 2. Зайдите на https://vercel.com, "Import Project", выберите репозиторий.
-3. В настройках добавьте переменные окружения `DATABASE_URL`, `AUTH_SECRET`, `NEXTAUTH_URL`, `TEST_MODE`, `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, `ADMIN_TOTP_SECRET`, `NP_API_KEY` (те же, что в `.env`).
+3. В настройках добавьте переменные окружения `DATABASE_URL`, `AUTH_SECRET`, `NEXTAUTH_SECRET` (optional fallback), `NEXTAUTH_URL`, `TEST_MODE`, `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, `ADMIN_TOTP_SECRET`, `NP_API_KEY` (те же, что в `.env`).
 4. Нажмите Deploy.
 
 Если что-то не получается на любом из шагов — пришлите мне точный текст ошибки из терминала, и я подскажу решение.

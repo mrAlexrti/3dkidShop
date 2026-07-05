@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import { getAuthSecret, isTestModeEnabled, readServerEnv } from "@/lib/server-env";
 import { verifyTotpCode } from "@/lib/totp";
 
 const TEST_ADMIN_USERNAME = "admin";
@@ -19,26 +20,14 @@ class MissingAdminConfigError extends CredentialsSignin {
   code = "admin_config_missing";
 }
 
-function readEnv(name: string) {
-  const value = process.env[name]?.trim() ?? "";
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value.slice(1, -1).trim();
-  }
-
-  return value;
-}
-
-function isTestMode() {
-  return readEnv("TEST_MODE") === "1";
+class MissingAuthSecretError extends CredentialsSignin {
+  code = "auth_secret_missing";
 }
 
 function getAdminConfig() {
-  const username = readEnv("ADMIN_USERNAME");
-  const passwordHash = readEnv("ADMIN_PASSWORD_HASH");
-  const totpSecret = readEnv("ADMIN_TOTP_SECRET");
+  const username = readServerEnv("ADMIN_USERNAME");
+  const passwordHash = readServerEnv("ADMIN_PASSWORD_HASH");
+  const totpSecret = readServerEnv("ADMIN_TOTP_SECRET");
 
   if (!username || !passwordHash || !totpSecret) return null;
 
@@ -49,9 +38,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   pages: {
     signIn: "/login",
   },
+  secret: getAuthSecret(),
+  trustHost: true,
   session: { strategy: "jwt" },
   providers: [
     Credentials({
+      id: "credentials",
       name: "credentials",
       credentials: {
         username: { label: "Username", type: "text" },
@@ -63,7 +55,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const password = credentials?.password as string | undefined;
         const totp = credentials?.totp as string | undefined;
 
-        if (isTestMode()) {
+        if (!getAuthSecret()) throw new MissingAuthSecretError();
+
+        if (isTestModeEnabled()) {
           if (username?.trim() !== TEST_ADMIN_USERNAME || password !== TEST_ADMIN_PASSWORD) {
             throw new InvalidCredentialsError();
           }
