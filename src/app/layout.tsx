@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     template: "%s | 3D Kid",
   },
   description: "Магазин 3D Kid: іграшки, брелоки, курси. Яскравий дизайн, швидка доставка.",
-  metadataBase: new URL("https://3dkid-shop-y8ut.vercel.app"),
+  metadataBase: new URL("https://www.3dkid.shop"),
   openGraph: {
     title:       "3D Kid — Іграшки, брелоки та курси",
     description: "Наклей трохи радості!",

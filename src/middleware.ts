@@ -18,13 +18,10 @@ function shouldRedirectToCanonical(req: NextRequest) {
   const canonicalHost = getCanonicalHost();
   const requestHost = req.nextUrl.host;
 
-  return (
-    process.env.VERCEL_ENV === "production" &&
-    Boolean(canonicalHost) &&
-    requestHost !== canonicalHost &&
-    requestHost.startsWith("3dkid-shop-y8ut-") &&
-    requestHost.endsWith(".vercel.app")
-  );
+  const isVercelHost = requestHost === "3dkid-shop-y8ut.vercel.app" || (requestHost.startsWith("3dkid-shop-y8ut-") && requestHost.endsWith(".vercel.app"));
+  const isApexCustomDomain = canonicalHost === "www.3dkid.shop" && requestHost === "3dkid.shop";
+
+  return process.env.VERCEL_ENV === "production" && Boolean(canonicalHost) && requestHost !== canonicalHost && (isVercelHost || isApexCustomDomain);
 }
 
 function isSecureRequest(req: NextRequest) {

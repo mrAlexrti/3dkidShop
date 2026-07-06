@@ -89,7 +89,7 @@ ADMIN_TOTP_SECRET="BASE32_SECRET_FROM_AUTHENTICATOR"
 AUTH_SECRET="your_auth_secret"
 # Optional fallback for older NextAuth naming. Use the same value as AUTH_SECRET if needed.
 NEXTAUTH_SECRET="your_auth_secret"
-NEXTAUTH_URL="https://3dkid-shop-y8ut.vercel.app"
+NEXTAUTH_URL="https://www.3dkid.shop"
 ```
 
 ### Как сгенерировать hash пароля
@@ -190,25 +190,39 @@ NP_DESCRIPTION="3D printed goods"
 5. Після успіху в замовленні збережуться `novaPoshtaTtn`, `novaPoshtaTtnRef`, `novaPoshtaCreatedAt`; у UI зʼявиться посилання на трекінг.
 
 Обмеження першої версії: автоматичне створення ТТН розраховане на замовлення з відділенням або поштоматом, де checkout зберігає `novaPoshtaBranchRef`. Курʼєрська доставка може потребувати окремої логіки адрес одержувача.
-## Nova Poshta status sync via external cron
+## Nova Poshta status sync via GitHub Actions
 
-Проєкт більше не використовує Vercel Cron, щоб деплой працював на Vercel Hobby. Endpoint синхронізації залишається доступним як захищений HTTP-виклик:
+Production-домен проєкту: `https://www.3dkid.shop/`.
+
+Синхронізація статусів Нової Пошти запускається не через Vercel Cron, а через GitHub Actions workflow `.github/workflows/novaposhta-sync.yml`. Workflow викликає захищений endpoint:
 
 ```text
-GET /api/cron/novaposhta
+GET https://www.3dkid.shop/api/cron/novaposhta
 Authorization: Bearer <CRON_SECRET>
 ```
 
-Його можна запускати вручну або через зовнішній cron-сервіс: cron-job.org, EasyCron, GitHub Actions, серверний cron тощо.
+Workflow запускається кожні 30 хвилин і також підтримує ручний запуск через `workflow_dispatch`.
 
-### Env для синхронізації
+### GitHub Secrets
+
+У GitHub repository settings додайте secret:
 
 ```bash
-CRON_SECRET="replace_with_random_secret"
-NP_STATUS_SYNC_LIMIT=50
+CRON_SECRET="same_value_as_vercel_cron_secret"
 ```
 
-Також мають залишатися налаштованими всі env Нової Пошти: `NP_API_KEY`, `NP_SENDER_REF`, `NP_CONTACT_SENDER_REF`, `NP_SENDER_CITY_REF`, `NP_SENDER_ADDRESS_REF`, `NP_SENDER_PHONE` та інші `NP_*` параметри створення ТТН.
+Значення має збігатися з `CRON_SECRET` у Vercel env. Також у Vercel мають залишатися `NP_API_KEY`, `NP_SENDER_REF`, `NP_CONTACT_SENDER_REF`, `NP_SENDER_CITY_REF`, `NP_SENDER_ADDRESS_REF`, `NP_SENDER_PHONE`, `NP_STATUS_SYNC_LIMIT` та інші `NP_*` env для створення/синхронізації ТТН.
+
+### Vercel env для нового домену
+
+Для production потрібно виставити:
+
+```bash
+NEXTAUTH_URL="https://www.3dkid.shop"
+NEXT_PUBLIC_SITE_URL="https://www.3dkid.shop"
+```
+
+`NEXT_PUBLIC_SITE_URL` використовується для LiqPay `server_url` і `result_url`, тому після зміни домену обовʼязково зробіть redeploy.
 
 ### Що синхронізується
 
@@ -223,33 +237,35 @@ Endpoint бере замовлення з `novaPoshtaTtn`, викликає `Tra
 - `novaPoshtaCodAmount`
 - `novaPoshtaError`
 
-### Ручний виклик через curl
+Окремого `paymentStatus` у Prisma зараз немає, тому workflow використовує існуючий `Order.status`: якщо післяплата визначена як оплачена/отримана, замовлення переходить у `PAID` тільки зі станів `PENDING` або `PROCESSING`; якщо посилка отримана/доставлена, замовлення переходить у `COMPLETED`, окрім уже `CANCELLED` або `COMPLETED`.
 
-```bash
-curl -X GET "https://3dkid-shop-y8ut.vercel.app/api/cron/novaposhta" \
-  -H "Authorization: Bearer YOUR_CRON_SECRET"
-```
+### Ручний запуск workflow
 
-Успішна відповідь має виглядати приблизно так:
+1. Відкрийте GitHub repo → `Actions`.
+2. Оберіть workflow `Nova Poshta status sync`.
+3. Натисніть `Run workflow`.
+4. Відкрийте останній run і перевірте logs: старт синхронізації, HTTP status, API response.
+
+### Історія запусків
+
+GitHub → `Actions` → `Nova Poshta status sync`. У кожному run видно HTTP status і JSON-відповідь endpoint, наприклад:
 
 ```json
-{ "success": true, "checked": 10, "updated": 10, "errors": 0 }
+{ "success": true, "checked": 10, "updated": 10, "errors": 0, "orderStatusChanged": 2 }
 ```
 
 ### Ручний виклик через PowerShell
 
 ```powershell
 $headers = @{ Authorization = "Bearer YOUR_CRON_SECRET" }
-Invoke-RestMethod -Method Get -Uri "https://3dkid-shop-y8ut.vercel.app/api/cron/novaposhta" -Headers $headers
+Invoke-RestMethod -Method Get -Uri "https://www.3dkid.shop/api/cron/novaposhta" -Headers $headers
 ```
 
-### Приклад налаштування cron-job.org
+### Ручний виклик через curl
 
-1. Створіть новий cron job.
-2. URL: `https://3dkid-shop-y8ut.vercel.app/api/cron/novaposhta`.
-3. Method: `GET`.
-4. Schedule: наприклад кожні 30–60 хвилин або за вашим операційним графіком.
-5. У Headers додайте `Authorization` зі значенням `Bearer YOUR_CRON_SECRET`.
-6. Увімкніть job і перевірте відповідь `{ checked, updated, errors }` у логах cron-job.org.
+```bash
+curl -X GET "https://www.3dkid.shop/api/cron/novaposhta" \
+  -H "Authorization: Bearer YOUR_CRON_SECRET"
+```
 
-Після зміни Prisma schema потрібно виконати `npm run db:push` або застосувати міграцію БД перед деплоєм. Для цієї конкретної переробки з Vercel Cron на зовнішній cron нові поля БД не додавались.
+Після зміни Prisma schema потрібно виконати `npm run db:push` або застосувати міграцію БД перед деплоєм. Для додавання GitHub Actions workflow нові поля БД не додавались.

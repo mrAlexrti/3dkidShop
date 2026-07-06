@@ -1,0 +1,53 @@
+name: Nova Poshta status sync
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sync-novaposhta:
+    name: Sync Nova Poshta statuses
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Start sync
+        run: |
+          echo "Starting Nova Poshta status sync"
+          echo "Target: https://www.3dkid.shop/api/cron/novaposhta"
+          echo "Triggered by: ${{ github.event_name }}"
+
+      - name: Call sync endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SYNC_URL: https://www.3dkid.shop/api/cron/novaposhta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::GitHub secret CRON_SECRET is not configured"
+            exit 1
+          fi
+
+          response_file="$(mktemp)"
+          echo "Calling ${SYNC_URL}"
+
+          http_status="$(curl --silent --show-error --location \
+            --request GET "${SYNC_URL}" \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            --output "${response_file}" \
+            --write-out "%{http_code}")"
+
+          echo "HTTP status: ${http_status}"
+          echo "API response:"
+          cat "${response_file}"
+          echo
+
+          if [ "${http_status}" -lt 200 ] || [ "${http_status}" -ge 300 ]; then
+            echo "::error::Nova Poshta sync failed with HTTP ${http_status}"
+            exit 1
+          fi
+
+          echo "Nova Poshta sync finished successfully"

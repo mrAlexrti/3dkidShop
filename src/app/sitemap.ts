@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { MetadataRoute } from "next";
 
-const SITE_URL = "https://3dkid-shop-y8ut.vercel.app";
+const SITE_URL = "https://www.3dkid.shop";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const products = await prisma.product.findMany({

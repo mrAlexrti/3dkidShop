@@ -1,3 +1,4 @@
+import { OrderStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getNovaPoshtaDocumentStatuses } from "@/lib/novaposhta";
@@ -30,6 +31,49 @@ function statusByTtnKey(ttn: string) {
   return ttn.replace(/\D/g, "");
 }
 
+function normalizedText(...values: Array<string | null | undefined>) {
+  return values.filter(Boolean).join(" ").toLowerCase();
+}
+
+function isDeliveredStatus(status: { status: string; statusCode: string }) {
+  const text = normalizedText(status.status);
+  return (
+    status.statusCode === "9" ||
+    text.includes("отримано") ||
+    text.includes("доставлено") ||
+    text.includes("получено") ||
+    text.includes("delivered") ||
+    text.includes("received")
+  );
+}
+
+function isCodPaidStatus(status: { codStatus: string; codStatusCode: string }) {
+  const text = normalizedText(status.codStatus, status.codStatusCode);
+  return (
+    text.includes("оплач") ||
+    text.includes("отриман") ||
+    text.includes("получен") ||
+    text.includes("перерах") ||
+    text.includes("зарах") ||
+    text.includes("paid") ||
+    text.includes("received")
+  );
+}
+
+function getNextOrderStatus(
+  currentStatus: OrderStatus,
+  status: { status: string; statusCode: string; codStatus: string; codStatusCode: string },
+) {
+  if (currentStatus === OrderStatus.CANCELLED || currentStatus === OrderStatus.COMPLETED) return currentStatus;
+  if (isDeliveredStatus(status)) return OrderStatus.COMPLETED;
+
+  if (isCodPaidStatus(status) && (currentStatus === OrderStatus.PENDING || currentStatus === OrderStatus.PROCESSING)) {
+    return OrderStatus.PAID;
+  }
+
+  return currentStatus;
+}
+
 export async function GET(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json(
@@ -51,6 +95,7 @@ export async function GET(request: Request) {
     select: {
       id: true,
       number: true,
+      status: true,
       novaPoshtaTtn: true,
     },
   });
@@ -62,12 +107,16 @@ export async function GET(request: Request) {
 
   const result = await getNovaPoshtaDocumentStatuses(ttns);
   if (!result.success) {
-    return NextResponse.json({ success: false, checked: ttns.length, updated: 0, errors: ttns.length, error: result.error }, { status: 502 });
+    return NextResponse.json(
+      { success: false, checked: ttns.length, updated: 0, errors: ttns.length, error: result.error },
+      { status: 502 },
+    );
   }
 
   const statusesByTtn = new Map(result.statuses.map((status) => [statusByTtnKey(status.ttn), status]));
   let updated = 0;
   let errors = 0;
+  let orderStatusChanged = 0;
 
   for (const order of orders) {
     const ttn = order.novaPoshtaTtn;
@@ -86,9 +135,13 @@ export async function GET(request: Request) {
       continue;
     }
 
+    const nextOrderStatus = getNextOrderStatus(order.status, status);
+    if (nextOrderStatus !== order.status) orderStatusChanged += 1;
+
     await prisma.order.update({
       where: { id: order.id },
       data: {
+        status: nextOrderStatus,
         novaPoshtaStatus: status.status || null,
         novaPoshtaStatusCode: status.statusCode || null,
         novaPoshtaDeliveredAt: status.deliveredAt,
@@ -107,5 +160,6 @@ export async function GET(request: Request) {
     checked: ttns.length,
     updated,
     errors,
+    orderStatusChanged,
   });
 }
