@@ -113,6 +113,14 @@ function productLines(order: OrderForNotification) {
 }
 
 function renderCustomerOrderEmail(order: OrderForNotification) {
+  const statusLabel = getOrderStatusLabel(order.status);
+  const note = paymentNote(order);
+  const orderUrl = `${siteUrl()}/checkout/success?order=${encodeURIComponent(order.number)}`;
+  const brandPink = "#f94f8e";
+  const softPink = "#fff0f6";
+  const ink = "#24191f";
+  const muted = "#7b6f75";
+
   const rows = order.items
     .map((item) => {
       const options = safeOptions(item.optionsJson);
@@ -121,50 +129,143 @@ function renderCustomerOrderEmail(order: OrderForNotification) {
 
       return `
         <tr>
-          <td style="padding:8px 0;border-bottom:1px solid #ffe2ea;">
-            <strong>${escapeHtml(item.productName)}</strong>
-            ${options ? `<div style="color:#7a6d72;font-size:13px;">${escapeHtml(options)}</div>` : ""}
+          <td style="padding:16px 0;border-bottom:1px solid #f8dbe5;">
+            <div style="font-size:15px;font-weight:700;color:${ink};">✔ ${escapeHtml(item.productName)}</div>
+            ${options ? `<div style="margin-top:4px;font-size:13px;color:${muted};">${escapeHtml(options)}</div>` : ""}
           </td>
-          <td style="padding:8px 0;border-bottom:1px solid #ffe2ea;text-align:center;">${item.quantity}</td>
-          <td style="padding:8px 0;border-bottom:1px solid #ffe2ea;text-align:right;">${formatPrice(itemPrice)}</td>
-          <td style="padding:8px 0;border-bottom:1px solid #ffe2ea;text-align:right;">${formatPrice(lineTotal)}</td>
+          <td style="padding:16px 8px;border-bottom:1px solid #f8dbe5;text-align:center;color:${muted};white-space:nowrap;">${item.quantity} шт.</td>
+          <td style="padding:16px 0;border-bottom:1px solid #f8dbe5;text-align:right;color:${ink};white-space:nowrap;">${formatPrice(lineTotal)}</td>
         </tr>
       `;
     })
     .join("");
 
-  const note = paymentNote(order);
-
   return `
-    <div style="font-family:Arial,sans-serif;color:#221a1d;line-height:1.5;max-width:720px;margin:0 auto;">
-      <h1 style="color:#ff4d81;">Дякуємо за замовлення!</h1>
-      <p>Ваше замовлення <strong>${escapeHtml(order.number)}</strong> прийнято.</p>
-      <p><strong>Дата:</strong> ${escapeHtml(formatDate(order.createdAt))}</p>
-      <p><strong>Клієнт:</strong> ${escapeHtml(order.customerName)}</p>
-      <table style="width:100%;border-collapse:collapse;margin:20px 0;">
-        <thead>
-          <tr>
-            <th style="text-align:left;padding-bottom:8px;">Товар</th>
-            <th style="text-align:center;padding-bottom:8px;">К-сть</th>
-            <th style="text-align:right;padding-bottom:8px;">Ціна</th>
-            <th style="text-align:right;padding-bottom:8px;">Сума</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <p><strong>Загальна сума:</strong> ${formatPrice(numberFromMoney(order.total))}</p>
-      <p><strong>Спосіб оплати:</strong> ${escapeHtml(order.paymentMethod)}</p>
-      <p><strong>Статус:</strong> ${escapeHtml(getOrderStatusLabel(order.status))}</p>
-      ${note ? `<p><strong>Оплата:</strong> ${escapeHtml(note)}</p>` : ""}
-      <p><strong>Доставка:</strong> ${escapeHtml(deliveryLabel(order))}</p>
-      <p><strong>Місто:</strong> ${escapeHtml(order.city)}</p>
-      <p><strong>Відділення / поштомат:</strong> ${escapeHtml(order.novaPoshtaBranch || order.shippingAddress)}</p>
-      ${order.comment ? `<p><strong>Коментар:</strong> ${escapeHtml(order.comment)}</p>` : ""}
-      <p><a href="${siteUrl()}" style="color:#ff4d81;">Перейти на сайт 3D Kid</a></p>
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Замовлення ${escapeHtml(order.number)} — 3D Kid</title>
+  </head>
+  <body style="margin:0;padding:0;background:#fff7fb;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:${ink};">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
+      Дякуємо за ваше замовлення ${escapeHtml(order.number)} у 3D Kid.
     </div>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#fff7fb;padding:28px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#ffffff;border-radius:28px;overflow:hidden;box-shadow:0 18px 48px rgba(249,79,142,0.14);">
+            <tr>
+              <td style="background:${brandPink};padding:28px 28px 36px;text-align:center;">
+                <div style="display:inline-block;padding:10px 18px;border-radius:999px;background:rgba(255,255,255,0.18);color:#fff;font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">
+                  3D Kid
+                </div>
+                <h1 style="margin:22px 0 8px;color:#fff;font-size:30px;line-height:1.2;font-weight:800;">
+                  Дякуємо за ваше замовлення ❤️
+                </h1>
+                <p style="margin:0;color:#ffe8f1;font-size:16px;">
+                  Ми вже отримали його та готуємо до обробки.
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:30px 28px 8px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="padding:18px;border-radius:22px;background:${softPink};">
+                      <div style="font-size:13px;color:${muted};text-transform:uppercase;letter-spacing:0.08em;font-weight:700;">Замовлення</div>
+                      <div style="margin-top:6px;font-size:26px;font-weight:800;color:${ink};">№ ${escapeHtml(order.number)}</div>
+                      <div style="margin-top:8px;font-size:14px;color:${muted};">${escapeHtml(formatDate(order.createdAt))}</div>
+                    </td>
+                    <td width="16"></td>
+                    <td style="padding:18px;border-radius:22px;background:#f7fbff;text-align:right;">
+                      <div style="font-size:13px;color:${muted};text-transform:uppercase;letter-spacing:0.08em;font-weight:700;">Сума</div>
+                      <div style="margin-top:6px;font-size:28px;font-weight:900;color:${brandPink};">${formatPrice(numberFromMoney(order.total))}</div>
+                      <div style="margin-top:8px;font-size:14px;color:${muted};">${escapeHtml(statusLabel)}</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:22px 28px 0;">
+                <h2 style="margin:0 0 12px;font-size:20px;color:${ink};">Товари</h2>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                  <tbody>${rows}</tbody>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:26px 28px 0;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#fff;border:1px solid #f8dbe5;border-radius:22px;">
+                  <tr>
+                    <td style="padding:18px 20px;">
+                      <div style="font-size:14px;color:${muted};">Клієнт</div>
+                      <div style="margin-top:4px;font-weight:700;color:${ink};">${escapeHtml(order.customerName)}</div>
+                    </td>
+                    <td style="padding:18px 20px;text-align:right;">
+                      <div style="font-size:14px;color:${muted};">Телефон</div>
+                      <div style="margin-top:4px;font-weight:700;color:${ink};">${escapeHtml(order.customerPhone)}</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:0 20px 18px;">
+                      <div style="font-size:14px;color:${muted};">Оплата</div>
+                      <div style="margin-top:4px;font-weight:700;color:${ink};">${escapeHtml(order.paymentMethod)}</div>
+                    </td>
+                    <td style="padding:0 20px 18px;text-align:right;">
+                      <div style="font-size:14px;color:${muted};">Доставка</div>
+                      <div style="margin-top:4px;font-weight:700;color:${ink};">${escapeHtml(deliveryLabel(order))}</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:18px 28px 0;">
+                <div style="padding:18px 20px;border-radius:22px;background:#fafafa;color:${ink};font-size:15px;line-height:1.6;">
+                  <div><strong>Місто:</strong> ${escapeHtml(order.city)}</div>
+                  <div><strong>Відділення / поштомат:</strong> ${escapeHtml(order.novaPoshtaBranch || order.shippingAddress)}</div>
+                  ${order.comment ? `<div><strong>Коментар:</strong> ${escapeHtml(order.comment)}</div>` : ""}
+                  ${note ? `<div style="margin-top:10px;color:${brandPink};"><strong>${escapeHtml(note)}</strong></div>` : ""}
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td align="center" style="padding:30px 28px 12px;">
+                <a href="${orderUrl}" style="display:inline-block;background:${brandPink};color:#ffffff;text-decoration:none;border-radius:999px;padding:15px 28px;font-size:16px;font-weight:800;box-shadow:0 10px 24px rgba(249,79,142,0.28);">
+                  Переглянути замовлення
+                </a>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:18px 28px 30px;text-align:center;color:${muted};font-size:14px;line-height:1.6;">
+                <div style="height:1px;background:#f8dbe5;margin:0 0 18px;"></div>
+                <div style="font-weight:700;color:${ink};">3D Kid</div>
+                <div>Магазин 3D-друкованих товарів для українського ринку</div>
+                <div style="margin-top:8px;">
+                  <a href="${siteUrl()}" style="color:${brandPink};text-decoration:none;font-weight:700;">www.3dkid.shop</a>
+                  <span style="color:#d8b8c3;"> • </span>
+                  <a href="mailto:hello@3dkid.shop" style="color:${brandPink};text-decoration:none;font-weight:700;">hello@3dkid.shop</a>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
   `;
 }
-
 function renderTelegramNewOrder(order: OrderForNotification) {
   return [
     "🆕 Нове замовлення",
