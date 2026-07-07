@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { createNovaPoshtaWaybill } from "@/lib/novaposhta";
+import { notifyOrderStatusChanged } from "@/lib/notifications/orders";
 import { getOrderStatusAfterTtnCreated } from "@/lib/order-status";
 
 function unauthorized() {
@@ -18,7 +19,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (role !== "ADMIN") return unauthorized();
 
   const { id } = await params;
-  const order = await prisma.order.findUnique({ where: { id } });
+  const order = await prisma.order.findUnique({ where: { id }, include: { items: true } });
   if (!order) {
     return NextResponse.json({ success: false, error: "Order not found." }, { status: 404 });
   }
@@ -47,7 +48,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       );
     }
 
-    await prisma.order.update({
+    const updatedOrder = await prisma.order.update({
       where: { id: order.id },
       data: {
         status: getOrderStatusAfterTtnCreated(order.status),
@@ -58,6 +59,14 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         novaPoshtaCreatedAt: new Date(),
         novaPoshtaError: null,
       },
+      include: { items: true },
+    });
+
+    await notifyOrderStatusChanged({
+      order: updatedOrder,
+      previousStatus: order.status,
+      nextStatus: updatedOrder.status,
+      source: "Створення ТТН",
     });
 
     return NextResponse.json({ success: true, ttn: result.ttn, ref: result.ref });

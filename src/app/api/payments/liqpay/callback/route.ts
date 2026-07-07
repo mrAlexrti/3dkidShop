@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendOrderConfirmationEmail } from "@/lib/email";
+import { notifyOrderStatusChanged } from "@/lib/notifications/orders";
 import { getOrderStatusAfterPaymentReceived } from "@/lib/order-status";
 import {
   isLiqPayConfigured,
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
   }
 
   if (isPaidLiqPayStatus(payload.status)) {
-    const shouldSendEmail = !order.paidAt;
+    const previousStatus = order.status;
     const updatedOrder = await prisma.order.update({
       where: { id: order.id },
       data: {
@@ -49,9 +49,12 @@ export async function POST(req: Request) {
       include: { items: true },
     });
 
-    if (shouldSendEmail) {
-      await sendOrderConfirmationEmail(updatedOrder);
-    }
+    await notifyOrderStatusChanged({
+      order: updatedOrder,
+      previousStatus,
+      nextStatus: updatedOrder.status,
+      source: "LiqPay",
+    });
 
     return NextResponse.json({ success: true });
   }

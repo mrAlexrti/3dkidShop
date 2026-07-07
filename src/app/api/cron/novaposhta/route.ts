@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getNovaPoshtaDocumentStatuses } from "@/lib/novaposhta";
+import { notifyOrderStatusChanged } from "@/lib/notifications/orders";
 import { getOrderStatusAfterNovaPoshtaSync } from "@/lib/order-status";
 import { readServerEnv } from "@/lib/server-env";
 
@@ -78,14 +79,7 @@ export async function GET(request: Request) {
     },
     orderBy: [{ novaPoshtaSyncedAt: "asc" }, { createdAt: "desc" }],
     take: limit,
-    select: {
-      id: true,
-      number: true,
-      status: true,
-      paidAt: true,
-      novaPoshtaTtn: true,
-      novaPoshtaDeliveredAt: true,
-    },
+    include: { items: true },
   });
 
   const ttns = orders.map((order) => order.novaPoshtaTtn).filter(Boolean) as string[];
@@ -134,7 +128,7 @@ export async function GET(request: Request) {
     });
     if (nextOrderStatus !== order.status) orderStatusChanged += 1;
 
-    await prisma.order.update({
+    const updatedOrder = await prisma.order.update({
       where: { id: order.id },
       data: {
         status: nextOrderStatus,
@@ -148,7 +142,16 @@ export async function GET(request: Request) {
         novaPoshtaSyncedAt: new Date(),
         novaPoshtaError: null,
       },
+      include: { items: true },
     });
+
+    await notifyOrderStatusChanged({
+      order: updatedOrder,
+      previousStatus: order.status,
+      nextStatus: updatedOrder.status,
+      source: "Нова Пошта",
+    });
+
     updated += 1;
   }
 

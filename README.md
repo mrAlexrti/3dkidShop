@@ -304,3 +304,69 @@ CANCELLED → Скасовано
 5. Автоматичний `COMPLETED`: переконатися, що одночасно є `paidAt` і `novaPoshtaDeliveredAt`.
 
 Після зміни enum `OrderStatus` і додавання `paidAt` потрібно виконати `npm run db:push` або застосувати відповідну Prisma migration перед redeploy.
+## Order notifications
+
+Проєкт надсилає повідомлення best-effort: якщо Resend або Telegram не налаштовані чи тимчасово недоступні, checkout, LiqPay callback, Nova Poshta sync і адмінка не падають. У логах буде тільки коротке безпечне попередження без секретів.
+
+### Email через Resend
+
+Env для Vercel:
+
+```bash
+RESEND_API_KEY="your_resend_api_key"
+EMAIL_FROM="3D Kid <orders@your-domain.example>"
+ADMIN_EMAIL="admin@your-domain.example"
+```
+
+Email клієнту надсилається один раз після створення замовлення, якщо `customerEmail` заповнений. Лист містить номер, дату, клієнта, товари, суму, спосіб оплати, статус українською, доставку, місто, відділення/поштомат, коментар і посилання на `https://www.3dkid.shop`.
+
+Для онлайн-оплати лист показує, що оплата очікується, доки LiqPay callback не підтвердить оплату. Для післяплати лист повідомляє, що оплата буде при отриманні у Новій Пошті.
+
+Як протестувати email:
+
+1. У Vercel додайте `RESEND_API_KEY` і `EMAIL_FROM` з підтвердженим доменом/адресою Resend.
+2. Оформіть замовлення з email клієнта.
+3. Перевірте пошту клієнта і Resend logs.
+4. Якщо env не задані, замовлення створиться, а `emailSent` буде `false`.
+
+### Telegram Bot API
+
+Env для Vercel:
+
+```bash
+TELEGRAM_BOT_TOKEN="your_bot_token"
+TELEGRAM_ADMIN_CHAT_ID="your_chat_id"
+```
+
+Як створити бота:
+
+1. В Telegram відкрийте `@BotFather`.
+2. Виконайте `/newbot`, задайте назву й username.
+3. Скопіюйте token у `TELEGRAM_BOT_TOKEN`.
+4. Напишіть будь-яке повідомлення вашому боту.
+5. Отримайте `chat_id`, наприклад відкривши `https://api.telegram.org/bot<token>/getUpdates` у браузері або через curl.
+6. Запишіть `chat.id` у `TELEGRAM_ADMIN_CHAT_ID`.
+
+Telegram повідомлення надсилаються власнику магазину:
+
+- після створення будь-якого замовлення;
+- при зміні статусу через LiqPay;
+- при зміні статусу через Nova Poshta sync / GitHub Actions;
+- при ручній зміні статусу в адмінці;
+- при створенні ТТН, якщо статус переходить у `SHIPPED`.
+
+Повідомлення про зміну статусу не надсилається, якщо статус фактично не змінився. Повторний cron sync без зміни статусу не дублює Telegram.
+
+Як протестувати Telegram нове замовлення:
+
+1. Додайте `TELEGRAM_BOT_TOKEN` і `TELEGRAM_ADMIN_CHAT_ID` у Vercel.
+2. Зробіть redeploy.
+3. Оформіть тестове замовлення.
+4. Перевірте повідомлення `🆕 Нове замовлення` в Telegram.
+
+Як протестувати Telegram зміну статусу:
+
+1. Відкрийте замовлення в `/admin/orders/{id}`.
+2. Змініть статус вручну або створіть ТТН.
+3. Перевірте повідомлення `🔄 Статус замовлення змінено`.
+4. Для Nova Poshta sync вручну запустіть GitHub Actions workflow `Nova Poshta status sync` або викличте `/api/cron/novaposhta` з `Authorization: Bearer <CRON_SECRET>`.

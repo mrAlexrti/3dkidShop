@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { checkoutSchema } from "@/lib/validations/checkout";
 import type { CartItem } from "@/types";
 import { DELIVERY_LABELS, PAYMENT_LABELS } from "@/lib/validations/checkout";
-import { sendOrderConfirmationEmail } from "@/lib/email";
+import { notifyOrderCreated } from "@/lib/notifications/orders";
 import { getInitialOrderStatus } from "@/lib/order-status";
 import {
   createLiqPayCheckout,
@@ -212,7 +212,7 @@ export async function createOrder(
     return {
       success: true,
       orderNumber,
-      emailSent: false,
+      emailSent: order ? await notifyOrderCreated(order) : false,
       payment: createLiqPayCheckout({
         orderNumber,
         amount: total,
@@ -220,7 +220,7 @@ export async function createOrder(
     };
   }
 
-  const emailSent = order ? await sendOrderConfirmationEmail(order) : false;
+  const emailSent = order ? await notifyOrderCreated(order) : false;
 
   return { success: true, orderNumber, emailSent };
 }
