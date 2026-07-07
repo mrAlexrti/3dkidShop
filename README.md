@@ -237,7 +237,7 @@ Endpoint бере замовлення з `novaPoshtaTtn`, викликає `Tra
 - `novaPoshtaCodAmount`
 - `novaPoshtaError`
 
-Окремого `paymentStatus` у Prisma зараз немає, тому workflow використовує існуючий `Order.status`: якщо післяплата визначена як оплачена/отримана, замовлення переходить у `PAID` тільки зі станів `PENDING` або `PROCESSING`; якщо посилка отримана/доставлена, замовлення переходить у `COMPLETED`, окрім уже `CANCELLED` або `COMPLETED`.
+Статуси замовлень зберігаються в `Order.status`, а факт оплати додатково фіксується в `Order.paidAt`. Це потрібно, щоб не втрачати оплату, коли замовлення переходить у `SHIPPED` або `DELIVERED`. Якщо післяплата або LiqPay підтвердили оплату — заповнюється `paidAt`; якщо Нова Пошта підтвердила отримання — заповнюється `novaPoshtaDeliveredAt`. Автоматичний перехід у `COMPLETED` відбувається тільки коли є обидві умови: оплачено + доставлено.
 
 ### Ручний запуск workflow
 
@@ -268,4 +268,39 @@ curl -X GET "https://www.3dkid.shop/api/cron/novaposhta" \
   -H "Authorization: Bearer YOUR_CRON_SECRET"
 ```
 
-Після зміни Prisma schema потрібно виконати `npm run db:push` або застосувати міграцію БД перед деплоєм. Для додавання GitHub Actions workflow нові поля БД не додавались.
+Після зміни Prisma schema потрібно виконати `npm run db:push` або застосувати міграцію БД перед деплоєм.
+## Order status model
+
+Єдина таблиця українських назв статусів знаходиться в `src/lib/order-status.ts`.
+
+```text
+PENDING → Очікує
+AWAITING_PAYMENT → Очікує оплати
+PROCESSING → В обробці
+SHIPPED → Відправлено
+DELIVERED → Доставлено
+PAID → Оплачено
+COMPLETED → Завершено
+CANCELLED → Скасовано
+```
+
+### Бізнес-логіка
+
+- `card_online` створює замовлення зі статусом `AWAITING_PAYMENT`.
+- Якщо клієнт закрив або скасував LiqPay, замовлення не скасовується автоматично і залишається в очікуванні оплати.
+- Успішний LiqPay callback заповнює `paidAt` і переводить замовлення в `PAID`, або в `COMPLETED`, якщо доставка вже підтверджена.
+- Замовлення з післяплатою або оплатою при отриманні створюється як `PROCESSING`.
+- Створення ТТН переводить замовлення в `SHIPPED`, якщо воно не `CANCELLED` або `COMPLETED`.
+- GitHub Actions синхронізація Нової Пошти переводить замовлення в `DELIVERED`, якщо посилка отримана, і заповнює `paidAt`, якщо післяплата отримана.
+- `COMPLETED` виставляється автоматично тільки якщо замовлення і доставлене, і оплачене.
+- `CANCELLED` не виставляється автоматично через неуспішний/скасований LiqPay callback; це ручний статус.
+
+### Як тестувати статуси
+
+1. LiqPay success: оформити `card_online`, пройти оплату, перевірити `paidAt` і статус `PAID`.
+2. LiqPay cancel/закриття браузера: оформити `card_online`, не завершити оплату, перевірити що статус лишився `AWAITING_PAYMENT`, не `CANCELLED`.
+3. Післяплата: оформити замовлення з післяплатою, створити ТТН, після sync перевірити `novaPoshtaCodStatus`, `novaPoshtaCodAmount`, `paidAt` і статус `PAID` або `COMPLETED`.
+4. Доставка: після статусу Нової Пошти “отримано/доставлено” перевірити `novaPoshtaDeliveredAt` і статус `DELIVERED` або `COMPLETED`.
+5. Автоматичний `COMPLETED`: переконатися, що одночасно є `paidAt` і `novaPoshtaDeliveredAt`.
+
+Після зміни enum `OrderStatus` і додавання `paidAt` потрібно виконати `npm run db:push` або застосувати відповідну Prisma migration перед redeploy.

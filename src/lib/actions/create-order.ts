@@ -5,6 +5,7 @@ import { checkoutSchema } from "@/lib/validations/checkout";
 import type { CartItem } from "@/types";
 import { DELIVERY_LABELS, PAYMENT_LABELS } from "@/lib/validations/checkout";
 import { sendOrderConfirmationEmail } from "@/lib/email";
+import { getInitialOrderStatus } from "@/lib/order-status";
 import {
   createLiqPayCheckout,
   getMissingLiqPayEnvNames,
@@ -179,6 +180,7 @@ export async function createOrder(
           novaPoshtaBranchRef: d.npWarehouseRef,
           comment: d.comment,
           paymentMethod: PAYMENT_LABELS[d.paymentMethod],
+          status: getInitialOrderStatus(d.paymentMethod),
           subtotal,
           shippingCost,
           total,

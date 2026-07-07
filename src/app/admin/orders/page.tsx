@@ -2,16 +2,8 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { getOrderStatusLabel } from "@/lib/order-status";
 import { formatPrice } from "@/lib/utils";
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: "Ожидает",
-  PAID: "Оплачен",
-  PROCESSING: "В обработке",
-  SHIPPED: "Отправлен",
-  COMPLETED: "Завершён",
-  CANCELLED: "Отменён",
-};
 
 export default async function AdminOrdersPage() {
   const orders = await prisma.order.findMany({ orderBy: { createdAt: "desc" } });
@@ -40,8 +32,8 @@ export default async function AdminOrdersPage() {
                   </Link>
                 </td>
                 <td className="px-4 py-3">{o.customerName}</td>
-                <td className="px-4 py-3 text-ink/50">{o.createdAt.toLocaleDateString("ru-RU")}</td>
-                <td className="px-4 py-3">{STATUS_LABELS[o.status]}</td>
+                <td className="px-4 py-3 text-ink/50">{o.createdAt.toLocaleDateString("uk-UA")}</td>
+                <td className="px-4 py-3">{getOrderStatusLabel(o.status)}</td>
                 <td className="px-4 py-3 font-medium">{formatPrice(Number(o.total))}</td>
               </tr>
             ))}

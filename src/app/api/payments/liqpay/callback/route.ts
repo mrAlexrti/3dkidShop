@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { OrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendOrderConfirmationEmail } from "@/lib/email";
+import { getOrderStatusAfterPaymentReceived } from "@/lib/order-status";
 import {
-  isFailedLiqPayStatus,
   isLiqPayConfigured,
   isPaidLiqPayStatus,
   isValidLiqPaySignature,
@@ -40,10 +39,13 @@ export async function POST(req: Request) {
   }
 
   if (isPaidLiqPayStatus(payload.status)) {
-    const shouldSendEmail = order.status !== OrderStatus.PAID;
+    const shouldSendEmail = !order.paidAt;
     const updatedOrder = await prisma.order.update({
       where: { id: order.id },
-      data: { status: OrderStatus.PAID },
+      data: {
+        paidAt: order.paidAt ?? new Date(),
+        status: getOrderStatusAfterPaymentReceived(order.status, Boolean(order.novaPoshtaDeliveredAt)),
+      },
       include: { items: true },
     });
 
@@ -52,22 +54,6 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true });
-  }
-
-  if (isFailedLiqPayStatus(payload.status) && order.status === OrderStatus.PENDING) {
-    await prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: { id: order.id },
-        data: { status: OrderStatus.CANCELLED },
-      });
-
-      for (const item of order.items) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { increment: item.quantity } },
-        });
-      }
-    });
   }
 
   return NextResponse.json({ success: true });

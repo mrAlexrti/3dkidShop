@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { createNovaPoshtaWaybill } from "@/lib/novaposhta";
+import { getOrderStatusAfterTtnCreated } from "@/lib/order-status";
 
 function unauthorized() {
   return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -49,6 +50,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     await prisma.order.update({
       where: { id: order.id },
       data: {
+        status: getOrderStatusAfterTtnCreated(order.status),
         novaPoshtaTtn: result.ttn,
         novaPoshtaTtnRef: result.ref,
         novaPoshtaStatus: result.status ?? null,
