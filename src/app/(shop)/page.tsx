@@ -7,7 +7,8 @@ export const revalidate = 60;
 
 async function getHomeData() {
   const [categories, featured, newest] = await Promise.all([
-    prisma.category.findMany({ orderBy: { order: "asc" }, take: 4 }),
+    // Только категории верхнего уровня — для карточек на главной.
+    prisma.category.findMany({ where: { parentId: null }, orderBy: { order: "asc" }, take: 8 }),
     prisma.product.findMany({
       where: { isFeatured: true, isActive: true },
       include: { images: true, _count: { select: { options: true } } },
@@ -42,8 +43,8 @@ export default async function HomePage() {
   return (
     <>
       <Categories categories={categories} />
-      <FeaturedProducts products={featured.map(mapProduct)} />
-      <FeaturedProducts products={newest.map(mapProduct)} title="Новинки" />
+      <FeaturedProducts products={featured.map(mapProduct)} variant="featured" />
+      <FeaturedProducts products={newest.map(mapProduct)} variant="newest" />
       <Benefits />
     </>
   );

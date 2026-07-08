@@ -1,14 +1,20 @@
+"use client";
+
 import { Truck, ShieldCheck, RefreshCcw, Heart } from "lucide-react";
 import { AnimatedSection } from "@/components/shared/animated-section";
-
-const items = [
-  { icon: Truck, title: "Быстрая доставка", text: "Отправка в течение 24 часов" },
-  { icon: ShieldCheck, title: "Гарантия качества", text: "Премиальные материалы" },
-  { icon: RefreshCcw, title: "Лёгкий возврат", text: "14 дней на возврат товара" },
-  { icon: Heart, title: "Сделано с любовью", text: "Дизайн собственной разработки" },
-];
+import { useLangStore } from "@/store/lang-store";
 
 export function Benefits() {
+  const { t } = useLangStore();
+  const b = t.home.benefits;
+
+  const items = [
+    { icon: Truck, title: b.delivery, text: b.deliveryDesc },
+    { icon: ShieldCheck, title: b.quality, text: b.qualityDesc },
+    { icon: RefreshCcw, title: b.returns, text: b.returnsDesc },
+    { icon: Heart, title: b.love, text: b.loveDesc },
+  ];
+
   return (
     <section className="container-shop mt-24">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">

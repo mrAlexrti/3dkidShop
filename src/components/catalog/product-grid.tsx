@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { ProductCard } from "@/components/product/product-card";
 import { staggerContainer } from "@/components/shared/animated-section";
+import { useLangStore } from "@/store/lang-store";
 
 type GridProduct = {
   id: string;
@@ -17,8 +18,10 @@ type GridProduct = {
 };
 
 export function ProductGrid({ products }: { products: GridProduct[] }) {
+  const { t } = useLangStore();
+
   if (products.length === 0) {
-    return <p className="py-16 text-center text-ink/50">Товары не найдены</p>;
+    return <p className="py-16 text-center text-ink/50">{t.catalog.empty}</p>;
   }
 
   return (

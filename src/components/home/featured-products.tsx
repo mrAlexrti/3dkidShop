@@ -1,7 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { AnimatedSection } from "@/components/shared/animated-section";
 import { ProductGrid } from "@/components/catalog/product-grid";
 import { Button } from "@/components/ui/button";
+import { useLangStore } from "@/store/lang-store";
 
 type Product = {
   id: string;
@@ -15,16 +18,26 @@ type Product = {
   stock?: number;
 };
 
-export function FeaturedProducts({ products, title = "Популярные товары" }: { products: Product[]; title?: string }) {
+export function FeaturedProducts({
+  products,
+  variant = "featured",
+}: {
+  products: Product[];
+  variant?: "featured" | "newest";
+}) {
+  const { t } = useLangStore();
+  const title = variant === "newest" ? t.home.newArrivals : t.home.featured;
+  const subtitle = variant === "featured" ? t.home.featuredDesc : null;
+
   return (
     <section className="container-shop mt-24">
       <AnimatedSection className="flex items-end justify-between">
         <div>
           <h2 className="font-display text-3xl text-ink">{title}</h2>
-          <p className="mt-2 text-ink/60">Выбор покупателей за последний месяц</p>
+          {subtitle && <p className="mt-2 text-ink/60">{subtitle}</p>}
         </div>
         <Link href="/catalog" className="hidden md:block">
-          <Button variant="outline">Весь каталог</Button>
+          <Button variant="outline">{t.home.viewCatalog}</Button>
         </Link>
       </AnimatedSection>
 

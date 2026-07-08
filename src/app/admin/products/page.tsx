@@ -7,9 +7,12 @@ import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DeleteButton } from "@/components/admin/delete-button";
 import { deleteProduct } from "@/lib/actions/products";
+import { getT } from "@/lib/i18n-server";
 import { Plus, Pencil } from "lucide-react";
 
 export default async function AdminProductsPage() {
+  const t = await getT();
+  const tl = t.admin.productsList;
   const products = await prisma.product.findMany({
     include: { images: true, category: true },
     orderBy: { createdAt: "desc" },
@@ -18,10 +21,10 @@ export default async function AdminProductsPage() {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-3xl">Товары</h1>
+        <h1 className="font-display text-3xl">{t.admin.nav.products}</h1>
         <Link href="/admin/products/new">
           <Button>
-            <Plus size={16} /> Добавить товар
+            <Plus size={16} /> {tl.add}
           </Button>
         </Link>
       </div>
@@ -30,11 +33,11 @@ export default async function AdminProductsPage() {
         <table className="w-full text-left text-sm">
           <thead className="bg-pink-50/60 text-ink/60">
             <tr>
-              <th className="px-4 py-3">Товар</th>
-              <th className="px-4 py-3">Категория</th>
-              <th className="px-4 py-3">Цена</th>
-              <th className="px-4 py-3">Остаток</th>
-              <th className="px-4 py-3">Статус</th>
+              <th className="px-4 py-3">{tl.thProduct}</th>
+              <th className="px-4 py-3">{tl.thCategory}</th>
+              <th className="px-4 py-3">{tl.thPrice}</th>
+              <th className="px-4 py-3">{tl.thStock}</th>
+              <th className="px-4 py-3">{tl.thStatus}</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -52,7 +55,7 @@ export default async function AdminProductsPage() {
                 <td className="px-4 py-3">{p.stock}</td>
                 <td className="px-4 py-3">
                   <span className={p.isActive ? "text-green-600" : "text-ink/40"}>
-                    {p.isActive ? "Активен" : "Скрыт"}
+                    {p.isActive ? tl.active : tl.hidden}
                   </span>
                 </td>
                 <td className="px-4 py-3">

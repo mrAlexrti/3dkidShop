@@ -4,9 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { ProductForm } from "@/components/admin/product-form";
 import { updateProduct } from "@/lib/actions/products";
+import { getT } from "@/lib/i18n-server";
 
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const t = await getT();
   const [product, categories] = await Promise.all([
     prisma.product.findUnique({ where: { id }, include: { images: true } }),
     prisma.category.findMany({ orderBy: { name: "asc" } }),
@@ -18,7 +20,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
 
   return (
     <div>
-      <h1 className="font-display text-3xl">Редактировать товар</h1>
+      <h1 className="font-display text-3xl">{t.admin.productsList.editTitle}</h1>
       <div className="mt-6">
         <ProductForm
           categories={categories}

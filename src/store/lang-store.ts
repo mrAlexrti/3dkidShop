@@ -13,16 +13,24 @@ type LangStore = {
   setLocale: (locale: Locale) => void;
 };
 
+// Синхронизируем выбранную локаль с cookie, чтобы её видели server components.
+function writeLocaleCookie(locale: Locale) {
+  if (typeof document === "undefined") return;
+  document.cookie = `locale=${locale}; path=/; max-age=31536000; samesite=lax`;
+}
+
 export const useLangStore = create<LangStore>()(
   persist(
     (set) => ({
       locale: "ua",
       t: translations.ua as Translation,
-      setLocale: (locale) =>
+      setLocale: (locale) => {
+        writeLocaleCookie(locale);
         set({
           locale,
           t: translations[locale] as Translation,
-        }),
+        });
+      },
     }),
     { name: "stikr-lang" }
   )

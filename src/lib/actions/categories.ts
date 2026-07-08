@@ -10,6 +10,7 @@ const categorySchema = z.object({
   slug: z.string().min(2),
   description: z.string().optional(),
   imageUrl: z.string().url().optional().or(z.literal("")),
+  parentId: z.string().optional().or(z.literal("")),
 });
 
 export async function createCategory(formData: FormData) {
@@ -18,7 +19,34 @@ export async function createCategory(formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
   const parsed = categorySchema.parse(raw);
   await prisma.category.create({
-    data: { ...parsed, imageUrl: parsed.imageUrl || null },
+    data: {
+      name: parsed.name,
+      slug: parsed.slug,
+      description: parsed.description || null,
+      imageUrl: parsed.imageUrl || null,
+      parentId: parsed.parentId || null,
+    },
+  });
+  revalidatePath("/admin/categories");
+  revalidatePath("/");
+}
+
+export async function updateCategory(id: string, formData: FormData) {
+  await requireAdmin();
+
+  const raw = Object.fromEntries(formData.entries());
+  const parsed = categorySchema.parse(raw);
+  // Категория не может быть собственным родителем.
+  const parentId = parsed.parentId && parsed.parentId !== id ? parsed.parentId : null;
+  await prisma.category.update({
+    where: { id },
+    data: {
+      name: parsed.name,
+      slug: parsed.slug,
+      description: parsed.description || null,
+      imageUrl: parsed.imageUrl || null,
+      parentId,
+    },
   });
   revalidatePath("/admin/categories");
   revalidatePath("/");

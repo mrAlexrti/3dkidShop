@@ -3,118 +3,109 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShoppingBag, X, Menu } from "lucide-react";
+import { ShoppingBag, X, Menu, ChevronDown } from "lucide-react";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { LangSwitcher } from "@/components/layout/lang-switcher";
+import { BlueBlob, SunChar, FlowerChar, HeartChar } from "@/components/layout/header-characters";
 import { cn } from "@/lib/utils";
 
-/* ─── SVG логотип "3D Kid" ─────────────────────────────── */
+export type NavCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  children: { id: string; name: string; slug: string }[];
+};
+
+/* ─── Пухлый 3D-логотип «3D Kid» (bubble-стиль под ескиз) ─────── */
 function Logo3DKid({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 160 90"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-label="3D Kid"
-    >
-      {/* Тень / глубина для объёма */}
-      <text
-        x="12" y="60"
-        fontFamily="'Arial Rounded MT Bold', 'Arial Black', sans-serif"
-        fontSize="60"
-        fontWeight="900"
-        fill="rgba(0,0,0,0.18)"
-        transform="translate(3,3)"
-      >3D</text>
-      {/* Основной текст "3D" */}
-      <text
-        x="12" y="60"
-        fontFamily="'Arial Rounded MT Bold', 'Arial Black', sans-serif"
-        fontSize="60"
-        fontWeight="900"
-        fill="white"
-      >3D</text>
-      {/* Тень "kid" */}
-      <text
-        x="28" y="82"
-        fontFamily="'Arial Rounded MT Bold', 'Arial Black', sans-serif"
-        fontSize="28"
-        fontWeight="900"
-        fill="rgba(0,0,0,0.18)"
-        letterSpacing="6"
-        transform="translate(3,3)"
-      >kid</text>
-      {/* "kid" */}
-      <text
-        x="28" y="82"
-        fontFamily="'Arial Rounded MT Bold', 'Arial Black', sans-serif"
-        fontSize="28"
-        fontWeight="900"
-        fill="white"
-        letterSpacing="6"
-      >kid</text>
-      {/* Декоративные искры */}
-      <text x="108" y="24" fontSize="16" opacity="0.9">✨</text>
-      <text x="4"   y="20" fontSize="12" opacity="0.8">⭐</text>
-      <text x="140" y="55" fontSize="11" opacity="0.7">•</text>
+    <svg viewBox="0 0 210 120" className={className} aria-label="3D Kid" fill="none">
+      <g
+        fontFamily="'Fredoka', 'Nunito', system-ui, sans-serif"
+        fontWeight={600}
+        fill="#fff"
+        stroke="#3A2632"
+        strokeWidth={6}
+        paintOrder="stroke"
+        strokeLinejoin="round"
+        style={{ filter: "drop-shadow(0 6px 0 rgba(58,38,50,0.18))" }}
+      >
+        <text x="105" y="66" fontSize="74" textAnchor="middle" letterSpacing="2">3D</text>
+        <text x="105" y="108" fontSize="40" textAnchor="middle" letterSpacing="4">kid</text>
+      </g>
     </svg>
   );
 }
 
-/* ─── Декоративные персонажи + SVG волна ───────────────── */
-function WaveSection() {
+/* ─── Жёлтая звёздочка-искра ──────────────────────────────────── */
+function Sparkle({ className, style }: { className?: string; style?: React.CSSProperties }) {
   return (
-    <div
-      className="pointer-events-none absolute inset-x-0 bottom-0 select-none overflow-hidden"
-      style={{ height: "80px" }}
+    <svg viewBox="0 0 24 24" className={className} style={style} aria-hidden fill="none">
+      <path
+        d="M12 0c1 6 5 10 12 12-7 2-11 6-12 12-1-6-5-10-12-12C7 10 11 6 12 0Z"
+        fill="#FFD84D"
+      />
+    </svg>
+  );
+}
+
+/* ─── Волна-переход к кремовому фону ──────────────────────────── */
+function Wave() {
+  return (
+    <svg
+      viewBox="0 0 1440 70"
+      xmlns="http://www.w3.org/2000/svg"
+      className="pointer-events-none absolute bottom-0 left-0 w-full"
+      preserveAspectRatio="none"
+      style={{ height: "52px" }}
       aria-hidden
     >
-      {/* Персонажи */}
-      <span className="absolute text-[44px] drop-shadow-md" style={{ left: "6%",  bottom: "38px" }}>😤</span>
-      <span className="absolute text-[44px] drop-shadow-md" style={{ left: "20%", bottom: "30px" }}>🌼</span>
-      <span className="absolute text-[42px] drop-shadow-md" style={{ right: "26%",bottom: "36px" }}>☀️</span>
-      <span className="absolute text-[44px] drop-shadow-md" style={{ right: "6%", bottom: "28px" }}>❤️</span>
+      <path
+        d="M0,28 C120,60 260,6 420,34 C560,58 700,8 860,34 C1020,60 1180,10 1320,32 C1380,42 1420,34 1440,30 L1440,70 L0,70 Z"
+        fill="#FBF7F2"
+      />
+    </svg>
+  );
+}
 
-      {/* Декоративные белые точки — имитация снега/текстуры */}
-      {[
-        [15,65],[30,75],[46,60],[60,78],[72,62],[87,72],[95,58],
-        [10,45],[22,50],[38,42],[54,48],[70,44],[83,50],[94,40],
-      ].map(([x, y], i) => (
-        <span
-          key={i}
-          className="absolute rounded-full bg-white/50"
-          style={{ left: `${x}%`, top: `${y}%`, width: "5px", height: "5px" }}
-        />
-      ))}
+/* ─── Декоративные персонажи по углам ─────────────────────────── */
+function HeroCharacters() {
+  return (
+    <div className="pointer-events-none absolute inset-0 select-none" aria-hidden>
+      <BlueBlob
+        className="animate-float absolute h-14 w-14 drop-shadow-md md:h-20 md:w-20"
+        style={{ left: "3%", top: "12%" }}
+      />
+      <SunChar
+        className="animate-float-slow absolute h-16 w-16 drop-shadow-md md:h-24 md:w-24"
+        style={{ right: "3%", top: "6%" }}
+      />
+      <FlowerChar
+        className="animate-float-slow absolute hidden h-16 w-16 drop-shadow-md sm:block md:h-20 md:w-20"
+        style={{ left: "9%", bottom: "26%" }}
+      />
+      <HeartChar
+        className="animate-float absolute h-16 w-16 drop-shadow-md md:h-24 md:w-24"
+        style={{ right: "5%", bottom: "22%" }}
+      />
 
-      {/* Волна */}
-      <svg
-        viewBox="0 0 1440 60"
-        xmlns="http://www.w3.org/2000/svg"
-        className="absolute bottom-0 left-0 w-full"
-        preserveAspectRatio="none"
-        style={{ height: "60px" }}
-      >
-        <path
-          d="M0,22 C100,50 220,4 360,30 C500,56 620,6 740,34 
-             C860,60 980,8 1100,32 C1220,56 1340,14 1440,28 
-             L1440,60 L0,60 Z"
-          fill="#FBF7F2"
-        />
-      </svg>
+      {/* искры вокруг логотипа */}
+      <Sparkle className="absolute h-4 w-4 md:h-5 md:w-5" style={{ left: "34%", top: "26%" }} />
+      <Sparkle className="absolute h-3 w-3 md:h-4 md:w-4" style={{ right: "34%", top: "20%" }} />
+      <Sparkle className="absolute h-3 w-3 md:h-4 md:w-4" style={{ left: "40%", bottom: "32%" }} />
+      <Sparkle className="absolute h-4 w-4 md:h-5 md:w-5" style={{ right: "38%", bottom: "28%" }} />
     </div>
   );
 }
 
-/* ─── Главный компонент Header ──────────────────────────── */
-export function Header() {
+/* ─── Главный Header ──────────────────────────────────────────── */
+export function Header({ categories }: { categories: NavCategory[] }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [scrolled,   setScrolled]   = useState(false);
-  const count    = useCartStore((s) => s.count());
+  const [scrolled, setScrolled] = useState(false);
+  const count = useCartStore((s) => s.count());
   const openCart = useCartStore((s) => s.openCart);
-  const { t }    = useLangStore();
+  const { t } = useLangStore();
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 6);
@@ -123,48 +114,34 @@ export function Header() {
     return () => window.removeEventListener("scroll", fn);
   }, []);
 
-  const navLinks = [
-    { href: "/catalog",                   label: t.nav.all       },
-    { href: "/catalog?category=stickers", label: t.nav.stickers  },
-    { href: "/catalog?category=posters",  label: t.nav.posters   },
-    { href: "/catalog?category=merch",    label: t.nav.merch     },
-    { href: "/catalog?category=cards",    label: t.nav.cards     },
-  ];
-
   return (
     <header className="fixed inset-x-0 top-0 z-50">
-
-      {/* ══ РОЗОВА ШАПКА ══════════════════════════════════ */}
+      {/* ══ РОЗОВЫЙ HERO ══════════════════════════════════════════ */}
       <div
-        className="relative w-full bg-pink-400 overflow-hidden"
-        style={{ minHeight: "136px" }}
+        className="relative min-h-[150px] w-full overflow-hidden md:min-h-[180px]"
+        style={{
+          background:
+            "radial-gradient(120% 100% at 50% 18%, #FFD6E2 0%, #FFA9C3 46%, #FF83A8 100%)",
+        }}
       >
-        {/* Верхняя строка: бургер | логотип | корзина+язык */}
-        <div className="relative z-10 container-shop flex items-start justify-between pt-4 pb-16">
+        <HeroCharacters />
 
-          {/* Мобильный бургер */}
+        {/* верхняя строка: бургер | (лого по центру) | язык+корзина */}
+        <div className="relative z-10 flex items-start justify-between px-4 pt-4 md:px-6">
           <button
-            className="mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/25 text-white md:invisible"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/30 text-white transition-colors hover:bg-white/45 md:invisible"
             onClick={() => setMobileOpen((v) => !v)}
-            aria-label="Меню"
+            aria-label={t.nav.menu}
           >
             {mobileOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
 
-          {/* Центральный логотип */}
-          <div className="absolute left-1/2 -translate-x-1/2 top-3">
-            <Link href="/" aria-label="3D Kid — на головну">
-              <Logo3DKid className="h-[78px] w-auto drop-shadow-lg hover:scale-105 transition-transform" />
-            </Link>
-          </div>
-
-          {/* Правый блок: переключатель языка + корзина */}
-          <div className="mt-1 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <LangSwitcher />
             <button
               onClick={openCart}
-              className="relative grid h-9 w-9 place-items-center rounded-full bg-white/25 text-white transition-colors hover:bg-white/40"
-              aria-label="Кошик"
+              className="relative grid h-9 w-9 place-items-center rounded-full bg-white/30 text-white transition-colors hover:bg-white/45"
+              aria-label={t.cart.title}
             >
               <ShoppingBag size={20} />
               {count > 0 && (
@@ -182,33 +159,64 @@ export function Header() {
           </div>
         </div>
 
-        {/* Персонажи + волна */}
-        <WaveSection />
+        {/* центральный логотип */}
+        <div className="pointer-events-none absolute inset-x-0 top-[38px] z-[5] flex justify-center md:top-[40px]">
+          <Link href="/" aria-label="3D Kid" className="pointer-events-auto">
+            <Logo3DKid className="h-[92px] w-auto transition-transform hover:scale-105 md:h-[110px]" />
+          </Link>
+        </div>
+
+        <Wave />
       </div>
 
-      {/* ══ НАВИГАЦИЯ КАТЕГОРИЙ (desktop) ════════════════ */}
+      {/* ══ НАВИГАЦИЯ КАТЕГОРИЙ (desktop) ═════════════════════════ */}
       <div
         className={cn(
-          "hidden border-b border-pink-100 bg-[#FBF7F2]/95 backdrop-blur-sm md:block",
-          "transition-shadow duration-200",
+          "hidden border-b border-pink-100 bg-[#FBF7F2]/95 backdrop-blur-sm transition-shadow duration-200 md:block",
           scrolled && "shadow-md shadow-pink-100/60"
         )}
       >
         <nav className="container-shop flex items-center justify-center gap-1 py-2">
-          {navLinks.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className="group relative rounded-full px-5 py-1.5 text-sm font-semibold tracking-wide text-ink/70 transition-colors hover:bg-pink-100 hover:text-pink-600"
-            >
-              {l.label}
-              <span className="absolute bottom-1 left-4 right-4 h-[2px] scale-x-0 rounded-full bg-pink-400 transition-transform duration-300 group-hover:scale-x-100" />
-            </Link>
+          <Link
+            href="/catalog"
+            className="rounded-full px-4 py-1.5 text-sm font-semibold text-ink/70 transition-colors hover:bg-pink-100 hover:text-pink-600"
+          >
+            {t.nav.all}
+          </Link>
+
+          {categories.map((c) => (
+            <div key={c.id} className="group relative">
+              <Link
+                href={`/catalog?category=${c.slug}`}
+                className="flex items-center gap-1 rounded-full px-4 py-1.5 text-sm font-semibold text-ink/70 transition-colors hover:bg-pink-100 hover:text-pink-600"
+              >
+                {c.name}
+                {c.children.length > 0 && (
+                  <ChevronDown size={14} className="transition-transform group-hover:rotate-180" />
+                )}
+              </Link>
+
+              {c.children.length > 0 && (
+                <div className="invisible absolute left-1/2 top-full z-20 min-w-[200px] -translate-x-1/2 pt-2 opacity-0 transition-all group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+                  <div className="overflow-hidden rounded-2xl border border-pink-100 bg-white p-1.5 shadow-glass">
+                    {c.children.map((ch) => (
+                      <Link
+                        key={ch.id}
+                        href={`/catalog?category=${ch.slug}`}
+                        className="block rounded-xl px-3 py-2 text-sm font-medium text-ink/70 transition-colors hover:bg-pink-50 hover:text-pink-600"
+                      >
+                        {ch.name}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           ))}
         </nav>
       </div>
 
-      {/* ══ МОБИЛЬНОЕ МЕНЮ ════════════════════════════════ */}
+      {/* ══ МОБИЛЬНОЕ МЕНЮ ════════════════════════════════════════ */}
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
@@ -219,16 +227,40 @@ export function Header() {
             className="overflow-hidden border-b border-pink-100 bg-[#FBF7F2]/98 md:hidden"
           >
             <nav className="container-shop flex flex-col gap-1 py-4">
-              {navLinks.map((l) => (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  onClick={() => setMobileOpen(false)}
-                  className="rounded-xl px-4 py-3 text-sm font-semibold hover:bg-pink-50 hover:text-pink-600 transition-colors"
-                >
-                  {l.label}
-                </Link>
+              <Link
+                href="/catalog"
+                onClick={() => setMobileOpen(false)}
+                className="rounded-xl px-4 py-3 text-sm font-semibold transition-colors hover:bg-pink-50 hover:text-pink-600"
+              >
+                {t.nav.all}
+              </Link>
+
+              {categories.map((c) => (
+                <div key={c.id}>
+                  <Link
+                    href={`/catalog?category=${c.slug}`}
+                    onClick={() => setMobileOpen(false)}
+                    className="block rounded-xl px-4 py-3 text-sm font-semibold transition-colors hover:bg-pink-50 hover:text-pink-600"
+                  >
+                    {c.name}
+                  </Link>
+                  {c.children.length > 0 && (
+                    <div className="ml-3 flex flex-col border-l border-pink-100 pl-2">
+                      {c.children.map((ch) => (
+                        <Link
+                          key={ch.id}
+                          href={`/catalog?category=${ch.slug}`}
+                          onClick={() => setMobileOpen(false)}
+                          className="rounded-lg px-4 py-2 text-sm text-ink/70 transition-colors hover:bg-pink-50 hover:text-pink-600"
+                        >
+                          {ch.name}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
+
               <div className="mt-3 px-4">
                 <LangSwitcher />
               </div>

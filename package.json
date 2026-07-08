@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "db:dedupe-categories": "tsx scripts/dedupe-categories.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"
   },

@@ -3,9 +3,10 @@
 @tailwind utilities;
 
 :root {
-  --header-h: 174px;
-  --font-manrope: "Manrope", "Inter", "Segoe UI", system-ui, sans-serif;
-  --font-fraunces: "Fraunces", Georgia, "Times New Roman", serif;
+  --header-h: 228px;
+  /* Fallback-значения; активная тема выставляется инлайново в <html> из layout.tsx */
+  --font-body: "Nunito", system-ui, sans-serif;
+  --font-display: "Fredoka", "Nunito", system-ui, sans-serif;
 }
 
 html {

@@ -37,6 +37,37 @@ async function main() {
     );
   }
 
+  // --- Канонические категории 3D Kid (идемпотентно, дополнительно к демо-данным).
+  //     Продовые дубликаты не удаляются автоматически — это делается вручную в админке. ---
+  const canonicalTop = [
+    { name: "3D іграшки", slug: "3d-toys", order: 1, imageUrl: img("photo-1611930022073-b7a4ba5fcccd") },
+    { name: "Інші 3D товари", slug: "other-3d", order: 2, imageUrl: img("photo-1606107557195-0e29a4b5b4aa") },
+    { name: "Шопери", slug: "shoppers", order: 3, imageUrl: img("photo-1591561954557-26941169b49e") },
+    { name: "Курси з 3D моделювання", slug: "courses-3d", order: 4, imageUrl: img("photo-1513201099705-a9746e1e201f") },
+  ];
+  const topIdBySlug: Record<string, string> = {};
+  for (const c of canonicalTop) {
+    const created = await prisma.category.upsert({
+      where: { slug: c.slug },
+      update: { order: c.order }, // не перезатираем имя/картинку, если их правили в админке
+      create: { name: c.name, slug: c.slug, order: c.order, imageUrl: c.imageUrl },
+    });
+    topIdBySlug[c.slug] = created.id;
+  }
+
+  const canonicalSubs = [
+    { name: "Ґудзики", slug: "buttons", order: 1, parent: "other-3d" },
+    { name: "Джибітси для Crocs", slug: "crocs-jibbitz", order: 2, parent: "other-3d" },
+    { name: "Аксесуари для навушників", slug: "earphone-accessories", order: 3, parent: "other-3d" },
+  ];
+  for (const s of canonicalSubs) {
+    await prisma.category.upsert({
+      where: { slug: s.slug },
+      update: { order: s.order, parentId: topIdBySlug[s.parent] },
+      create: { name: s.name, slug: s.slug, order: s.order, parentId: topIdBySlug[s.parent] },
+    });
+  }
+
   // --- Товары ---
   const productSeed = [
     { name: "Набор стикеров «Котики»", price: 249, cat: "stickers", featured: true, isNew: false, img: "photo-1517960413843-0aee8e2b3285" },
@@ -117,6 +148,11 @@ async function main() {
     where: { key: "hero_subtitle" },
     update: {},
     create: { key: "hero_subtitle", value: "Стикеры, постеры и мерч, которые поднимают настроение" },
+  });
+  await prisma.siteContent.upsert({
+    where: { key: "site_font" },
+    update: {},
+    create: { key: "site_font", value: "fredoka-nunito" },
   });
 
   console.log("Seed завершён ✅");

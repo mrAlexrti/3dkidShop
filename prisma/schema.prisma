@@ -57,14 +57,19 @@ model Session {
 // ---------- Каталог ----------
 
 model Category {
-  id          String    @id @default(cuid())
+  id          String     @id @default(cuid())
   name        String
-  slug        String    @unique
+  slug        String     @unique
   description String?
   imageUrl    String?
-  order       Int       @default(0)
+  order       Int        @default(0)
+  parentId    String?
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryHierarchy")
   products    Product[]
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime   @default(now())
+
+  @@index([parentId])
 }
 
 model Product {
