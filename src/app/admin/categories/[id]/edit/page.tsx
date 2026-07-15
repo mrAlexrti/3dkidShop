@@ -46,10 +46,12 @@ export default async function EditCategoryPage({
           parents={parents}
           defaults={{
             name: category.name,
+            nameEn: category.nameEn,
             slug: category.slug,
             imageUrl: category.imageUrl,
             description: category.description,
             parentId: category.parentId,
+            order: category.order,
           }}
           action={updateCategory.bind(null, id)}
           mode="edit"

@@ -1,17 +1,18 @@
 "use client";
 
-import { useTransition } from "react";
+import { Fragment, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useLangStore } from "@/store/lang-store";
-
-type Category = { id: string; name: string };
+import type { CategoryTreeNode } from "@/lib/categories";
 
 type ProductDefaults = {
   name?: string;
+  nameEn?: string | null;
   slug?: string;
   description?: string;
+  descriptionEn?: string | null;
   price?: number;
   oldPrice?: number | null;
   stock?: number;
@@ -27,7 +28,7 @@ export function ProductForm({
   defaults,
   action,
 }: {
-  categories: Category[];
+  categories: CategoryTreeNode[];
   defaults?: ProductDefaults;
   action: (formData: FormData) => Promise<void>;
 }) {
@@ -56,8 +57,13 @@ export function ProductForm({
       className="glass max-w-2xl space-y-5 rounded-xl2 p-6 shadow-soft"
     >
       <div>
-        <label className="mb-1 block text-sm font-medium">{tp.name}</label>
+        <label className="mb-1 block text-sm font-medium">{tp.nameUa}</label>
         <input name="name" defaultValue={defaults?.name} required className={inputClass} />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium">{tp.nameEn}</label>
+        <input name="nameEn" defaultValue={defaults?.nameEn ?? ""} required className={inputClass} />
       </div>
 
       <div>
@@ -66,8 +72,13 @@ export function ProductForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium">{tp.description}</label>
+        <label className="mb-1 block text-sm font-medium">{tp.descriptionUa}</label>
         <textarea name="description" defaultValue={defaults?.description} rows={4} required className={inputClass} />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium">{tp.descriptionEn}</label>
+        <textarea name="descriptionEn" defaultValue={defaults?.descriptionEn ?? ""} rows={4} required className={inputClass} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -89,10 +100,15 @@ export function ProductForm({
         <div>
           <label className="mb-1 block text-sm font-medium">{tp.category}</label>
           <select name="categoryId" defaultValue={defaults?.categoryId} required className={inputClass}>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
+            {categories.map((category) => (
+              <Fragment key={category.id}>
+                <option value={category.id}>{category.name}</option>
+                {category.children.map((child, index) => (
+                  <option key={child.id} value={child.id}>
+                    {`  ${index === category.children.length - 1 ? "└" : "├"}─ ${child.name}`}
+                  </option>
+                ))}
+              </Fragment>
             ))}
           </select>
         </div>

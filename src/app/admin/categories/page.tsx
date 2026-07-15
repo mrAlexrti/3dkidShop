@@ -7,6 +7,7 @@ import { createCategory, deleteCategory } from "@/lib/actions/categories";
 import { DeleteButton } from "@/components/admin/delete-button";
 import { CategoryForm } from "@/components/admin/category-form";
 import { getT } from "@/lib/i18n-server";
+import { CategoryImage } from "@/components/category/category-image";
 
 export default async function AdminCategoriesPage() {
   const t = await getT();
@@ -50,14 +51,12 @@ export default async function AdminCategoriesPage() {
                 <tr key={c.id} className="border-t border-pink-100">
                   <td className="px-4 py-3">
                     <div className="h-10 w-10 overflow-hidden rounded-lg border border-pink-100 bg-pink-50">
-                      {c.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={c.imageUrl} alt="" className="h-full w-full object-cover" />
-                      ) : null}
+                      <CategoryImage src={c.imageUrl} alt="" className="h-full w-full object-cover" />
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="font-medium">{c.name}</div>
+                    <div className="text-xs text-ink/60">{c.nameEn}</div>
                     <div className="text-xs text-ink/40">{c.slug}</div>
                   </td>
                   <td className="px-4 py-3 text-ink/50">{c.parent?.name ?? "—"}</td>

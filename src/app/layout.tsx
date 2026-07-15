@@ -9,13 +9,13 @@ import { FONT_THEMES, googleFontsHref } from "@/lib/fonts";
 
 export const metadata: Metadata = {
   title: {
-    default:  "3D Kid — Іграшки, брелоки та курси",
+    default:  "3D Kid — творчі 3D товари",
     template: "%s | 3D Kid",
   },
-  description: "Магазин 3D Kid: іграшки, брелоки, курси. Яскравий дизайн, швидка доставка.",
+  description: "Магазин творчих товарів 3D Kid. Яскравий дизайн і швидка доставка.",
   metadataBase: new URL("https://www.3dkid.shop"),
   openGraph: {
-    title:       "3D Kid — Іграшки, брелоки та курси",
+    title:       "3D Kid — творчі 3D товари",
     description: "Наклей трохи радості!",
     type:        "website",
   },
@@ -38,7 +38,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       style={fontVars}
       suppressHydrationWarning
     >
-      <body className="font-sans antialiased" suppressHydrationWarning>
+      <body className="grid-surface font-sans antialiased" suppressHydrationWarning>
         {/* Динамическая шрифтовая тема (выбирается в админке, хранится в SiteContent).
             React 19 хойстит эти <link> в <head> и дедуплицирует по href. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />

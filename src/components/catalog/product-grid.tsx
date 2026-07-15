@@ -9,6 +9,7 @@ type GridProduct = {
   id: string;
   slug: string;
   name: string;
+  nameEn?: string | null;
   price: number;
   oldPrice?: number | null;
   image: string;
@@ -24,12 +25,14 @@ export function ProductGrid({ products }: { products: GridProduct[] }) {
     return <p className="py-16 text-center text-ink/50">{t.catalog.empty}</p>;
   }
 
+  const productSetKey = products.map((product) => product.id).join(":");
+
   return (
     <motion.div
+      key={productSetKey}
       variants={staggerContainer}
       initial="hidden"
-      whileInView="show"
-      viewport={{ once: true, margin: "-60px" }}
+      animate="show"
       className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4"
     >
       {products.map((p) => (

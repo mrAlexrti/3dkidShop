@@ -10,6 +10,7 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:dedupe-categories": "tsx scripts/dedupe-categories.ts",
+    "db:backfill-product-translations": "tsx scripts/backfill-product-translations.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"
   },

@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { updateSiteContent } from "@/lib/actions/categories";
 import { Button } from "@/components/ui/button";
 import { getT } from "@/lib/i18n-server";
-import { FONT_THEMES, DEFAULT_FONT_THEME } from "@/lib/fonts";
+import { FONT_THEMES, resolveFontTheme } from "@/lib/fonts";
+import { SITE_FONT_KEY } from "@/lib/site-settings";
 
 export default async function AdminContentPage() {
   const t = await getT();
@@ -12,7 +13,7 @@ export default async function AdminContentPage() {
 
   const content = await prisma.siteContent.findMany();
   const map = Object.fromEntries(content.map((c) => [c.key, c.value]));
-  const currentFont = map.site_font ?? DEFAULT_FONT_THEME;
+  const currentFont = resolveFontTheme(map[SITE_FONT_KEY]);
 
   const inputClass =
     "w-full rounded-xl border border-ink/10 bg-white px-4 py-2.5 text-sm outline-none focus:border-pink-400";
@@ -33,7 +34,7 @@ export default async function AdminContentPage() {
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">{tc.font}</label>
-          <select name="site_font" defaultValue={currentFont} className={inputClass}>
+          <select name={SITE_FONT_KEY} defaultValue={currentFont} className={inputClass}>
             {Object.entries(FONT_THEMES).map(([id, theme]) => (
               <option key={id} value={id}>
                 {theme.label}

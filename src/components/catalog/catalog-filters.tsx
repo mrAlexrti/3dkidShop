@@ -5,12 +5,14 @@ import { Search, X, ChevronDown } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { useLangStore } from "@/store/lang-store";
+import { getCategoryName } from "@/lib/category-name";
 
 export type FilterCategory = {
   id: string;
   name: string;
+  nameEn: string;
   slug: string;
-  children: { id: string; name: string; slug: string }[];
+  children: { id: string; name: string; nameEn: string; slug: string }[];
 };
 
 export function CatalogFilters({ categories }: { categories: FilterCategory[] }) {
@@ -18,7 +20,7 @@ export function CatalogFilters({ categories }: { categories: FilterCategory[] })
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const { t } = useLangStore();
+  const { locale, t } = useLangStore();
 
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
   useEffect(() => {
@@ -48,7 +50,8 @@ export function CatalogFilters({ categories }: { categories: FilterCategory[] })
       else current.delete(key);
     });
     current.delete("page");
-    startTransition(() => router.push(`${pathname}?${current.toString()}`));
+    const query = current.toString();
+    startTransition(() => router.push(query ? `${pathname}?${query}` : pathname));
   }
 
   function handleCategoryClick(slug: string | null) {
@@ -105,7 +108,9 @@ export function CatalogFilters({ categories }: { categories: FilterCategory[] })
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap gap-2">
           <button
+            type="button"
             onClick={() => handleCategoryClick(null)}
+            aria-pressed={!activeCategory}
             className={cn(
               chipBase,
               !activeCategory
@@ -121,7 +126,9 @@ export function CatalogFilters({ categories }: { categories: FilterCategory[] })
             return (
               <button
                 key={c.id}
+                type="button"
                 onClick={() => handleCategoryClick(c.slug)}
+                aria-pressed={active}
                 className={cn(
                   chipBase,
                   "flex items-center gap-1",
@@ -130,7 +137,7 @@ export function CatalogFilters({ categories }: { categories: FilterCategory[] })
                     : "bg-white text-ink/70 hover:bg-pink-50"
                 )}
               >
-                {c.name}
+                {getCategoryName(c, locale)}
                 {c.children.length > 0 && (
                   <ChevronDown size={14} className={cn(active && "rotate-180", "transition-transform")} />
                 )}
@@ -169,7 +176,9 @@ export function CatalogFilters({ categories }: { categories: FilterCategory[] })
           {subcats.map((ch) => (
             <button
               key={ch.id}
+              type="button"
               onClick={() => handleCategoryClick(ch.slug)}
+              aria-pressed={activeCategory === ch.slug}
               className={cn(
                 "rounded-full px-3 py-1.5 text-xs font-semibold transition-all active:scale-95",
                 activeCategory === ch.slug
@@ -177,7 +186,7 @@ export function CatalogFilters({ categories }: { categories: FilterCategory[] })
                   : "bg-pink-50 text-pink-600 hover:bg-pink-100"
               )}
             >
-              {ch.name}
+              {getCategoryName(ch, locale)}
             </button>
           ))}
         </div>

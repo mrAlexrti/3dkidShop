@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { Instagram, Facebook, Mail, Phone } from "lucide-react";
 import { useLangStore } from "@/store/lang-store";
+import type { CategoryTreeNode } from "@/lib/categories";
+import { getCategoryName } from "@/lib/category-name";
 
-export function Footer() {
-  const { t } = useLangStore();
+export function Footer({ categories }: { categories: CategoryTreeNode[] }) {
+  const { locale, t } = useLangStore();
 
   return (
     <footer className="mt-24 border-t border-pink-100 bg-white/60">
@@ -31,8 +33,16 @@ export function Footer() {
           </h4>
           <ul className="space-y-2 text-sm text-ink/70">
             <li><Link href="/catalog" className="hover:text-pink-600 transition-colors">{t.nav.catalog}</Link></li>
-            <li><Link href="/catalog?category=stickers" className="hover:text-pink-600 transition-colors">{t.nav.toys}</Link></li>
-            <li><Link href="/catalog?category=merch" className="hover:text-pink-600 transition-colors">{t.nav.keychains}</Link></li>
+            {categories.map((category) => (
+              <li key={category.id}>
+                <Link
+                  href={`/catalog?category=${category.slug}`}
+                  className="transition-colors hover:text-pink-600"
+                >
+                  {getCategoryName(category, locale)}
+                </Link>
+              </li>
+            ))}
             <li><Link href="/cart" className="hover:text-pink-600 transition-colors">{t.nav.cart}</Link></li>
           </ul>
         </div>

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { getSession, signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -34,6 +34,7 @@ function getRedirectTarget(responseUrl: string | null | undefined, fallbackUrl: 
 }
 
 export function LoginForm({ isTestMode }: { isTestMode: boolean }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [username, setUsername] = useState(isTestMode ? "admin" : "");
   const [password, setPassword] = useState("");
@@ -64,15 +65,26 @@ export function LoginForm({ isTestMode }: { isTestMode: boolean }) {
       if (response.error || response.ok === false) {
         const message = AUTH_ERROR_MESSAGES[response.code ?? response.error ?? ""] ?? "Не вдалося увійти";
         setError(message);
+        setPassword("");
         toast.error(message);
         return;
       }
 
-      window.location.assign(getRedirectTarget(response.url, callbackUrl));
-    } catch (signInError) {
-      console.error("Admin sign-in failed", signInError);
-      const message = "Помилка входу. Перевірте env, cookies та /api/auth/diagnostics";
+      const session = await getSession();
+      if (!session?.user) {
+        const message = "Вхід підтверджено, але браузер не зберіг сесію. Дозвольте cookies для localhost і спробуйте ще раз.";
+        setError(message);
+        setPassword("");
+        toast.error(message);
+        return;
+      }
+
+      router.replace(getRedirectTarget(response.url, callbackUrl));
+      router.refresh();
+    } catch {
+      const message = "Помилка входу. Перевірте підключення та спробуйте ще раз.";
       setError(message);
+      setPassword("");
       toast.error(message);
     } finally {
       setLoading(false);

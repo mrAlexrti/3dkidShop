@@ -3,18 +3,20 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ImageOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLangStore } from "@/store/lang-store";
+import { CategoryImage } from "@/components/category/category-image";
 
 type ParentOption = { id: string; name: string };
 
 type CategoryDefaults = {
   name?: string;
+  nameEn?: string;
   slug?: string;
   imageUrl?: string | null;
   description?: string | null;
   parentId?: string | null;
+  order?: number;
 };
 
 export function CategoryForm({
@@ -34,8 +36,6 @@ export function CategoryForm({
   const tc = t.admin.categories;
 
   const [imageUrl, setImageUrl] = useState(defaults?.imageUrl ?? "");
-  const [imgError, setImgError] = useState(false);
-  const showPreview = imageUrl.trim() !== "" && !imgError;
 
   const inputClass =
     "w-full rounded-xl border border-ink/10 bg-white px-4 py-2.5 text-sm outline-none focus:border-pink-400";
@@ -57,8 +57,31 @@ export function CategoryForm({
       }}
       className="space-y-3"
     >
-      <input name="name" defaultValue={defaults?.name} placeholder={tc.name} required className={inputClass} />
+      <input
+        name="name"
+        defaultValue={defaults?.name}
+        placeholder={tc.nameUa}
+        required
+        className={inputClass}
+      />
+      <input
+        name="nameEn"
+        defaultValue={defaults?.nameEn}
+        placeholder={tc.nameEn}
+        required
+        className={inputClass}
+      />
       <input name="slug" defaultValue={defaults?.slug} placeholder={tc.slug} required className={inputClass} />
+
+      <div>
+        <label className="mb-1 block text-xs font-medium text-ink/50">{tc.order}</label>
+        <input
+          name="order"
+          type="number"
+          defaultValue={defaults?.order ?? 0}
+          className={inputClass}
+        />
+      </div>
 
       <div>
         <label className="mb-1 block text-xs font-medium text-ink/50">{tc.parent}</label>
@@ -75,32 +98,18 @@ export function CategoryForm({
       <div>
         <input
           name="imageUrl"
+          type="url"
           value={imageUrl}
-          onChange={(e) => {
-            setImageUrl(e.target.value);
-            setImgError(false);
-          }}
+          onChange={(e) => setImageUrl(e.target.value)}
           placeholder={tc.image}
           className={inputClass}
         />
         <div className="mt-2 flex items-center gap-3">
           <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-pink-100 bg-pink-50">
-            {showPreview ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={imageUrl}
-                alt=""
-                className="h-full w-full object-cover"
-                onError={() => setImgError(true)}
-              />
-            ) : (
-              <div className="grid h-full w-full place-items-center text-pink-300">
-                <ImageOff size={20} />
-              </div>
-            )}
+            <CategoryImage src={imageUrl} alt="" className="h-full w-full object-cover" />
           </div>
           <span className="text-xs text-ink/40">
-            {showPreview ? t.admin.common.preview : tc.imageHint}
+            {imageUrl.trim() ? t.admin.common.preview : tc.imageHint}
           </span>
         </div>
       </div>

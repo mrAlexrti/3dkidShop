@@ -7,8 +7,10 @@ import { requireAdmin } from "@/lib/actions/require-admin";
 
 const productSchema = z.object({
   name: z.string().min(2),
+  nameEn: z.string().trim().min(2),
   slug: z.string().min(2),
   description: z.string().min(5),
+  descriptionEn: z.string().trim().min(5),
   price: z.coerce.number().positive(),
   oldPrice: z.coerce.number().optional().nullable(),
   stock: z.coerce.number().int().nonnegative(),
@@ -33,8 +35,10 @@ export async function createProduct(formData: FormData) {
   await prisma.product.create({
     data: {
       name: parsed.name,
+      nameEn: parsed.nameEn,
       slug: parsed.slug,
       description: parsed.description,
+      descriptionEn: parsed.descriptionEn,
       price: parsed.price,
       oldPrice: parsed.oldPrice || null,
       stock: parsed.stock,
@@ -65,8 +69,10 @@ export async function updateProduct(id: string, formData: FormData) {
     where: { id },
     data: {
       name: parsed.name,
+      nameEn: parsed.nameEn,
       slug: parsed.slug,
       description: parsed.description,
+      descriptionEn: parsed.descriptionEn,
       price: parsed.price,
       oldPrice: parsed.oldPrice || null,
       stock: parsed.stock,

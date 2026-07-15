@@ -1,13 +1,13 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
 import { ProductForm } from "@/components/admin/product-form";
 import { createProduct } from "@/lib/actions/products";
 import { getT } from "@/lib/i18n-server";
+import { getCategoryTree } from "@/lib/categories";
 
 export default async function NewProductPage() {
   const t = await getT();
-  const categories = await prisma.category.findMany({ orderBy: { name: "asc" } });
+  const categories = await getCategoryTree();
 
   return (
     <div>

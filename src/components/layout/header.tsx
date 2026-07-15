@@ -9,20 +9,15 @@ import { useLangStore } from "@/store/lang-store";
 import { LangSwitcher } from "@/components/layout/lang-switcher";
 import { BlueBlob, SunChar, FlowerChar, HeartChar } from "@/components/layout/header-characters";
 import { cn } from "@/lib/utils";
-
-export type NavCategory = {
-  id: string;
-  name: string;
-  slug: string;
-  children: { id: string; name: string; slug: string }[];
-};
+import type { CategoryTreeNode } from "@/lib/categories";
+import { getCategoryName } from "@/lib/category-name";
 
 /* ─── Пухлый 3D-логотип «3D Kid» (bubble-стиль под ескиз) ─────── */
 function Logo3DKid({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 210 120" className={className} aria-label="3D Kid" fill="none">
       <g
-        fontFamily="'Fredoka', 'Nunito', system-ui, sans-serif"
+        fontFamily="var(--font-display)"
         fontWeight={600}
         fill="#fff"
         stroke="#3A2632"
@@ -100,12 +95,12 @@ function HeroCharacters() {
 }
 
 /* ─── Главный Header ──────────────────────────────────────────── */
-export function Header({ categories }: { categories: NavCategory[] }) {
+export function Header({ categories }: { categories: CategoryTreeNode[] }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const count = useCartStore((s) => s.count());
   const openCart = useCartStore((s) => s.openCart);
-  const { t } = useLangStore();
+  const { locale, t } = useLangStore();
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 6);
@@ -172,14 +167,14 @@ export function Header({ categories }: { categories: NavCategory[] }) {
       {/* ══ НАВИГАЦИЯ КАТЕГОРИЙ (desktop) ═════════════════════════ */}
       <div
         className={cn(
-          "hidden border-b border-pink-100 bg-[#FBF7F2]/95 backdrop-blur-sm transition-shadow duration-200 md:block",
+          "hidden border-b border-pink-100 bg-transparent transition-shadow duration-200 md:block",
           scrolled && "shadow-md shadow-pink-100/60"
         )}
       >
-        <nav className="container-shop flex items-center justify-center gap-1 py-2">
+        <nav className="container-shop flex items-center justify-center gap-0.5 py-1.5 lg:gap-2">
           <Link
             href="/catalog"
-            className="rounded-full px-4 py-1.5 text-sm font-semibold text-ink/70 transition-colors hover:bg-pink-100 hover:text-pink-600"
+            className="whitespace-nowrap rounded-full px-2.5 py-1.5 text-xs font-semibold text-ink/70 transition-colors hover:bg-pink-100 hover:text-pink-600 lg:px-4 lg:text-sm"
           >
             {t.nav.all}
           </Link>
@@ -188,9 +183,9 @@ export function Header({ categories }: { categories: NavCategory[] }) {
             <div key={c.id} className="group relative">
               <Link
                 href={`/catalog?category=${c.slug}`}
-                className="flex items-center gap-1 rounded-full px-4 py-1.5 text-sm font-semibold text-ink/70 transition-colors hover:bg-pink-100 hover:text-pink-600"
+                className="flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-xs font-semibold text-ink/70 transition-colors hover:bg-pink-100 hover:text-pink-600 lg:px-4 lg:text-sm"
               >
-                {c.name}
+                {getCategoryName(c, locale)}
                 {c.children.length > 0 && (
                   <ChevronDown size={14} className="transition-transform group-hover:rotate-180" />
                 )}
@@ -205,7 +200,7 @@ export function Header({ categories }: { categories: NavCategory[] }) {
                         href={`/catalog?category=${ch.slug}`}
                         className="block rounded-xl px-3 py-2 text-sm font-medium text-ink/70 transition-colors hover:bg-pink-50 hover:text-pink-600"
                       >
-                        {ch.name}
+                        {getCategoryName(ch, locale)}
                       </Link>
                     ))}
                   </div>
@@ -242,7 +237,7 @@ export function Header({ categories }: { categories: NavCategory[] }) {
                     onClick={() => setMobileOpen(false)}
                     className="block rounded-xl px-4 py-3 text-sm font-semibold transition-colors hover:bg-pink-50 hover:text-pink-600"
                   >
-                    {c.name}
+                    {getCategoryName(c, locale)}
                   </Link>
                   {c.children.length > 0 && (
                     <div className="ml-3 flex flex-col border-l border-pink-100 pl-2">
@@ -253,7 +248,7 @@ export function Header({ categories }: { categories: NavCategory[] }) {
                           onClick={() => setMobileOpen(false)}
                           className="rounded-lg px-4 py-2 text-sm text-ink/70 transition-colors hover:bg-pink-50 hover:text-pink-600"
                         >
-                          {ch.name}
+                          {getCategoryName(ch, locale)}
                         </Link>
                       ))}
                     </div>

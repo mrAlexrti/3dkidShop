@@ -10,11 +10,13 @@ import { formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { toast } from "sonner";
+import { getProductName } from "@/lib/product-content";
 
 type Props = {
   id: string;
   slug: string;
   name: string;
+  nameEn?: string | null;
   price: number;
   oldPrice?: number | null;
   image: string;
@@ -23,10 +25,11 @@ type Props = {
   stock?: number;
 };
 
-export function ProductCard({ id, slug, name, price, oldPrice, image, isNew, hasOptions = false, stock }: Props) {
+export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, isNew, hasOptions = false, stock }: Props) {
   const router = useRouter();
   const addItem  = useCartStore((s) => s.addItem);
-  const { t } = useLangStore();
+  const { locale, t } = useLangStore();
+  const localizedName = getProductName({ name, nameEn }, locale);
   const currency = "UAH";
 
   const handleQuickAdd = (e: React.MouseEvent) => {
@@ -40,8 +43,8 @@ export function ProductCard({ id, slug, name, price, oldPrice, image, isNew, has
       router.push(`/product/${slug}`);
       return;
     }
-    addItem({ id, productId: id, name, slug, price, image, quantity: 1 });
-    toast.success(`${name} ${t.cart.addedToCart}`);
+    addItem({ id, productId: id, name: localizedName, slug, price, image, quantity: 1 });
+    toast.success(`${localizedName} ${t.cart.addedToCart}`);
   };
 
   return (
@@ -50,7 +53,7 @@ export function ProductCard({ id, slug, name, price, oldPrice, image, isNew, has
         <div className="relative aspect-[4/5] overflow-hidden rounded-xl2 bg-white shadow-soft">
           <Image
             src={image}
-            alt={name}
+            alt={localizedName}
             fill
             sizes="(max-width: 768px) 50vw, 25vw"
             className="object-cover transition-transform duration-500 group-hover:scale-110"
@@ -77,7 +80,7 @@ export function ProductCard({ id, slug, name, price, oldPrice, image, isNew, has
         </div>
 
         <div className="mt-3 px-1">
-          <h3 className="text-sm font-medium text-ink line-clamp-2 leading-snug">{name}</h3>
+          <h3 className="text-sm font-medium text-ink line-clamp-2 leading-snug">{localizedName}</h3>
           <div className="mt-1.5 flex items-center gap-2">
             <span className="text-base font-semibold text-pink-600">
               {formatPrice(price, currency)}

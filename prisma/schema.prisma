@@ -59,6 +59,7 @@ model Session {
 model Category {
   id          String     @id @default(cuid())
   name        String
+  nameEn      String
   slug        String     @unique
   description String?
   imageUrl    String?
@@ -75,8 +76,10 @@ model Category {
 model Product {
   id          String             @id @default(cuid())
   name        String
+  nameEn      String?
   slug        String             @unique
   description String             @db.Text
+  descriptionEn String?          @db.Text
   price       Decimal            @db.Decimal(10, 2)
   oldPrice    Decimal?           @db.Decimal(10, 2)
   sku         String?            @unique

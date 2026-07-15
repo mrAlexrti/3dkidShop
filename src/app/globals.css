@@ -3,17 +3,17 @@
 @tailwind utilities;
 
 :root {
-  --header-h: 228px;
+  --header-h: 220px;
   /* Fallback-значения; активная тема выставляется инлайново в <html> из layout.tsx */
-  --font-body: "Nunito", system-ui, sans-serif;
-  --font-display: "Fredoka", "Nunito", system-ui, sans-serif;
+  --font-body: system-ui, sans-serif;
+  --font-display: system-ui, sans-serif;
 }
 
 html {
   scroll-behavior: smooth;
 }
 
-body {
+.grid-surface {
   background-color: #fbf7f2;
   background-image:
     linear-gradient(rgba(255, 77, 129, 0.14) 1px, transparent 1px),

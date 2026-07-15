@@ -48,7 +48,10 @@ export default async function AdminProductsPage() {
                   <div className="relative h-10 w-10 overflow-hidden rounded-lg bg-white">
                     {p.images[0] && <Image src={p.images[0].url} alt={p.name} fill className="object-cover" />}
                   </div>
-                  {p.name}
+                  <span>
+                    <span className="block font-medium">{p.name}</span>
+                    <span className="block text-xs text-ink/45">{p.nameEn || "—"}</span>
+                  </span>
                 </td>
                 <td className="px-4 py-3">{p.category.name}</td>
                 <td className="px-4 py-3">{formatPrice(Number(p.price))}</td>
