@@ -3,7 +3,6 @@
 @tailwind utilities;
 
 :root {
-  --header-h: 220px;
   /* Fallback-значения; активная тема выставляется инлайново в <html> из layout.tsx */
   --font-body: system-ui, sans-serif;
   --font-display: system-ui, sans-serif;
@@ -51,4 +50,57 @@ html {
   max-width: 1320px;
   margin-inline: auto;
   padding-inline: 1.25rem;
+}
+
+.bubble-hero-surface {
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 4rem;
+  background:
+    radial-gradient(circle at 50% 5%, rgba(255, 255, 255, 0.5), transparent 34%),
+    radial-gradient(circle at 15% 78%, rgba(255, 220, 231, 0.8), transparent 32%),
+    linear-gradient(145deg, #ffc7d8 0%, #f99abb 52%, #f889af 100%);
+  box-shadow:
+    0 22px 55px rgba(179, 76, 116, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.bubble-nav-surface {
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  border-radius: 9999px;
+  background: rgba(255, 250, 246, 0.98);
+  box-shadow:
+    0 0 0 7px rgba(255, 255, 255, 0.62),
+    0 18px 40px rgba(127, 62, 87, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.bubble-garden-float {
+  animation: bubble-garden-float 5s ease-in-out infinite;
+}
+
+.bubble-garden-float-slow {
+  animation: bubble-garden-float-slow 7s ease-in-out infinite;
+}
+
+@keyframes bubble-garden-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+
+@keyframes bubble-garden-float-slow {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-5px) rotate(2deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-garden-float,
+  .bubble-garden-float-slow {
+    animation: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .bubble-hero-surface {
+    border-radius: 2.25rem;
+  }
 }

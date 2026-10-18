@@ -9,12 +9,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   return (
     <>
       <Header categories={categories} />
-      {/*
-        Высота хедера:
-        - розовый Hero: 150px (mobile) / 180px (desktop)
-        - полоса категорий (только desktop): ~48px
-      */}
-      <main className="pt-[150px] md:pt-[220px]">{children}</main>
+      <main>{children}</main>
       <Footer categories={categories} />
       <CartDrawer />
     </>

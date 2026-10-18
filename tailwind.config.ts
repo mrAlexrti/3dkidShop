@@ -21,6 +21,7 @@ const config: Config = {
           900: "#5C0C26",
         },
         ink: "#221A1D",
+        "bubble-border": "rgba(232, 168, 191, 0.42)",
       },
       fontFamily: {
         sans: ["var(--font-body)", "system-ui", "sans-serif"],
@@ -28,10 +29,16 @@ const config: Config = {
       },
       borderRadius: {
         xl2: "1.25rem",
+        "bubble-hero": "4rem",
+        "bubble-section": "4rem",
+        "bubble-card": "2rem",
+        "bubble-pill": "9999px",
       },
       boxShadow: {
         soft: "0 8px 30px rgba(34, 26, 29, 0.06)",
         glass: "0 8px 32px rgba(255, 77, 129, 0.12)",
+        "bubble-soft": "0 8px 24px rgba(127, 62, 87, 0.10)",
+        "bubble-medium": "0 15px 35px rgba(127, 62, 87, 0.14)",
       },
       backgroundImage: {
         "grid-notebook":
