@@ -15,7 +15,7 @@ export function Providers({
   const store = useMemo(() => createLangStore(initialLocale), [initialLocale]);
 
   useEffect(() => {
-    void store.persist.rehydrate();
+    void store.persist?.rehydrate();
     store.getState().setLocale(initialLocale);
   }, [initialLocale, store]);
 
