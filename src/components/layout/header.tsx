@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { ShoppingBag, X, Menu, UserRound } from "lucide-react";
 import { useCartStore } from "@/store/cart-store";
@@ -12,6 +13,7 @@ import type { CategoryTreeNode } from "@/lib/categories";
 import { getCategoryName } from "@/lib/category-name";
 
 export function Header({ categories }: { categories: CategoryTreeNode[] }) {
+  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const count = useCartStore((s) => s.count());
   const openCart = useCartStore((s) => s.openCart);
@@ -57,7 +59,7 @@ export function Header({ categories }: { categories: CategoryTreeNode[] }) {
           </nav>
         )}
       </header>
-      <CategoryNav categories={categories} />
+      {pathname !== "/" && <CategoryNav categories={categories} />}
     </>
   );
 }

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { FeaturedProducts } from "@/components/home/featured-products";
 import { Benefits } from "@/components/home/benefits";
+import { Hero } from "@/components/home/hero";
 
 export const revalidate = 60;
 
@@ -40,6 +41,7 @@ export default async function HomePage() {
 
   return (
     <>
+      <Hero />
       <FeaturedProducts products={featured.map(mapProduct)} variant="featured" />
       <FeaturedProducts products={newest.map(mapProduct)} variant="newest" />
       <Benefits />
