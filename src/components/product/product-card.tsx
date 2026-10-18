@@ -23,9 +23,10 @@ type Props = {
   isNew?: boolean;
   hasOptions?: boolean;
   stock?: number;
+  presentation?: "default" | "home";
 };
 
-export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, isNew, hasOptions = false, stock }: Props) {
+export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, isNew, hasOptions = false, stock, presentation = "default" }: Props) {
   const router = useRouter();
   const addItem  = useCartStore((s) => s.addItem);
   const { locale, t } = useLangStore();
@@ -35,17 +36,40 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, is
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     if (stock !== undefined && stock <= 0) {
-      toast.error("Товару немає в наявності");
+      toast.error(t.product.outOfStock);
       return;
     }
     if (hasOptions) {
-      toast.message("Оберіть опції товару");
+      toast.message(t.product.chooseOptions);
       router.push(`/product/${slug}`);
       return;
     }
     addItem({ id, productId: id, name: localizedName, slug, price, image, quantity: 1 });
     toast.success(`${localizedName} ${t.cart.addedToCart}`);
   };
+
+  if (presentation === "home") {
+    return (
+      <article className="sf-product-card">
+        <Link className="sf-product-visual" href={`/product/${slug}`} aria-label={localizedName}>
+          <Image src={image} alt={localizedName} fill sizes="(max-width: 680px) 44vw, (max-width: 980px) 42vw, 260px" className="object-cover" />
+          {isNew && <span className="absolute left-2 top-2 rounded-full bg-pink-700 px-3 py-1 text-xs font-semibold text-white">{t.common.new}</span>}
+        </Link>
+        <div className="sf-product-body">
+          <h3><Link href={`/product/${slug}`}>{localizedName}</Link></h3>
+          <div className="sf-product-bottom">
+            <div className="sf-product-price">
+              <span>{formatPrice(price, currency)}</span>
+              {oldPrice && <del>{formatPrice(oldPrice, currency)}</del>}
+            </div>
+            <button type="button" className="sf-product-add" onClick={handleQuickAdd} aria-label={`${t.product.addToCart}: ${localizedName}`}>
+              <ShoppingBag size={20} aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <motion.div variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}>

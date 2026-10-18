@@ -1,11 +1,7 @@
-"use client";
-
 import Link from "next/link";
-import { AnimatedSection } from "@/components/shared/animated-section";
-import { ProductGrid } from "@/components/catalog/product-grid";
-import { Button } from "@/components/ui/button";
-import { useLangStore } from "@/store/lang-store";
-import { cn } from "@/lib/utils";
+import { Search } from "lucide-react";
+import { ProductCard } from "@/components/product/product-card";
+import { getT } from "@/lib/i18n-server";
 
 type Product = {
   id: string;
@@ -20,37 +16,40 @@ type Product = {
   stock?: number;
 };
 
-export function FeaturedProducts({
-  products,
-  variant = "featured",
-}: {
+export async function FeaturedProducts({ products, variant = "featured" }: {
   products: Product[];
   variant?: "featured" | "newest";
 }) {
-  const { t } = useLangStore();
-  const title = variant === "newest" ? t.home.newArrivals : t.home.featured;
-  const subtitle = variant === "featured" ? t.home.featuredDesc : null;
-
+  const t = await getT();
+  const featured = variant === "featured";
+  const titleId = `home-${variant}-title`;
   return (
-    <section
-      className={cn(
-        "container-shop",
-        variant === "featured" ? "mt-10 md:mt-14" : "mt-20 md:mt-24"
-      )}
-    >
-      <AnimatedSection className="flex items-end justify-between">
+    <section className="sf-shell sf-home-panel" aria-labelledby={titleId}>
+      <div className="sf-section-heading">
         <div>
-          <h2 className="font-display text-3xl text-ink">{title}</h2>
-          {subtitle && <p className="mt-2 text-ink/60">{subtitle}</p>}
+          {featured && <span className="sf-eyebrow">{t.home.eyebrow}</span>}
+          <h2 id={titleId}>{featured ? t.home.featured : t.home.newArrivals}</h2>
+          {featured && <p>{t.home.description}</p>}
         </div>
-        <Link href="/catalog" className="hidden md:block">
-          <Button variant="outline">{t.home.viewCatalog}</Button>
-        </Link>
-      </AnimatedSection>
-
-      <div className="mt-8">
-        <ProductGrid products={products} />
+        <Link className="sf-pill" href="/catalog">{t.home.viewCatalog}</Link>
       </div>
+      {featured && (
+        <form action="/catalog" method="get" role="search" className="sf-home-search">
+          <label htmlFor="home-product-search">{t.home.searchLabel}</label>
+          <div className="sf-search-row">
+            <div className="sf-search-field">
+              <Search size={22} aria-hidden="true" />
+              <input id="home-product-search" name="q" type="search" placeholder={t.home.searchPlaceholder} />
+            </div>
+            <button type="submit" className="sf-pill">{t.catalog.find}</button>
+          </div>
+        </form>
+      )}
+      {products.length > 0 ? (
+        <div className="sf-product-grid">
+          {products.map((product) => <ProductCard key={product.id} {...product} presentation="home" />)}
+        </div>
+      ) : <p className="py-10 text-center">{t.catalog.empty}</p>}
     </section>
   );
 }
