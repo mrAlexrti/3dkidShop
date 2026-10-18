@@ -1,4 +1,4 @@
-﻿const star = "M-5-22C-3-28 3-28 5-22L10-11C11-9 12-8 14-7L24-3C30-1 30 4 24 6L13 10C11 11 10 12 9 14L5 25C3 31-2 31-4 25L-9 14C-10 12-11 11-13 10L-24 6C-30 4-30-1-24-3L-14-7C-12-8-11-9-10-11Z";
+const star = "M-5-22C-3-28 3-28 5-22L10-11C11-9 12-8 14-7L24-3C30-1 30 4 24 6L13 10C11 11 10 12 9 14L5 25C3 31-2 31-4 25L-9 14C-10 12-11 11-13 10L-24 6C-30 4-30-1-24-3L-14-7C-12-8-11-9-10-11Z";
 export function HeroDoodle({ side }: { side: "left" | "right" }) {
   const id = `hero-gold-${side}`;
   const rays = side === "left" ? [[40,37,-24,40],[21,69,-65,26]] : [[38,40,27,38],[57,69,68,27]];
@@ -13,4 +13,3 @@ export function HeroDoodle({ side }: { side: "left" | "right" }) {
     {stars.map(([x,y,size],index) => <g key={`star-${index}`} transform={`translate(${x} ${y}) scale(${size/56}) rotate(${side === "left" ? -12 : 12})`} filter={`url(#${id}-shadow)`}><path d={star} transform="translate(0 3)" fill="#d88317" /><path d={star} fill={`url(#${id}-face)`} stroke="#dc8b1b" strokeWidth=".8" /><path d="M-17-3C-11-5-7-10-4-18" stroke="#fff0b2" strokeWidth="3" strokeLinecap="round" opacity=".9" /><ellipse cx="5" cy="-8" rx="7" ry="3" transform="rotate(35 5 -8)" fill="#ffe49a" opacity=".45" /></g>)}
   </svg>;
 }
-
