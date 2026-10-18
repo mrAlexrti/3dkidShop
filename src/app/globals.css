@@ -3,7 +3,6 @@
 @tailwind utilities;
 
 :root {
-  --header-h: 220px;
   /* Fallback-значения; активная тема выставляется инлайново в <html> из layout.tsx */
   --font-body: system-ui, sans-serif;
   --font-display: system-ui, sans-serif;
