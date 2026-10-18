@@ -1,8 +1,8 @@
 "use client";
 
 import { SessionProvider } from "next-auth/react";
-import { useEffect } from "react";
-import { useLangStore } from "@/store/lang-store";
+import { useEffect, useMemo } from "react";
+import { createLangStore, LangStoreContext } from "@/store/lang-store";
 import type { Locale } from "@/lib/i18n";
 
 export function Providers({
@@ -12,13 +12,16 @@ export function Providers({
   children: React.ReactNode;
   initialLocale: Locale;
 }) {
-  // Cookie (initialLocale, отрендеренная сервером) — источник истины.
-  // Если клиентский стор из localStorage разошёлся с cookie — приводим к cookie.
-  useEffect(() => {
-    if (useLangStore.getState().locale !== initialLocale) {
-      useLangStore.getState().setLocale(initialLocale);
-    }
-  }, [initialLocale]);
+  const store = useMemo(() => createLangStore(initialLocale), [initialLocale]);
 
-  return <SessionProvider>{children}</SessionProvider>;
+  useEffect(() => {
+    void store.persist.rehydrate();
+    store.getState().setLocale(initialLocale);
+  }, [initialLocale, store]);
+
+  return (
+    <SessionProvider>
+      <LangStoreContext.Provider value={store}>{children}</LangStoreContext.Provider>
+    </SessionProvider>
+  );
 }

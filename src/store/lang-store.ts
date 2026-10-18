@@ -1,6 +1,7 @@
 "use client";
 
-import { create } from "zustand";
+import { createContext, useContext } from "react";
+import { createStore, useStore } from "zustand";
 import { persist } from "zustand/middleware";
 import { translations } from "@/lib/i18n";
 
@@ -19,11 +20,12 @@ function writeLocaleCookie(locale: Locale) {
   document.cookie = `locale=${locale}; path=/; max-age=31536000; samesite=lax`;
 }
 
-export const useLangStore = create<LangStore>()(
+// A provider-owned store keeps the server cookie authoritative and isolates SSR requests.
+export const createLangStore = (initialLocale: Locale) => createStore<LangStore>()(
   persist(
     (set) => ({
-      locale: "ua",
-      t: translations.ua as Translation,
+      locale: initialLocale,
+      t: translations[initialLocale] as Translation,
       setLocale: (locale) => {
         writeLocaleCookie(locale);
         set({
@@ -32,6 +34,22 @@ export const useLangStore = create<LangStore>()(
         });
       },
     }),
-    { name: "stikr-lang" }
+    {
+      name: "stikr-lang",
+      version: 1,
+      skipHydration: true,
+      partialize: (state) => ({ locale: state.locale }),
+      migrate: () => ({ locale: initialLocale }),
+      // Never restore a dictionary or override the server's cookie with localStorage.
+      merge: (_persisted, current) => current,
+    }
   )
 );
+
+export const LangStoreContext = createContext<ReturnType<typeof createLangStore> | null>(null);
+
+export function useLangStore() {
+  const store = useContext(LangStoreContext);
+  if (!store) throw new Error("Language store requires Providers");
+  return useStore(store);
+}
