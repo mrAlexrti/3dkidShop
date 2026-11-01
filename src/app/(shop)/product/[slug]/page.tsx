@@ -24,7 +24,7 @@ async function getProduct(rawSlug: string) {
   let product = await prisma.product.findFirst({
     where: { slug, isActive: true },
     include: {
-      images: true,
+      images: { orderBy: [{ order: "asc" }, { id: "asc" }] },
       options: { include: { values: true } },
       attributes: true,
       category: true,
@@ -42,7 +42,7 @@ async function getProduct(rawSlug: string) {
         isActive: true,
       },
       include: {
-        images: true,
+        images: { orderBy: [{ order: "asc" }, { id: "asc" }] },
         options: { include: { values: true } },
         attributes: true,
         category: true,
@@ -92,7 +92,7 @@ export default async function ProductPage({
       id: { not: product.id },
       isActive: true,
     },
-    include: { images: true, _count: { select: { options: true } } },
+    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }] }, _count: { select: { options: true } } },
     take: 4,
   });
 
@@ -167,6 +167,7 @@ export default async function ProductPage({
           slug: p.slug,
           name: p.name,
           nameEn: p.nameEn,
+          hoverGifUrl: p.hoverGifUrl,
           price: Number(p.price),
           image: p.images[0]?.url ?? "/images/placeholder.svg",
           isNew: p.isNew,

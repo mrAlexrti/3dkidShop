@@ -9,12 +9,12 @@ async function getHomeData() {
   const [featured, newest] = await Promise.all([
     prisma.product.findMany({
       where: { isFeatured: true, isActive: true },
-      include: { images: true, _count: { select: { options: true } } },
+      include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }] }, _count: { select: { options: true } } },
       take: 8,
     }),
     prisma.product.findMany({
       where: { isNew: true, isActive: true },
-      include: { images: true, _count: { select: { options: true } } },
+      include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }] }, _count: { select: { options: true } } },
       take: 4,
       orderBy: { createdAt: "desc" },
     }),
@@ -31,6 +31,7 @@ export default async function HomePage() {
     slug: product.slug,
     name: product.name,
     nameEn: product.nameEn,
+    hoverGifUrl: product.hoverGifUrl,
     price: Number(product.price),
     oldPrice: product.oldPrice ? Number(product.oldPrice) : null,
     image: product.images[0]?.url ?? "/images/placeholder.svg",

@@ -11,7 +11,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const t = await getT();
   const [product, categories] = await Promise.all([
-    prisma.product.findUnique({ where: { id }, include: { images: true } }),
+    prisma.product.findUnique({ where: { id }, include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }] } } }),
     getCategoryTree(),
   ]);
 
@@ -37,6 +37,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
             stock: product.stock,
             categoryId: product.categoryId,
             imageUrl: product.images[0]?.url,
+            hoverGifUrl: product.hoverGifUrl,
             isFeatured: product.isFeatured,
             isNew: product.isNew,
             isActive: product.isActive,

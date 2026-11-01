@@ -61,7 +61,7 @@ export default async function CatalogPage({
     prisma.product.findMany({
       where,
       orderBy,
-      include: { images: true, _count: { select: { options: true } } },
+      include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }] }, _count: { select: { options: true } } },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
@@ -106,6 +106,7 @@ export default async function CatalogPage({
           slug:     p.slug,
           name:     p.name,
           nameEn:   p.nameEn,
+          hoverGifUrl: p.hoverGifUrl,
           price:    Number(p.price),
           oldPrice: p.oldPrice ? Number(p.oldPrice) : null,
           image:    p.images[0]?.url ?? "/images/placeholder.svg",

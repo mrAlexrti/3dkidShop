@@ -11,6 +11,7 @@ type Product = {
   price: number;
   oldPrice?: number | null;
   image: string;
+  hoverGifUrl?: string | null;
   isNew?: boolean;
   hasOptions?: boolean;
   stock?: number;

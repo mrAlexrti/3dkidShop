@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/actions/require-admin";
+import { optionalHoverGifUrl, updateMainProductImage } from "@/lib/product-media";
 
 const productSchema = z.object({
   name: z.string().min(2),
@@ -16,6 +17,7 @@ const productSchema = z.object({
   stock: z.coerce.number().int().nonnegative(),
   categoryId: z.string().min(1),
   imageUrl: z.string().url(),
+  hoverGifUrl: optionalHoverGifUrl,
   isFeatured: z.coerce.boolean().optional(),
   isNew: z.coerce.boolean().optional(),
   isActive: z.coerce.boolean().optional(),
@@ -47,11 +49,13 @@ export async function createProduct(formData: FormData) {
       isNew: !!parsed.isNew,
       isActive: parsed.isActive ?? true,
       images: { create: [{ url: parsed.imageUrl, order: 0 }] },
+      hoverGifUrl: parsed.hoverGifUrl,
     },
   });
 
   revalidatePath("/admin/products");
   revalidatePath("/catalog");
+  revalidatePath("/");
 }
 
 export async function updateProduct(id: string, formData: FormData) {
@@ -65,27 +69,32 @@ export async function updateProduct(id: string, formData: FormData) {
     isActive: raw.isActive === "on",
   });
 
-  await prisma.product.update({
-    where: { id },
-    data: {
-      name: parsed.name,
-      nameEn: parsed.nameEn,
-      slug: parsed.slug,
-      description: parsed.description,
-      descriptionEn: parsed.descriptionEn,
-      price: parsed.price,
-      oldPrice: parsed.oldPrice || null,
-      stock: parsed.stock,
-      categoryId: parsed.categoryId,
-      isFeatured: !!parsed.isFeatured,
-      isNew: !!parsed.isNew,
-      isActive: parsed.isActive ?? true,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.product.update({
+      where: { id },
+      data: {
+        name: parsed.name,
+        nameEn: parsed.nameEn,
+        slug: parsed.slug,
+        description: parsed.description,
+        descriptionEn: parsed.descriptionEn,
+        price: parsed.price,
+        oldPrice: parsed.oldPrice || null,
+        stock: parsed.stock,
+        categoryId: parsed.categoryId,
+        isFeatured: !!parsed.isFeatured,
+        isNew: !!parsed.isNew,
+        isActive: parsed.isActive ?? true,
+        hoverGifUrl: parsed.hoverGifUrl,
+      },
+    });
+    await updateMainProductImage(tx, id, parsed.imageUrl);
   });
 
   revalidatePath("/admin/products");
   revalidatePath(`/product/${parsed.slug}`);
   revalidatePath("/catalog");
+  revalidatePath("/");
 }
 
 export async function deleteProduct(id: string) {

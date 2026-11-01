@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useLangStore } from "@/store/lang-store";
 import type { CategoryTreeNode } from "@/lib/categories";
+import { MediaUrlField } from "@/components/admin/media-url-field";
 
 type ProductDefaults = {
   name?: string;
@@ -18,6 +19,7 @@ type ProductDefaults = {
   stock?: number;
   categoryId?: string;
   imageUrl?: string;
+  hoverGifUrl?: string | null;
   isFeatured?: boolean;
   isNew?: boolean;
   isActive?: boolean;
@@ -118,6 +120,8 @@ export function ProductForm({
         <label className="mb-1 block text-sm font-medium">{tp.imageUrl}</label>
         <input name="imageUrl" type="url" defaultValue={defaults?.imageUrl} required className={inputClass} />
       </div>
+
+      <MediaUrlField name="hoverGifUrl" label={tp.hoverGif} help={tp.hoverGifHelp} defaultValue={defaults?.hoverGifUrl ?? ""} />
 
       <div className="flex gap-6 text-sm">
         <label className="flex items-center gap-2">

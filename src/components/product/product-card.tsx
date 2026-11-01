@@ -11,6 +11,16 @@ import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { toast } from "sonner";
 import { getProductName } from "@/lib/product-content";
+import { useState, useSyncExternalStore } from "react";
+
+const animationQuery = "(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)";
+function subscribeAnimationPreference(callback: () => void) {
+  const query = window.matchMedia(animationQuery);
+  query.addEventListener("change", callback);
+  return () => query.removeEventListener("change", callback);
+}
+const canAnimate = () => window.matchMedia(animationQuery).matches;
+const staticOnServer = () => false;
 
 type Props = {
   id: string;
@@ -20,18 +30,39 @@ type Props = {
   price: number;
   oldPrice?: number | null;
   image: string;
+  hoverGifUrl?: string | null;
   isNew?: boolean;
   hasOptions?: boolean;
   stock?: number;
   presentation?: "default" | "home";
 };
 
-export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, isNew, hasOptions = false, stock, presentation = "default" }: Props) {
+export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, hoverGifUrl, isNew, hasOptions = false, stock, presentation = "default" }: Props) {
   const router = useRouter();
   const addItem  = useCartStore((s) => s.addItem);
   const { locale, t } = useLangStore();
   const localizedName = getProductName({ name, nameEn }, locale);
   const currency = "UAH";
+  const animationAllowed = useSyncExternalStore(subscribeAnimationPreference, canAnimate, staticOnServer);
+  const [pointed, setPointed] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  const showGif = animationAllowed && (pointed || focused) && hoverGifUrl && failedUrl !== hoverGifUrl;
+  const interaction = {
+    onPointerEnter: (event: React.PointerEvent<HTMLElement>) => setPointed(event.pointerType === "mouse"),
+    onPointerLeave: () => setPointed(false),
+    onFocusCapture: (event: React.FocusEvent<HTMLElement>) => setFocused(event.target.matches(":focus-visible")),
+    onBlurCapture: (event: React.FocusEvent<HTMLElement>) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
+    },
+  };
+  // The semantic static image stays mounted underneath; no GIF src exists before interaction.
+  const animatedOverlay = showGif ? (
+    <Image src={hoverGifUrl} alt="" aria-hidden="true" fill unoptimized
+      className={`pointer-events-none object-cover ${loadedUrl === hoverGifUrl ? "opacity-100" : "opacity-0"}`}
+      onLoad={() => setLoadedUrl(hoverGifUrl)} onError={() => setFailedUrl(hoverGifUrl)} />
+  ) : null;
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -50,9 +81,10 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, is
 
   if (presentation === "home") {
     return (
-      <article className="sf-product-card">
+      <article className="sf-product-card" {...interaction}>
         <Link className="sf-product-visual" href={`/product/${slug}`} aria-label={localizedName}>
           <Image src={image} alt={localizedName} fill sizes="(max-width: 680px) 44vw, (max-width: 980px) 42vw, 260px" className="object-cover" />
+          {animatedOverlay}
           {isNew && <span className="absolute left-2 top-2 rounded-full bg-pink-700 px-3 py-1 text-xs font-semibold text-white">{t.common.new}</span>}
         </Link>
         <div className="sf-product-body">
@@ -72,7 +104,7 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, is
   }
 
   return (
-    <motion.div variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}>
+    <motion.div {...interaction} variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}>
       <Link href={`/product/${slug}`} className="group block">
         <div className="relative aspect-[4/5] overflow-hidden rounded-xl2 bg-white shadow-soft">
           <Image
@@ -82,6 +114,7 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, is
             sizes="(max-width: 768px) 50vw, 25vw"
             className="object-cover transition-transform duration-500 group-hover:scale-110"
           />
+          {animatedOverlay}
           {isNew && (
             <Badge className="absolute left-3 top-3">{t.common.new}</Badge>
           )}
@@ -92,7 +125,7 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, is
           )}
 
           {/* Кнопка "В корзину" появляется при hover */}
-          <div className="absolute inset-x-3 bottom-3 translate-y-14 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+          <div className="absolute inset-x-3 bottom-3 translate-y-14 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100 [@media(hover:none)]:translate-y-0 [@media(hover:none)]:opacity-100">
             <button
               onClick={handleQuickAdd}
               className="flex w-full items-center justify-center gap-2 rounded-full bg-ink/90 py-2.5 text-sm font-medium text-white backdrop-blur"

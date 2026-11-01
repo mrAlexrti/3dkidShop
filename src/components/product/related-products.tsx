@@ -8,6 +8,7 @@ type Product = {
   nameEn?: string | null;
   price: number;
   image: string;
+  hoverGifUrl?: string | null;
   isNew?: boolean;
   hasOptions?: boolean;
   stock?: number;

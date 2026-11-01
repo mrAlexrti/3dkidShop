@@ -242,6 +242,11 @@ export const translations = {
         fontHint:     "Застосовується до всього сайту. Усі варіанти підтримують українську.",
         save:         "Зберегти",
       },
+      media: {
+        clear: "Прибрати",
+        invalidUrl: "Вкажіть пряме посилання HTTP або HTTPS без облікових даних або залиште поле порожнім.",
+        previewError: "Не вдалося завантажити прев'ю. Перевірте посилання.",
+      },
       product: {
         nameUa:      "Назва українською",
         nameEn:      "Назва англійською",
@@ -253,6 +258,8 @@ export const translations = {
         stock:       "Залишок",
         category:    "Категорія",
         imageUrl:    "URL зображення",
+        hoverGif: "GIF при наведенні",
+        hoverGifHelp: "Пряме HTTP/HTTPS-посилання на GIF. Анімація замінює звичайне зображення, коли покупець наводить вказівник на картку товару або переходить до неї з клавіатури. Залиште порожнім, щоб вимкнути.",
         featured:    "Популярний",
         isNew:       "Новинка",
         active:      "Активний",
@@ -491,6 +498,11 @@ export const translations = {
         fontHint:     "Applied across the whole site. All options support Ukrainian.",
         save:         "Save",
       },
+      media: {
+        clear: "Remove",
+        invalidUrl: "Enter a direct HTTP or HTTPS URL without credentials, or leave this field empty.",
+        previewError: "Could not load the preview. Check the URL.",
+      },
       product: {
         nameUa:      "Name in Ukrainian",
         nameEn:      "Name in English",
@@ -502,6 +514,8 @@ export const translations = {
         stock:       "Stock",
         category:    "Category",
         imageUrl:    "Image URL",
+        hoverGif: "Hover GIF",
+        hoverGifHelp: "A direct HTTP/HTTPS GIF URL. This animation replaces the regular image when a customer hovers over the product card or focuses it with the keyboard. Leave empty to disable.",
         featured:    "Featured",
         isNew:       "New",
         active:      "Active",
