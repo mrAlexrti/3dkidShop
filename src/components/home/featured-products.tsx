@@ -30,16 +30,16 @@ export async function FeaturedProducts({ products }: {
         </div>
         <Link className="sf-pill" href="/catalog">{t.home.viewCatalog}</Link>
       </div>
-        <form action="/catalog" method="get" role="search" className="sf-home-search">
-          <label htmlFor="home-product-search">{t.home.searchLabel}</label>
-          <div className="sf-search-row">
-            <div className="sf-search-field">
-              <Search size={22} aria-hidden="true" />
-              <input id="home-product-search" name="q" type="search" placeholder={t.home.searchPlaceholder} />
-            </div>
-            <button type="submit" className="sf-pill">{t.catalog.find}</button>
+      <form action="/catalog" method="get" role="search" className="sf-home-search">
+        <label htmlFor="home-product-search">{t.home.searchLabel}</label>
+        <div className="sf-search-row">
+          <div className="sf-search-field">
+            <Search size={22} aria-hidden="true" />
+            <input id="home-product-search" name="q" type="search" placeholder={t.home.searchPlaceholder} />
           </div>
-        </form>
+          <button type="submit" className="sf-pill">{t.catalog.find}</button>
+        </div>
+      </form>
       {products.length > 0 ? (
         <div className="sf-product-grid">
           {products.map((product) => <ProductCard key={product.id} {...product} presentation="home" />)}

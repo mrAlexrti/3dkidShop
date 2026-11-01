@@ -62,7 +62,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const [product, locale] = await Promise.all([getProduct(slug), getLocale()]);
-  if (!product) return { title: "Товар не найден" };
+  if (!product) return { title: translations[locale].product.notFound };
   const name = getProductName(product, locale);
   const description = getProductDescription(product, locale);
   return {

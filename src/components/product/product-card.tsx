@@ -12,6 +12,7 @@ import { useLangStore } from "@/store/lang-store";
 import { toast } from "sonner";
 import { getProductName } from "@/lib/product-content";
 import { useState, useSyncExternalStore } from "react";
+import { httpMediaUrl } from "@/lib/product-media";
 
 const animationQuery = "(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)";
 function subscribeAnimationPreference(callback: () => void) {
@@ -48,7 +49,9 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, ho
   const [focused, setFocused] = useState(false);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
-  const showGif = animationAllowed && (pointed || focused) && hoverGifUrl && failedUrl !== hoverGifUrl;
+  const parsedGif = httpMediaUrl.safeParse(hoverGifUrl);
+  const gifUrl = parsedGif.success ? parsedGif.data : null;
+  const showGif = animationAllowed && (pointed || focused) && gifUrl && failedUrl !== gifUrl;
   const interaction = {
     onPointerEnter: (event: React.PointerEvent<HTMLElement>) => setPointed(event.pointerType === "mouse"),
     onPointerLeave: () => setPointed(false),
@@ -59,9 +62,9 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, ho
   };
   // The semantic static image stays mounted underneath; no GIF src exists before interaction.
   const animatedOverlay = showGif ? (
-    <Image src={hoverGifUrl} alt="" aria-hidden="true" fill unoptimized
-      className={`pointer-events-none object-cover ${loadedUrl === hoverGifUrl ? "opacity-100" : "opacity-0"}`}
-      onLoad={() => setLoadedUrl(hoverGifUrl)} onError={() => setFailedUrl(hoverGifUrl)} />
+    <Image src={gifUrl} alt="" aria-hidden="true" fill unoptimized
+      className={`pointer-events-none object-cover ${loadedUrl === gifUrl ? "opacity-100" : "opacity-0"}`}
+      onLoad={() => setLoadedUrl(gifUrl)} onError={() => setFailedUrl(gifUrl)} />
   ) : null;
 
   const handleQuickAdd = (e: React.MouseEvent) => {

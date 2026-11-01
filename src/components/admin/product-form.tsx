@@ -121,7 +121,7 @@ export function ProductForm({
         <input name="imageUrl" type="url" defaultValue={defaults?.imageUrl} required className={inputClass} />
       </div>
 
-      <MediaUrlField name="hoverGifUrl" label={tp.hoverGif} help={tp.hoverGifHelp} defaultValue={defaults?.hoverGifUrl ?? ""} />
+      <MediaUrlField name="hoverGifUrl" label={tp.hoverGif} help={tp.hoverGifHelp} defaultValue={defaults?.hoverGifUrl ?? ""} animated />
 
       <div className="flex gap-6 text-sm">
         <label className="flex items-center gap-2">
