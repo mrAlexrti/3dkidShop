@@ -10,9 +10,7 @@ export async function Hero() {
   return (
     <section className="sf-shell sf-hero" aria-labelledby="hero-title">
       <div className="sf-hero-copy">
-        <Image className="sf-hero-logo" src="/hero/logo.png" width={282} height={314} sizes="78px" alt="3D Kid" />
-        <h1 id="hero-title">{t.home.hero.title}<br /><span>{t.home.hero.titleAccent}</span></h1>
-        <p>{t.home.hero.subtitle}</p>
+        <h1 id="hero-title">{t.home.hero.title}</h1>
       </div>
       <div className="sf-hero-gallery" role="group" aria-label={t.home.hero.gallery}>
         <HeroDoodle side="left" />

@@ -4,6 +4,7 @@
 // поэтому грузится только выбранная тема, а не все сразу.
 
 export type FontThemeId =
+  | "comfortaa"
   | "fredoka-nunito"
   | "comfortaa-rubik"
   | "unbounded-manrope"
@@ -19,6 +20,12 @@ export type FontTheme = {
 };
 
 export const FONT_THEMES: Record<FontThemeId, FontTheme> = {
+  comfortaa: {
+    label: "Comfortaa Bold 700",
+    google: "family=Comfortaa:wght@700",
+    display: "'Comfortaa', system-ui, sans-serif",
+    body: "'Comfortaa', system-ui, sans-serif",
+  },
   "fredoka-nunito": {
     label: "Fredoka + Nunito",
     google: "family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800",

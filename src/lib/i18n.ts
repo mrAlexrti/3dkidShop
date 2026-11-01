@@ -31,9 +31,8 @@ export const translations = {
       searchPlaceholder: "Назва товару…",
       benefitsLabel: "Переваги магазину",
       hero: {
-        title: "Яскраві іграшки",
-        titleAccent: "та милі речі",
-        subtitle: "для подарунків і щоденних радощів",
+        title: "Маленькі радощі для великої дитини в кожному з нас",
+        subtitle: "",
         gallery: "Натхнення для ваших подарунків",
         dragon: "М’ятний дракон із рухливими деталями",
         bunny: "Персиковий зайчик із кремовими вушками",
@@ -295,9 +294,8 @@ export const translations = {
       searchPlaceholder: "Product name…",
       benefitsLabel: "Shop benefits",
       hero: {
-        title: "Bright toys",
-        titleAccent: "and little delights",
-        subtitle: "for gifts and everyday joy",
+        title: "Little joys for the big kid in each of us",
+        subtitle: "",
         gallery: "A little gift inspiration",
         dragon: "Mint dragon with articulated details",
         bunny: "Peach bunny with cream ears",
