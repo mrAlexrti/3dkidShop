@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/actions/require-admin";
 import { isFontThemeId } from "@/lib/fonts";
 import { SITE_FONT_KEY } from "@/lib/site-settings";
+import { storefrontContentSchema, STOREFRONT_CONTENT_KEYS } from "@/lib/site-content";
 
 const categorySchema = z.object({
   name: z.string().trim().min(2),
@@ -129,7 +130,11 @@ export async function deleteCategory(id: string) {
 export async function updateSiteContent(formData: FormData) {
   await requireAdmin();
 
-  const entries = Object.fromEntries(formData.entries()) as Record<string, string>;
+  const raw = Object.fromEntries(formData.entries());
+  const entries: Record<string, string> = storefrontContentSchema.parse(
+    Object.fromEntries(Object.entries(raw).filter(([key]) => STOREFRONT_CONTENT_KEYS.includes(key)))
+  );
+  if (typeof raw[SITE_FONT_KEY] === "string") entries[SITE_FONT_KEY] = raw[SITE_FONT_KEY];
   const siteFont = entries[SITE_FONT_KEY];
   if (siteFont !== undefined && !isFontThemeId(siteFont)) {
     throw new Error("Недопустимая тема шрифта");

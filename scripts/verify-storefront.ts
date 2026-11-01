@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { createLangStore } from "../src/store/lang-store";
 import { translations } from "../src/lib/i18n";
+import { resolveHeroCopy, safeContentUrl, storefrontContentSchema } from "../src/lib/site-content";
 
 function leafKeys(value: object, prefix = ""): string[] {
   return Object.entries(value).flatMap(([key, child]) => {
@@ -13,6 +14,18 @@ function leafKeys(value: object, prefix = ""): string[] {
 async function verify() {
   assert.deepEqual(Object.keys(translations).sort(), ["en", "ua"]);
   assert.deepEqual(leafKeys(translations.ua), leafKeys(translations.en));
+  assert.equal(resolveHeroCopy({}, "ua").title, "Маленькі радощі для великої дитини в кожному з нас");
+  assert.equal(resolveHeroCopy({}, "en").title, "Little joys for the big kid in each of us");
+  const copy = { hero_title_ua: "Власний заголовок", hero_subtitle_ua: "Підзаголовок" };
+  assert.equal(resolveHeroCopy(copy, "en").title, translations.en.home.hero.title);
+  assert.equal(resolveHeroCopy(copy, "en").subtitle, "");
+  assert.equal(resolveHeroCopy(copy, "ua").title, copy.hero_title_ua);
+  assert.equal(resolveHeroCopy({ hero_title_en: "   ", hero_subtitle_en: "" }, "en").title, translations.en.home.hero.title);
+  assert.equal(safeContentUrl("javascript:alert(1)"), undefined);
+  assert.equal(safeContentUrl("https://example.com/image.webp"), "https://example.com/image.webp");
+  assert.equal(storefrontContentSchema.safeParse({ hero_image_1: "bad" }).success, false);
+  assert.equal(storefrontContentSchema.safeParse({ social_youtube: "#" }).success, false);
+  assert.deepEqual(storefrontContentSchema.parse({ hero_image_1: "", social_tiktok: "" }), { hero_image_1: "", social_tiktok: "" });
 
   const values = new Map<string, string>();
   const storage: Storage = {
