@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment } from "react";
 import { ChevronDown } from "lucide-react";
 import type { CategoryTreeNode } from "@/lib/categories";
 import { getCategoryName } from "@/lib/category-name";
@@ -12,11 +11,9 @@ export function CategoryNav({ categories, home = false }: { categories: Category
   return (
     <nav className={`sf-shell sf-categories${home ? " sf-categories--home" : ""}`} aria-label={t.nav.categories}>
       {!home && <Link href="/catalog">{t.nav.all}</Link>}
-      {categories.map((category, index) => (
-        <Fragment key={category.id}>
-        {(index > 0 || !home) && <span className="sf-decorative-star" aria-hidden="true">✦</span>}
-        <div className="sf-category-group">
-          <Link href={`/catalog?category=${encodeURIComponent(category.slug)}`}>{getCategoryName(category, locale)}</Link>
+      {categories.map((category) => (
+        <div className="sf-category-group" key={category.id}>
+          <Link href={`/catalog?category=${encodeURIComponent(category.slug)}`}><span className="sf-decorative-star" aria-hidden="true">✦</span>{getCategoryName(category, locale)}</Link>
           {!home && category.children.length > 0 && (
             <details onKeyDown={(event) => {
               if (event.key === "Escape") {
@@ -35,7 +32,6 @@ export function CategoryNav({ categories, home = false }: { categories: Category
             </details>
           )}
         </div>
-        </Fragment>
       ))}
     </nav>
   );
