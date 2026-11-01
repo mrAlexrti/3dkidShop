@@ -26,7 +26,7 @@ export async function FeaturedProducts({ products }: {
     <section className="sf-shell sf-home-panel" aria-labelledby={titleId}>
       <div className="sf-section-heading">
         <div>
-          <h2 id={titleId}>{t.catalog.title}</h2>
+          <h2 id={titleId}>{t.catalog.title}<span className="sf-decorative-star" aria-hidden="true">✦</span></h2>
         </div>
         <Link className="sf-pill" href="/catalog">{t.home.viewCatalog}</Link>
       </div>
