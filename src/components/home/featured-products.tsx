@@ -17,24 +17,19 @@ type Product = {
   stock?: number;
 };
 
-export async function FeaturedProducts({ products, variant = "featured" }: {
+export async function FeaturedProducts({ products }: {
   products: Product[];
-  variant?: "featured" | "newest";
 }) {
   const t = await getT();
-  const featured = variant === "featured";
-  const titleId = `home-${variant}-title`;
+  const titleId = "home-catalog-title";
   return (
     <section className="sf-shell sf-home-panel" aria-labelledby={titleId}>
       <div className="sf-section-heading">
         <div>
-          {featured && <span className="sf-eyebrow">{t.home.eyebrow}</span>}
-          <h2 id={titleId}>{featured ? t.home.featured : t.home.newArrivals}</h2>
-          {featured && <p>{t.home.description}</p>}
+          <h2 id={titleId}>{t.catalog.title}</h2>
         </div>
         <Link className="sf-pill" href="/catalog">{t.home.viewCatalog}</Link>
       </div>
-      {featured && (
         <form action="/catalog" method="get" role="search" className="sf-home-search">
           <label htmlFor="home-product-search">{t.home.searchLabel}</label>
           <div className="sf-search-row">
@@ -45,7 +40,6 @@ export async function FeaturedProducts({ products, variant = "featured" }: {
             <button type="submit" className="sf-pill">{t.catalog.find}</button>
           </div>
         </form>
-      )}
       {products.length > 0 ? (
         <div className="sf-product-grid">
           {products.map((product) => <ProductCard key={product.id} {...product} presentation="home" />)}

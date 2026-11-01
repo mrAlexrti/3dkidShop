@@ -6,27 +6,18 @@ import { Hero } from "@/components/home/hero";
 export const revalidate = 60;
 
 async function getHomeData() {
-  const [featured, newest] = await Promise.all([
-    prisma.product.findMany({
-      where: { isFeatured: true, isActive: true },
-      include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }] }, _count: { select: { options: true } } },
-      take: 8,
-    }),
-    prisma.product.findMany({
-      where: { isNew: true, isActive: true },
-      include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }] }, _count: { select: { options: true } } },
-      take: 4,
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
-
-  return { featured, newest };
+  return prisma.product.findMany({
+    where: { isActive: true },
+    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }] }, _count: { select: { options: true } } },
+    take: 12,
+    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+  });
 }
 
 export default async function HomePage() {
-  const { featured, newest } = await getHomeData();
+  const products = await getHomeData();
 
-  const mapProduct = (product: (typeof featured)[number]) => ({
+  const mapProduct = (product: (typeof products)[number]) => ({
     id: product.id,
     slug: product.slug,
     name: product.name,
@@ -43,8 +34,7 @@ export default async function HomePage() {
   return (
     <>
       <Hero />
-      <FeaturedProducts products={featured.map(mapProduct)} variant="featured" />
-      <FeaturedProducts products={newest.map(mapProduct)} variant="newest" />
+      <FeaturedProducts products={products.map(mapProduct)} />
       <Benefits />
     </>
   );

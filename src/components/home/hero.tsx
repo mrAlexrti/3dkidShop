@@ -28,7 +28,7 @@ export async function Hero() {
         ))}
         <HeroDoodle side="right" />
       </div>
-      <CategoryNav categories={categories} />
+      <CategoryNav categories={categories} home />
     </section>
   );
 }

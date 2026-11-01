@@ -1,4 +1,4 @@
-import { Truck, ShieldCheck, RefreshCcw, Heart } from "lucide-react";
+import { Zap, Flower2, Heart } from "lucide-react";
 import { getT } from "@/lib/i18n-server";
 
 export async function Benefits() {
@@ -6,9 +6,8 @@ export async function Benefits() {
   const b = t.home.benefits;
   const items = [
     { icon: Heart, title: b.love, text: b.loveDesc },
-    { icon: Truck, title: b.delivery, text: b.deliveryDesc },
-    { icon: ShieldCheck, title: b.quality, text: b.qualityDesc },
-    { icon: RefreshCcw, title: b.returns, text: b.returnsDesc },
+    { icon: Zap, title: b.delivery, text: b.deliveryDesc },
+    { icon: Flower2, title: b.joy, text: b.joyDesc },
   ];
   return (
     <section className="sf-shell sf-benefits" aria-label={t.home.benefitsLabel}>
