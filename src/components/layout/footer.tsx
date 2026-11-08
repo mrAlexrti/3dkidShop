@@ -10,6 +10,10 @@ import { SocialIcon } from "@/components/layout/social-icon";
 
 export function Footer({ categories, content }: { categories: CategoryTreeNode[]; content: StorefrontContent }) {
   const { locale, t } = useLangStore();
+  const socials = (["instagram", "telegram", "tiktok", "youtube"] as const).flatMap((network) => {
+    const url = safeContentUrl(content[`social_${network}`]);
+    return url ? [{ network, url }] : [];
+  });
   return (
     <footer className="sf-shell sf-footer">
       <div className="sf-footer-brand">
@@ -30,17 +34,12 @@ export function Footer({ categories, content }: { categories: CategoryTreeNode[]
         <Link href="/about">{t.footer.about}</Link>
         <Link href="/delivery-payment">{t.footer.delivery}</Link>
       </nav>
-      <div className="sf-footer-social">
+      {socials.length > 0 && <div className="sf-footer-social">
         <h2>{t.footer.follow}</h2>
         <div className="sf-social-icons">
-          {(["instagram", "telegram", "tiktok", "youtube"] as const).map((network) => {
-            const url = safeContentUrl(content[`social_${network}`]);
-            const icon = <SocialIcon network={network} />;
-            return url ? <a key={network} href={url} aria-label={t.footer.social[network]} target="_blank" rel="noopener noreferrer">{icon}</a>
-              : <span key={network} role="img" aria-label={`${t.footer.social[network]} — ${t.footer.unconfigured}`} title={t.footer.unconfigured}>{icon}</span>;
-          })}
+          {socials.map(({ network, url }) => <a key={network} href={url} aria-label={t.footer.social[network]} target="_blank" rel="noopener noreferrer"><SocialIcon network={network} /></a>)}
         </div>
-      </div>
+      </div>}
       <small>© {new Date().getFullYear()} 3D Kid. {t.footer.rights}</small>
     </footer>
   );

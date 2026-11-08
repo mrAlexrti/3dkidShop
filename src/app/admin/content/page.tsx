@@ -53,7 +53,7 @@ export default async function AdminContentPage() {
           <legend className="mb-4 text-lg font-semibold">{tc.socials}</legend>
           {(["instagram", "telegram", "tiktok", "youtube"] as const).map((network) => (
             <div key={network}>
-              <label htmlFor={`social_${network}`} className="mb-1 block text-sm font-medium">{t.footer.social[network]}</label>
+              <label htmlFor={`social_${network}`} className="mb-1 block text-sm font-medium">{tc.socialUrl.replace("{network}", t.footer.social[network])}</label>
               <input id={`social_${network}`} name={`social_${network}`} type="url" pattern="https?://.*" defaultValue={map[`social_${network}`]} placeholder="https://…" className={inputClass} />
             </div>
           ))}
