@@ -21,7 +21,6 @@ export const translations = {
     // Главная
     home: {
       newCollection: "Нова колекція",
-      viewCatalog:   "Переглянути каталог",
       featured:      "Популярні товари",
       featuredDesc:  "Вибір покупців за останній місяць",
       newArrivals:   "Новинки",
@@ -323,7 +322,6 @@ export const translations = {
     language: { label: "Site language", ua: "Ukrainian", en: "English" },
     home: {
       newCollection: "New Collection",
-      viewCatalog:   "View catalog",
       featured:      "Popular Items",
       featuredDesc:  "Customer favorites this month",
       newArrivals:   "New Arrivals",

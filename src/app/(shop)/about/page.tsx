@@ -9,8 +9,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AboutPage() {
   const { pages: { about } } = await getT();
   return <article className="sf-shell sf-information">
-    <h1>{about.title}</h1>
-    <p className="sf-information-lead">{about.slogan}</p>
+    <h1 className="sf-information-lead">{about.slogan}</h1>
     {about.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
   </article>;
 }

@@ -59,7 +59,7 @@ async function verify() {
     for (const product of products) assert.ok(home.includes(`/product/${product.slug}`));
     const about = await get("/about", cookie);
     assert.ok(about.includes(`<title>${t.pages.about.metaTitle} | 3D Kid</title>`));
-    assert.ok(about.includes(`<h1>${t.pages.about.title}</h1>`));
+    assert.ok(about.includes(`<h1 class="sf-information-lead">${t.pages.about.slogan}</h1>`));
     for (const paragraph of t.pages.about.paragraphs) assert.ok(about.includes(paragraph));
     const delivery = await get("/delivery-payment", cookie);
     assert.ok(delivery.includes(`<title>${t.pages.deliveryPayment.title} | 3D Kid</title>`));

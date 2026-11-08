@@ -19,6 +19,7 @@ export function Header({ categories }: { categories: CategoryTreeNode[] }) {
   const openCart = useCartStore((s) => s.openCart);
   const { locale, t } = useLangStore();
   const isHome = pathname === "/";
+  const isInformationPage = pathname === "/about" || pathname === "/delivery-payment";
 
   return (
     <>
@@ -60,7 +61,7 @@ export function Header({ categories }: { categories: CategoryTreeNode[] }) {
           </nav>
         )}
       </header>
-      {pathname !== "/" && <CategoryNav categories={categories} />}
+      {!isHome && !isInformationPage && <CategoryNav categories={categories} />}
     </>
   );
 }

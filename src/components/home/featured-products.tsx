@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Search } from "lucide-react";
 import { ProductCard } from "@/components/product/product-card";
 import { getT } from "@/lib/i18n-server";
@@ -28,7 +27,6 @@ export async function FeaturedProducts({ products }: {
         <div>
           <h2 id={titleId}>{t.catalog.title}<span className="sf-decorative-star" aria-hidden="true">✦</span></h2>
         </div>
-        <Link className="sf-pill" href="/catalog">{t.home.viewCatalog}</Link>
       </div>
       <form action="/catalog" method="get" role="search" className="sf-home-search">
         <label htmlFor="home-product-search">{t.home.searchLabel}</label>
