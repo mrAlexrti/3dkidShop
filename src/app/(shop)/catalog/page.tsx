@@ -14,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
   return {
     title: t.catalog.title,
-    description: "Каталог товарів 3D Kid.",
+    description: t.pages.about.metaDescription,
   };
 }
 
@@ -61,7 +61,7 @@ export default async function CatalogPage({
     prisma.product.findMany({
       where,
       orderBy,
-      include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }] }, _count: { select: { options: true } } },
+      include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 1 }, _count: { select: { options: true } } },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),

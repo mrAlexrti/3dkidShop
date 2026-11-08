@@ -1,4 +1,4 @@
-import type { Locale } from "@/lib/i18n";
+import { translations, type Locale } from "@/lib/i18n";
 
 export type LocalizedProduct = {
   name: string;
@@ -22,4 +22,10 @@ export function getProductDescription(
 
 export function getProductNameField(locale: Locale | "uk") {
   return locale === "en" ? "nameEn" : "name";
+}
+
+// Display labels only: canonical option names/values remain unchanged in cart and order data.
+export function getProductOptionLabel(value: string, locale: Locale) {
+  const labels: Readonly<Record<string, string>> = translations[locale].product.optionLabels;
+  return labels[value] ?? value;
 }

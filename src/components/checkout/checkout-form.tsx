@@ -3,186 +3,21 @@
 import { useForm, useWatch } from "react-hook-form";
 import type { Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { checkoutSchema, type CheckoutInput } from "@/lib/validations/checkout";
+import { getCheckoutSchema, type CheckoutInput } from "@/lib/validations/checkout";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/cart-store";
 import { createOrder } from "@/lib/actions/create-order";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useState, useCallback, useRef } from "react";
+import { useState, useMemo } from "react";
 import { formatPrice } from "@/lib/utils";
 import { MapPin, Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-async function npRequest(body: object) {
-  try {
-    const res = await fetch("/api/novaposhta", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || "Сервіс Нової Пошти тимчасово недоступний");
-    }
-    return data.data ?? [];
-  } catch (error) {
-    throw error instanceof Error ? error : new Error("Сервіс Нової Пошти тимчасово недоступний");
-  }
-}
+import { useLangStore } from "@/store/lang-store";
+import { useCitySearch, useWarehouses } from "./use-np-lookups";
+import type { NPCity, NPWarehouse } from "@/lib/np-warehouse-types";
 
-type NPCity      = { Ref: string; Description: string };
-type NPWarehouse = {
-  Ref: string;
-  Description: string;
-  Number: string;
-  ShortAddress?: string;
-  TypeOfWarehouseRef?: string;
-};
-
-function useCitySearch() {
-  const [cities, setCities]   = useState<NPCity[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  const search = useCallback((q: string) => {
-    clearTimeout(timer.current);
-    if (q.length < 2) { setCities([]); setError(null); return; }
-    timer.current = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const data = await npRequest({
-          modelName: "Address",
-          calledMethod: "searchSettlements",
-          methodProperties: { CityName: q, Limit: 12, Page: 1 },
-        });
-        const addresses = data?.[0]?.Addresses ?? [];
-        const flat: NPCity[] = addresses.map((a: { DeliveryCity: string; Present: string }) => ({
-          Ref: a.DeliveryCity,
-          Description: a.Present,
-        }));
-        setCities(flat);
-        setError(null);
-      } catch (requestError) {
-        setCities([]);
-        setError(requestError instanceof Error ? requestError.message : "Сервіс Нової Пошти тимчасово недоступний");
-      } finally {
-        setLoading(false);
-      }
-    }, 380);
-  }, []);
-
-  return { cities, loading, error, search, clear: () => { setCities([]); setError(null); } };
-}
-
-function useWarehouses() {
-  const [warehouses, setWarehouses] = useState<NPWarehouse[]>([]);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  const search = useCallback(async (
-    cityRef: string,
-    q: string,
-    deliveryType: Extract<CheckoutInput["deliveryType"], "np_warehouse" | "np_parcel_locker">,
-  ) => {
-    clearTimeout(timer.current);
-    const query = q.trim();
-    if (!cityRef || query.length < 1) {
-      setWarehouses([]);
-      setError(null);
-      return;
-    }
-
-    timer.current = setTimeout(async () => {
-      setLoading(false);
-      try {
-        const data: NPWarehouse[] = await npRequest({
-          modelName: "Address",
-          calledMethod: "getWarehouses",
-          methodProperties: {
-            CityRef: cityRef,
-            FindByString: query,
-            Limit: 50,
-            Page: 1,
-          },
-        });
-        setWarehouses(filterWarehousesByDelivery(data ?? [], deliveryType));
-        setError(null);
-      } catch (requestError) {
-        setWarehouses([]);
-        setError(requestError instanceof Error ? requestError.message : "РЎРµСЂРІС–СЃ РќРѕРІРѕС— РџРѕС€С‚Рё С‚РёРјС‡Р°СЃРѕРІРѕ РЅРµРґРѕСЃС‚СѓРїРЅРёР№");
-      } finally {
-        setLoading(false);
-      }
-    }, 350);
-  }, []);
-
-  const load = useCallback(async (cityRef: string, typeRef?: string) => {
-    if (!cityRef) return;
-    setLoading(true);
-    try {
-      const data: NPWarehouse[] = await npRequest({
-        modelName: "Address",
-        calledMethod: "getWarehouses",
-        methodProperties: {
-          CityRef: cityRef,
-          ...(typeRef ? { TypeOfWarehouseRef: typeRef } : {}),
-          Limit: 100,
-          Page: 1,
-        },
-      });
-      setWarehouses(data ?? []);
-      setError(null);
-    } catch (requestError) {
-      setWarehouses([]);
-      setError(requestError instanceof Error ? requestError.message : "Сервіс Нової Пошти тимчасово недоступний");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  return {
-    warehouses,
-    loading,
-    error,
-    search,
-    load,
-    clear: () => {
-      clearTimeout(timer.current);
-      setWarehouses([]);
-      setError(null);
-    },
-  };
-}
-
-// NP TypeOfWarehouseRef
-const NP_WAREHOUSE_TYPE  = "9a68df70-0267-42a8-bb5c-37f427e36ee4";
-const NP_LOCKER_TYPE     = "841339c7-591a-42e2-8233-7a0a00f0ed6f";
-
-function getWarehouseText(w: NPWarehouse) {
-  return `${w.Description ?? ""} ${w.ShortAddress ?? ""} ${w.TypeOfWarehouseRef ?? ""}`.toLowerCase();
-}
-
-function isParcelLocker(w: NPWarehouse) {
-  const text = getWarehouseText(w);
-  return w.TypeOfWarehouseRef === NP_LOCKER_TYPE || /поштомат|postomat|parcel locker/.test(text);
-}
-
-function isWarehouseBranch(w: NPWarehouse) {
-  const text = getWarehouseText(w);
-  return w.TypeOfWarehouseRef === NP_WAREHOUSE_TYPE || (/відділення|отделение|warehouse/.test(text) && !isParcelLocker(w));
-}
-
-function filterWarehousesByDelivery(
-  warehouses: NPWarehouse[],
-  deliveryType: Extract<CheckoutInput["deliveryType"], "np_warehouse" | "np_parcel_locker">,
-) {
-  return warehouses.filter((w) => (deliveryType === "np_parcel_locker" ? isParcelLocker(w) : isWarehouseBranch(w)));
-}
-
-// ─── Маленький компонент кнопки оплаты (чтобы не вызывать useWatch в map) ──
 function PaymentBtn({
   id, label, icon, control, setValue,
 }: {
@@ -196,6 +31,7 @@ function PaymentBtn({
   return (
     <button
       type="button"
+      aria-pressed={current === id}
       onClick={() => setValue("paymentMethod", id)}
       className={cn(
         "flex flex-col items-center gap-1 rounded-xl border-2 px-3 py-3 text-xs font-medium transition-all",
@@ -210,7 +46,6 @@ function PaymentBtn({
   );
 }
 
-// ─── Кнопка типа доставки ──────────────────────────────────────────
 function DeliveryBtn({
   id, label, icon, control, setValue,
 }: {
@@ -224,6 +59,7 @@ function DeliveryBtn({
   return (
     <button
       type="button"
+      aria-pressed={current === id}
       onClick={() => setValue(id)}
       className={cn(
         "flex flex-col items-center gap-1 rounded-xl border-2 px-3 py-3 text-xs font-medium transition-all",
@@ -261,7 +97,10 @@ function submitLiqPayForm(payment: { action: string; data: string; signature: st
   form.submit();
 }
 
-export function CheckoutForm() {
+export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean }) {
+  const { t, locale } = useLangStore();
+  const c = t.checkout;
+  const schema = useMemo(() => getCheckoutSchema(locale), [locale]);
   const { items, total, clear } = useCartStore();
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -281,10 +120,10 @@ export function CheckoutForm() {
     control,
     formState: { errors },
   } = useForm<CheckoutInput>({
-    resolver: zodResolver(checkoutSchema),
+    resolver: zodResolver(schema),
     defaultValues: {
       deliveryType:  "np_warehouse",
-      paymentMethod: "card_online",
+      paymentMethod: onlineCardEnabled ? "card_online" : "cash_on_delivery",
     },
   });
 
@@ -303,10 +142,9 @@ export function CheckoutForm() {
     setWarehousePicked(false);
     citySearch.clear();
     wh.clear();
-    // Загружаем отделения в зависимости от выбранного типа
+
   }
 
-  // При смене типа доставки — перезагружаем отделения если город уже выбран
   function changeDelivery(id: CheckoutInput["deliveryType"]) {
     setValue("deliveryType", id);
     setValue("npWarehouseRef", "");
@@ -327,51 +165,61 @@ export function CheckoutForm() {
 
   const onSubmit = async (data: CheckoutInput) => {
     setSubmitting(true);
-    const result = await createOrder(data, items);
-    setSubmitting(false);
-    if (result.success) {
-      clear();
-      if (result.payment) {
-        toast.success("Замовлення створено. Переходимо до оплати...");
-        submitLiqPayForm(result.payment);
-        return;
+    try {
+      const result = await createOrder(data, items, locale);
+      if (result.success) {
+        clear();
+        if (result.payment) {
+          toast.success(c.feedback.redirect);
+          submitLiqPayForm(result.payment);
+          return;
+        }
+        toast.success(result.emailSent ? c.feedback.emailed : c.feedback.created);
+        router.push(`/checkout/success?order=${result.orderNumber}&email=${result.emailSent ? "sent" : "pending"}`);
+      } else {
+        toast.error(result.error);
       }
-
-      toast.success(result.emailSent ? "Замовлення оформлено, лист відправлено! 🎉" : "Замовлення оформлено! 🎉");
-      router.push(`/checkout/success?order=${result.orderNumber}&email=${result.emailSent ? "sent" : "pending"}`);
-    } else {
-      toast.error(result.error);
+    } catch {
+      toast.error(c.feedback.failed);
+    } finally {
+      setSubmitting(false);
     }
   };
 
+  const errorText = (field: keyof CheckoutInput) => {
+    const fields: Partial<Record<keyof CheckoutInput, keyof typeof c.validation>> = { customerName: "name", customerSurname: "surname", customerEmail: "email", customerPhone: "phone", npCityName: "city", npCourierAddress: "address" };
+    const key = fields[field];
+    return key ? c.validation[key] : deliveryType === "np_parcel_locker" ? c.validation.locker : c.validation.branch;
+  };
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 
       {/* 1. Контактні дані */}
       <section className="glass rounded-xl2 p-6 shadow-soft">
         <h2 className="mb-5 font-display text-xl flex items-center gap-2">
-          <span className={NUM_STYLES}>1</span> Контактні дані
+          <span className={NUM_STYLES}>1</span> {c.contact.title}
         </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink/60">Ім&apos;я</label>
-            <input placeholder="Олександр" className={inp} {...register("customerName")} />
-            {errors.customerName && <p className="mt-1 text-xs text-pink-600">{errors.customerName.message}</p>}
+            <label htmlFor="customerName" className="mb-1 block text-xs font-medium text-ink/60">{c.contact.name}</label>
+            <input placeholder={c.contact.name} className={inp} id="customerName" autoComplete="given-name" aria-invalid={!!errors.customerName} aria-describedby={errors.customerName ? "customerName-error" : undefined} {...register("customerName")} />
+            {errors.customerName && <p id="customerName-error" role="alert" className="mt-1 text-xs text-pink-600">{errorText("customerName")}</p>}
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink/60">Прізвище</label>
-            <input placeholder="Іванченко" className={inp} {...register("customerSurname")} />
-            {errors.customerSurname && <p className="mt-1 text-xs text-pink-600">{errors.customerSurname.message}</p>}
+            <label htmlFor="customerSurname" className="mb-1 block text-xs font-medium text-ink/60">{c.contact.surname}</label>
+            <input placeholder={c.contact.surname} className={inp} id="customerSurname" autoComplete="family-name" aria-invalid={!!errors.customerSurname} aria-describedby={errors.customerSurname ? "customerSurname-error" : undefined} {...register("customerSurname")} />
+            {errors.customerSurname && <p id="customerSurname-error" role="alert" className="mt-1 text-xs text-pink-600">{errorText("customerSurname")}</p>}
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink/60">Телефон</label>
-            <input placeholder="+380 XX XXX XX XX" className={inp} {...register("customerPhone")} />
-            {errors.customerPhone && <p className="mt-1 text-xs text-pink-600">{errors.customerPhone.message}</p>}
+            <label htmlFor="customerPhone" className="mb-1 block text-xs font-medium text-ink/60">{c.contact.phone}</label>
+            <input type="tel" placeholder="+380 XX XXX XX XX" className={inp} id="customerPhone" autoComplete="tel" aria-invalid={!!errors.customerPhone} aria-describedby={errors.customerPhone ? "customerPhone-error" : undefined} {...register("customerPhone")} />
+            {errors.customerPhone && <p id="customerPhone-error" role="alert" className="mt-1 text-xs text-pink-600">{errorText("customerPhone")}</p>}
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink/60">Email</label>
-            <input type="email" placeholder="you@example.com" className={inp} {...register("customerEmail")} />
-            {errors.customerEmail && <p className="mt-1 text-xs text-pink-600">{errors.customerEmail.message}</p>}
+            <label htmlFor="customerEmail" className="mb-1 block text-xs font-medium text-ink/60">{c.contact.email}</label>
+            <input type="email" placeholder="you@example.com" className={inp} id="customerEmail" autoComplete="email" aria-invalid={!!errors.customerEmail} aria-describedby={errors.customerEmail ? "customerEmail-error" : undefined} {...register("customerEmail")} />
+            {errors.customerEmail && <p id="customerEmail-error" role="alert" className="mt-1 text-xs text-pink-600">{errorText("customerEmail")}</p>}
           </div>
         </div>
       </section>
@@ -379,20 +227,20 @@ export function CheckoutForm() {
       {/* 2. Доставка */}
       <section className="glass rounded-xl2 p-6 shadow-soft">
         <h2 className="mb-5 font-display text-xl flex items-center gap-2">
-          <span className={NUM_STYLES}>2</span> Доставка
+          <span className={NUM_STYLES}>2</span> {c.delivery.title}
         </h2>
 
         {/* Тип */}
         <div className="mb-5 grid grid-cols-3 gap-2">
-          <DeliveryBtn id="np_warehouse"     label="Відділення" icon="🏢" control={control} setValue={changeDelivery} />
-          <DeliveryBtn id="np_parcel_locker" label="Поштомат"   icon="📦" control={control} setValue={changeDelivery} />
-          <DeliveryBtn id="np_courier"       label="Кур'єр НП"  icon="🚚" control={control} setValue={changeDelivery} />
+          <DeliveryBtn id="np_warehouse"     label={c.delivery.warehouse} icon="🏢" control={control} setValue={changeDelivery} />
+          <DeliveryBtn id="np_parcel_locker" label={c.delivery.locker}   icon="📦" control={control} setValue={changeDelivery} />
+          <DeliveryBtn id="np_courier"       label={c.delivery.courier}  icon="🚚" control={control} setValue={changeDelivery} />
         </div>
 
         {/* Поиск города */}
         <div className="relative mb-4">
-          <label className="mb-1 flex items-center gap-1 text-xs font-medium text-ink/60">
-            <MapPin size={12} /> Місто
+          <label htmlFor="np-city" className="mb-1 flex items-center gap-1 text-xs font-medium text-ink/60">
+            <MapPin size={12} /> {c.delivery.city}
           </label>
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/30" />
@@ -410,7 +258,7 @@ export function CheckoutForm() {
                 wh.clear();
                 citySearch.search(e.target.value);
               }}
-              placeholder="Почніть вводити місто..."
+              id="np-city" placeholder={c.delivery.cityHint}
               className={cn(inp, "pl-9")}
               autoComplete="off"
             />
@@ -418,8 +266,8 @@ export function CheckoutForm() {
               <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-pink-400" />
             )}
           </div>
-          {errors.npCityName && <p className="mt-1 text-xs text-pink-600">{errors.npCityName.message}</p>}
-          {citySearch.error && <p className="mt-1 text-xs text-pink-600">{citySearch.error}. Можна продовжити з ручним введенням.</p>}
+          {errors.npCityName && <p className="mt-1 text-xs text-pink-600">{errorText("npCityName")}</p>}
+          {citySearch.error && <p className="mt-1 text-xs text-pink-600">{c.lookup.unavailable}</p>}
 
           {citySearch.cities.length > 0 && !cityPicked && (
             <ul className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-xl border border-pink-100 bg-white shadow-lg">
@@ -441,19 +289,17 @@ export function CheckoutForm() {
         {/* Відділення / поштомат */}
         {(npCityRef || cityText.trim().length >= 2) && deliveryType !== "np_courier" && (
           <div className="mb-3">
-            <label className="mb-1 block text-xs font-medium text-ink/60">
-              {deliveryType === "np_parcel_locker" ? "Поштомат" : "Відділення"}
+            <label htmlFor="np-warehouse" className="mb-1 block text-xs font-medium text-ink/60">
+              {deliveryType === "np_parcel_locker" ? c.delivery.locker : c.delivery.warehouse}
             </label>
-            {wh.loading ? (
-              <div className="flex items-center gap-2 rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm text-ink/40">
-                <Loader2 size={14} className="animate-spin text-pink-400" />
-                Завантаження...
-              </div>
-            ) : wh.error || !npCityRef ? (
+            {wh.loading && <p role="status" className="mb-1 flex items-center gap-2 text-xs text-ink/60"><Loader2 size={14} className="animate-spin" />{c.delivery.loading}</p>}
+            {wh.error || !npCityRef ? (
               <input
                 className={inp}
-                placeholder={deliveryType === "np_parcel_locker" ? "Введіть поштомат вручну" : "Введіть відділення вручну"}
+                id="np-warehouse" placeholder={deliveryType === "np_parcel_locker" ? c.lookup.manualLocker : c.lookup.manualBranch}
+                value={warehouseText}
                 onChange={(e) => {
+                  setWarehouseText(e.target.value);
                   setValue("npWarehouseRef", e.target.value ? "manual" : "", { shouldValidate: true });
                   setValue("npWarehouseAddress", e.target.value, { shouldValidate: true });
                 }}
@@ -463,12 +309,12 @@ export function CheckoutForm() {
                 <div className="relative">
                   <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/30" />
                   <input
-                    value={warehouseText}
+                    id="np-warehouse" value={warehouseText}
                     className={cn(inp, "pl-9")}
                     placeholder={
                       deliveryType === "np_parcel_locker"
-                        ? "Почніть вводити адресу або номер поштомата..."
-                        : "Почніть вводити адресу або номер відділення..."
+                        ? c.lookup.lockerSearch
+                        : c.lookup.branchSearch
                     }
                     autoComplete="off"
                     onChange={(e) => {
@@ -497,33 +343,14 @@ export function CheckoutForm() {
                   )}
                 </div>
                 {warehouseText.trim().length > 0 && !wh.loading && !warehousePicked && wh.warehouses.length === 0 && !wh.error && (
-                  <p className="mt-1 text-xs text-ink/40">Нічого не знайдено. Спробуйте іншу частину адреси або номер.</p>
+                  <p className="mt-1 text-xs text-ink/40">{c.lookup.empty}</p>
                 )}
-              <select
-                hidden
-                className={inp}
-                defaultValue=""
-                onChange={(e) => {
-                  const w = wh.warehouses.find((x) => x.Ref === e.target.value);
-                  setValue("npWarehouseRef",     w?.Ref ?? "");
-                  setValue("npWarehouseAddress", w?.Description ?? "");
-                }}
-              >
-                <option value="" disabled>
-                  {deliveryType === "np_parcel_locker" ? "Оберіть поштомат..." : "Оберіть відділення..."}
-                </option>
-                {wh.warehouses.map((w) => (
-                  <option key={w.Ref} value={w.Ref}>
-                    {w.Number ? `№${w.Number} — ` : ""}{w.Description}
-                  </option>
-                ))}
-              </select>
               </>
             )}
-            {wh.error && <p className="mt-1 text-xs text-pink-600">{wh.error}. Введіть дані вручну.</p>}
+            {wh.error && <p className="mt-1 text-xs text-pink-600">{c.lookup.unavailable}</p>}
             {(errors.npWarehouseRef || errors.npWarehouseAddress) && (
               <p className="mt-1 text-xs text-pink-600">
-                {errors.npWarehouseRef?.message || errors.npWarehouseAddress?.message}
+                {errorText("npWarehouseRef")}
               </p>
             )}
           </div>
@@ -531,13 +358,13 @@ export function CheckoutForm() {
 
         {deliveryType === "np_courier" && (
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink/60">Адреса</label>
+            <label htmlFor="np-courier" className="mb-1 block text-xs font-medium text-ink/60">{c.delivery.address}</label>
             <input
-              placeholder="Вулиця, будинок, квартира"
+              id="np-courier" placeholder={c.delivery.addressHint}
               className={inp}
               {...register("npCourierAddress")}
             />
-            {errors.npCourierAddress && <p className="mt-1 text-xs text-pink-600">{errors.npCourierAddress.message}</p>}
+            {errors.npCourierAddress && <p className="mt-1 text-xs text-pink-600">{errorText("npCourierAddress")}</p>}
           </div>
         )}
 
@@ -549,33 +376,33 @@ export function CheckoutForm() {
         <input type="hidden" {...register("deliveryType")} />
 
         <p className="mt-4 text-xs text-ink/40">
-          📦 Вартість доставки розраховується за тарифами Нової Пошти
+          {c.delivery.npNote}
         </p>
       </section>
 
       {/* 3. Оплата */}
       <section className="glass rounded-xl2 p-6 shadow-soft">
         <h2 className="mb-5 font-display text-xl flex items-center gap-2">
-          <span className={NUM_STYLES}>3</span> Оплата
+          <span className={NUM_STYLES}>3</span> {c.payment.title}
         </h2>
         <div className="grid gap-3 sm:grid-cols-3">
-          <PaymentBtn id="card_online"      label="Картка онлайн" icon="💳" control={control} setValue={(_, v) => setValue("paymentMethod", v)} />
-          <PaymentBtn id="cash_on_delivery" label="Накладений"    icon="💵" control={control} setValue={(_, v) => setValue("paymentMethod", v)} />
-          <PaymentBtn id="pay_on_pickup"    label="При отриманні" icon="🤝" control={control} setValue={(_, v) => setValue("paymentMethod", v)} />
+          {onlineCardEnabled && <PaymentBtn id="card_online"      label={c.payment.card} icon="💳" control={control} setValue={(_, v) => setValue("paymentMethod", v)} />}
+          <PaymentBtn id="cash_on_delivery" label={c.payment.cash}    icon="💵" control={control} setValue={(_, v) => setValue("paymentMethod", v)} />
+          <PaymentBtn id="pay_on_pickup"    label={c.payment.onPickup} icon="🤝" control={control} setValue={(_, v) => setValue("paymentMethod", v)} />
         </div>
         <input type="hidden" {...register("paymentMethod")} />
         <p className="mt-4 text-xs text-ink/40">
-          💳 Інтеграція з LiqPay / WayForPay / Monobank — незабаром
+          {onlineCardEnabled ? c.payment.note : c.payment.unavailable}
         </p>
       </section>
 
       {/* 4. Коментар */}
       <section className="glass rounded-xl2 p-6 shadow-soft">
         <h2 className="mb-4 font-display text-xl flex items-center gap-2">
-          <span className={NUM_STYLES}>4</span> Коментар
+          <span className={NUM_STYLES}>4</span> {c.comment}
         </h2>
         <textarea
-          placeholder="Побажання щодо доставки або пакування (необов'язково)"
+          aria-label={c.comment} placeholder={c.commentHint}
           rows={3}
           className={inp}
           {...register("comment")}
@@ -584,9 +411,9 @@ export function CheckoutForm() {
 
       <Button type="submit" size="lg" className="w-full text-base" disabled={submitting}>
         {submitting ? (
-          <><Loader2 size={18} className="animate-spin" /> Оформлюємо...</>
+          <><Loader2 size={18} className="animate-spin" /> {c.submitting}</>
         ) : (
-          <>🎉 Оформити замовлення — {formatPrice(total())}</>
+          <>{c.submit} — {formatPrice(total())}</>
         )}
       </Button>
     </form>

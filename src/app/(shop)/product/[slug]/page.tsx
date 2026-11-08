@@ -92,7 +92,7 @@ export default async function ProductPage({
       id: { not: product.id },
       isActive: true,
     },
-    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }] }, _count: { select: { options: true } } },
+    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 1 }, _count: { select: { options: true } } },
     take: 4,
   });
 

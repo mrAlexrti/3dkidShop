@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
+import { getProductOptionLabel } from "@/lib/product-content";
 
 type OptionValue = { id: string; value: string; priceModifier: number };
 type Option      = { id: string; name: string; values: OptionValue[] };
@@ -28,7 +29,7 @@ export function ProductOptions({
   const [quantity, setQuantity] = useState(1);
   const addItem  = useCartStore((s) => s.addItem);
   const openCart = useCartStore((s) => s.openCart);
-  const { t } = useLangStore();
+  const { t, locale } = useLangStore();
   const currency = "UAH";
 
   const finalPrice = useMemo(() => {
@@ -43,7 +44,7 @@ export function ProductOptions({
 
   function handleAddToCart() {
     if (stock <= 0) {
-      toast.error("Товару немає в наявності");
+      toast.error(t.product.outOfStock);
       return;
     }
     addItem({
@@ -65,11 +66,12 @@ export function ProductOptions({
       {/* Опции (размер, цвет и т.п.) */}
       {options.map((option) => (
         <div key={option.id}>
-          <h3 className="mb-2 text-sm font-semibold">{option.name}</h3>
+          <h3 className="mb-2 text-sm font-semibold">{getProductOptionLabel(option.name, locale)}</h3>
           <div className="flex flex-wrap gap-2">
             {option.values.map((value) => (
               <button
                 key={value.id}
+                aria-pressed={selected[option.name]?.id === value.id}
                 onClick={() => setSelected((s) => ({ ...s, [option.name]: value }))}
                 className={`rounded-full border px-4 py-2 text-sm transition-colors ${
                   selected[option.name]?.id === value.id
@@ -77,7 +79,7 @@ export function ProductOptions({
                     : "border-ink/15 hover:border-pink-400"
                 }`}
               >
-                {value.value}
+                {getProductOptionLabel(value.value, locale)}
               </button>
             ))}
           </div>
@@ -88,6 +90,7 @@ export function ProductOptions({
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-3 rounded-full border border-ink/15 px-4 py-2">
           <button
+            aria-label={t.cart.decrease}
             onClick={() => setQuantity((q) => Math.max(1, q - 1))}
             className="transition-colors hover:text-pink-600"
           >
@@ -95,6 +98,7 @@ export function ProductOptions({
           </button>
           <span className="w-6 text-center font-medium tabular-nums">{quantity}</span>
           <button
+            aria-label={t.cart.increase}
             onClick={() => setQuantity((q) => Math.min(stock, q + 1))}
             disabled={quantity >= stock}
             className="transition-colors hover:text-pink-600"
@@ -109,7 +113,7 @@ export function ProductOptions({
 
       <Button size="lg" className="w-full text-base" onClick={handleAddToCart} disabled={stock <= 0}>
         <ShoppingBag size={18} />
-        {stock > 0 ? t.product.addToCart : "Немає в наявності"}
+        {stock > 0 ? t.product.addToCart : t.product.outOfStock}
       </Button>
     </div>
   );

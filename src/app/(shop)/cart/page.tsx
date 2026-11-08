@@ -8,10 +8,11 @@ import { useLangStore } from "@/store/lang-store";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
+import { getProductOptionLabel } from "@/lib/product-content";
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity, total } = useCartStore();
-  const { t } = useLangStore();
+  const { t, locale } = useLangStore();
   const currency = "UAH";
 
   if (items.length === 0) {
@@ -45,7 +46,8 @@ export default function CartPage() {
                 className="glass flex gap-4 rounded-xl2 p-4 shadow-soft"
               >
                 <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-white">
-                  <Image src={item.image} alt={item.name} fill className="object-cover" />
+                  <Image sizes="96px"
+                          src={item.image} alt={item.name} fill className="object-cover" />
                 </div>
                 <div className="flex flex-1 flex-col justify-between min-w-0">
                   <div>
@@ -57,7 +59,7 @@ export default function CartPage() {
                     </Link>
                     {item.options && (
                       <p className="text-xs text-ink/40 mt-0.5">
-                        {Object.entries(item.options).map(([k, v]) => `${k}: ${v}`).join(", ")}
+                        {Object.entries(item.options).map(([k, v]) => `${getProductOptionLabel(k, locale)}: ${getProductOptionLabel(v, locale)}`).join(", ")}
                       </p>
                     )}
                   </div>
@@ -65,13 +67,15 @@ export default function CartPage() {
                     <div className="flex items-center gap-2 rounded-full border border-ink/10 px-3 py-1">
                       <button
                         onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                              aria-label={`${t.cart.decrease}: ${item.name}`}
                         disabled={item.quantity <= 1}
                         className="disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <Minus size={14} />
                       </button>
                       <span className="w-5 text-center text-sm tabular-nums">{item.quantity}</span>
-                      <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                      <button onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                              aria-label={`${t.cart.increase}: ${item.name}`}>
                         <Plus size={14} />
                       </button>
                     </div>
@@ -82,6 +86,7 @@ export default function CartPage() {
                 </div>
                 <button
                   onClick={() => removeItem(item.id)}
+                            aria-label={`${t.cart.remove}: ${item.name}`}
                   className="self-start rounded-full p-1.5 text-ink/30 hover:text-pink-600 hover:bg-pink-50 transition-colors"
                 >
                   <Trash2 size={17} />
@@ -101,7 +106,7 @@ export default function CartPage() {
             </div>
             <div className="flex justify-between text-ink/60">
               <span>{t.cart.shipping}</span>
-              <span className="text-green-600">{t.cart.freeShip}</span>
+              <span className="text-green-600">{t.cart.shippingRates}</span>
             </div>
           </div>
           <div className="mt-4 flex justify-between border-t border-pink-100 pt-4 text-lg font-semibold">

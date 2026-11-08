@@ -16,10 +16,10 @@ function SuccessContent() {
   const paymentStatus = searchParams.get("payment");
   const description =
     paymentStatus === "return"
-      ? "Дякуємо! Якщо оплата пройшла успішно, ми підтвердимо замовлення email-листом і зв'яжемося щодо доставки."
+      ? t.success.returned
       : emailStatus === "sent"
         ? t.success.desc
-        : "Замовлення прийнято. Ми зв'яжемося з вами щодо доставки.";
+        : t.success.pending;
 
   return (
     <div className="container-shop flex flex-col items-center py-32 text-center">

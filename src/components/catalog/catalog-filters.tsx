@@ -63,7 +63,7 @@ export function CatalogFilters({ categories }: { categories: FilterCategory[] })
     "rounded-full px-4 py-2 text-sm font-semibold transition-all active:scale-95";
 
   return (
-    <div className="glass mb-8 space-y-4 rounded-3xl p-4 shadow-soft md:p-5">
+    <div className="glass relative z-10 mb-8 space-y-4 rounded-3xl p-4 shadow-soft md:p-5">
       {/* ── Поиск ─────────────────────────────────────────── */}
       <form
         onSubmit={(e) => {

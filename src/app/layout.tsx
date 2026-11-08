@@ -3,23 +3,26 @@ import type { CSSProperties } from "react";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { Providers } from "@/components/providers";
-import { getLocale } from "@/lib/i18n-server";
+import { getLocale, getT } from "@/lib/i18n-server";
 import { getFontThemeId } from "@/lib/site-settings";
 import { FONT_THEMES, googleFontsHref } from "@/lib/fonts";
 
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
   title: {
-    default:  "3D Kid — творчі 3D товари",
+    default:  "3D Kid",
     template: "%s | 3D Kid",
   },
-  description: "Магазин творчих товарів 3D Kid. Яскравий дизайн і швидка доставка.",
+  description: t.pages.about.metaDescription,
   metadataBase: new URL("https://www.3dkid.shop"),
   openGraph: {
-    title:       "3D Kid — творчі 3D товари",
-    description: "Наклей трохи радості!",
+    title:       "3D Kid",
+    description: t.home.hero.title,
     type:        "website",
   },
-};
+  };
+}
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const [locale, fontThemeId] = await Promise.all([getLocale(), getFontThemeId()]);

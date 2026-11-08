@@ -8,7 +8,7 @@ export const revalidate = 60;
 async function getHomeData() {
   return prisma.product.findMany({
     where: { isActive: true },
-    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }] }, _count: { select: { options: true } } },
+    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 1 }, _count: { select: { options: true } } },
     take: 12,
     orderBy: [{ createdAt: "desc" }, { id: "asc" }],
   });

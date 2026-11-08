@@ -8,11 +8,40 @@ import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useEffect, useRef } from "react";
+import { getProductOptionLabel } from "@/lib/product-content";
 
 export function CartDrawer() {
   const { items, isOpen, closeCart, removeItem, updateQuantity, total } = useCartStore();
-  const { t } = useLangStore();
+  const { t, locale } = useLangStore();
   const currency = "UAH";
+  const panel = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusable = () => Array.from(panel.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), [tabindex="0"]') ?? []);
+    focusable()[0]?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); closeCart(); }
+      if (event.key !== "Tab") return;
+      const nodes = focusable();
+      const first = nodes[0]; const last = nodes[nodes.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !panel.current?.contains(document.activeElement))) {
+        event.preventDefault(); last?.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !panel.current?.contains(document.activeElement))) {
+        event.preventDefault(); first?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = previousOverflow;
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [isOpen, closeCart]);
 
   return (
     <AnimatePresence>
@@ -29,6 +58,10 @@ export function CartDrawer() {
 
           {/* Drawer */}
           <motion.aside
+            ref={panel}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cart-drawer-title"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
@@ -37,9 +70,10 @@ export function CartDrawer() {
           >
             {/* Шапка */}
             <div className="flex items-center justify-between border-b border-pink-100 p-5">
-              <h2 className="font-display text-xl">{t.cart.title}</h2>
+              <h2 id="cart-drawer-title" className="font-display text-xl">{t.cart.title}</h2>
               <button
                 onClick={closeCart}
+                aria-label={t.cart.close}
                 className="rounded-full p-2 hover:bg-pink-50 transition-colors"
               >
                 <X size={20} />
@@ -66,6 +100,7 @@ export function CartDrawer() {
                     >
                       <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-white shadow-soft">
                         <Image
+                          sizes="80px"
                           src={item.image}
                           alt={item.name}
                           fill
@@ -76,7 +111,7 @@ export function CartDrawer() {
                         <p className="text-sm font-medium line-clamp-2 leading-snug">{item.name}</p>
                         {item.options && (
                           <p className="mt-0.5 text-xs text-ink/40">
-                            {Object.entries(item.options).map(([k, v]) => `${k}: ${v}`).join(", ")}
+                            {Object.entries(item.options).map(([k, v]) => `${getProductOptionLabel(k, locale)}: ${getProductOptionLabel(v, locale)}`).join(", ")}
                           </p>
                         )}
                         <p className="mt-1 text-sm font-semibold text-pink-600">
@@ -86,6 +121,7 @@ export function CartDrawer() {
                           <div className="flex items-center gap-2 rounded-full border border-ink/10 px-2 py-0.5">
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                              aria-label={`${t.cart.decrease}: ${item.name}`}
                               disabled={item.quantity <= 1}
                               className="rounded-full p-0.5 transition-colors hover:bg-pink-50 disabled:cursor-not-allowed disabled:opacity-40"
                             >
@@ -94,6 +130,7 @@ export function CartDrawer() {
                             <span className="w-5 text-center text-sm tabular-nums">{item.quantity}</span>
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                              aria-label={`${t.cart.increase}: ${item.name}`}
                               className="rounded-full p-0.5 hover:bg-pink-50 transition-colors"
                             >
                               <Plus size={13} />
@@ -101,6 +138,7 @@ export function CartDrawer() {
                           </div>
                           <button
                             onClick={() => removeItem(item.id)}
+                            aria-label={`${t.cart.remove}: ${item.name}`}
                             className="ml-auto rounded-full p-1.5 text-ink/30 hover:text-pink-600 hover:bg-pink-50 transition-colors"
                           >
                             <Trash2 size={15} />

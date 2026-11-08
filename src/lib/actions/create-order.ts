@@ -1,14 +1,14 @@
 "use server";
 
+import { translations, type Locale } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
-import { checkoutSchema } from "@/lib/validations/checkout";
+import { getCheckoutSchema } from "@/lib/validations/checkout";
 import type { CartItem } from "@/types";
 import { DELIVERY_LABELS, PAYMENT_LABELS } from "@/lib/validations/checkout";
 import { notifyOrderCreated } from "@/lib/notifications/orders";
 import { getInitialOrderStatus } from "@/lib/order-status";
 import {
   createLiqPayCheckout,
-  getMissingLiqPayEnvNames,
   isLiqPayConfigured,
   type LiqPayCheckout,
 } from "@/lib/payments/liqpay";
@@ -25,12 +25,12 @@ type PricedOrderItem = {
   quantity: number;
 };
 
-async function priceOrderItems(items: CartItem[]) {
+async function priceOrderItems(items: CartItem[], errors: (typeof translations)[Locale]["checkout"]["errors"]) {
   const rawProductIds = items.map((item) => item.productId);
   const productIds = [...new Set(rawProductIds.filter(Boolean))];
 
   if (productIds.length !== new Set(rawProductIds).size) {
-    return { success: false as const, error: "Некоректні товари в кошику" };
+    return { success: false as const, error: errors.products };
   }
 
   const products = await prisma.product.findMany({
@@ -44,13 +44,13 @@ async function priceOrderItems(items: CartItem[]) {
   const productById = new Map(products.map((product) => [product.id, product]));
 
   if (products.length !== productIds.length) {
-    return { success: false as const, error: "Деякі товари більше недоступні" };
+    return { success: false as const, error: errors.unavailable };
   }
 
   const quantityByProduct = new Map<string, number>();
   for (const item of items) {
     if (!Number.isInteger(item.quantity) || item.quantity < 1) {
-      return { success: false as const, error: "Некоректна кількість товарів" };
+      return { success: false as const, error: errors.quantity };
     }
     quantityByProduct.set(item.productId, (quantityByProduct.get(item.productId) ?? 0) + item.quantity);
   }
@@ -58,7 +58,7 @@ async function priceOrderItems(items: CartItem[]) {
   for (const [productId, quantity] of quantityByProduct) {
     const product = productById.get(productId);
     if (!product || product.stock < quantity) {
-      return { success: false as const, error: "Недостатньо товару на складі" };
+      return { success: false as const, error: errors.stock };
     }
   }
 
@@ -68,14 +68,14 @@ async function priceOrderItems(items: CartItem[]) {
   for (const item of items) {
     const product = productById.get(item.productId);
     if (!product) {
-      return { success: false as const, error: "Товар не знайдено" };
+      return { success: false as const, error: errors.notFound };
     }
 
     const selectedOptions = item.options ?? {};
     const allowedOptionNames = new Set(product.options.map((option) => option.name));
     const hasUnknownOption = Object.keys(selectedOptions).some((name) => !allowedOptionNames.has(name));
     if (hasUnknownOption) {
-      return { success: false as const, error: "Некоректні опції товару" };
+      return { success: false as const, error: errors.options };
     }
 
     const canonicalOptions: Record<string, string> = {};
@@ -84,12 +84,12 @@ async function priceOrderItems(items: CartItem[]) {
     for (const option of product.options) {
       const selectedValue = selectedOptions[option.name];
       if (!selectedValue) {
-        return { success: false as const, error: "Оберіть опції товару перед оформленням" };
+        return { success: false as const, error: errors.chooseOptions };
       }
 
       const value = option.values.find((optionValue) => optionValue.value === selectedValue);
       if (!value) {
-        return { success: false as const, error: "Некоректні опції товару" };
+        return { success: false as const, error: errors.options };
       }
 
       canonicalOptions[option.name] = value.value;
@@ -111,28 +111,29 @@ async function priceOrderItems(items: CartItem[]) {
 
 export async function createOrder(
   data: unknown,
-  items: CartItem[]
+  items: CartItem[],
+  locale: Locale = "ua"
 ): Promise<CreateOrderResult> {
-  const parsed = checkoutSchema.safeParse(data);
+  const errors = translations[locale === "en" ? "en" : "ua"].checkout.errors;
+  const parsed = getCheckoutSchema(locale === "en" ? "en" : "ua").safeParse(data);
   if (!parsed.success) {
-    const msg = parsed.error.issues[0]?.message ?? "Некоректні дані";
+    const msg = parsed.error.issues[0]?.message ?? errors.invalid;
     return { success: false, error: msg };
   }
   if (!items || items.length === 0) {
-    return { success: false, error: "Кошик порожній" };
+    return { success: false, error: errors.empty };
   }
 
   const d = parsed.data;
 
   if (d.paymentMethod === "card_online" && !isLiqPayConfigured()) {
-    const missingEnv = getMissingLiqPayEnvNames();
     return {
       success: false,
-      error: `Онлайн-оплата тимчасово недоступна. Runtime не бачить: ${missingEnv.join(", ") || "LiqPay env"}.`,
+      error: errors.payment,
     };
   }
 
-  const priced = await priceOrderItems(items);
+  const priced = await priceOrderItems(items, errors);
   if (!priced.success) return { success: false, error: priced.error };
 
   let shippingAddress = `${DELIVERY_LABELS[d.deliveryType]}: ${d.npCityName}`;
@@ -176,7 +177,7 @@ export async function createOrder(
           postalCode: d.npWarehouseRef ?? d.npCityRef ?? "—",
           novaPoshtaCity: d.npCityName,
           novaPoshtaCityRef: d.npCityRef,
-          novaPoshtaBranch: d.npWarehouseAddress ?? d.npCourierAddress ?? null,
+          novaPoshtaBranch: (d.deliveryType === "np_courier" ? d.npCourierAddress : d.npWarehouseAddress) || null,
           novaPoshtaBranchRef: d.npWarehouseRef,
           comment: d.comment,
           paymentMethod: PAYMENT_LABELS[d.paymentMethod],
@@ -198,7 +199,7 @@ export async function createOrder(
     });
   } catch (error) {
     if (error instanceof Error && error.message === "OUT_OF_STOCK") {
-      return { success: false, error: "Недостатньо товару на складі" };
+      return { success: false, error: errors.stock };
     }
     throw error;
   }
