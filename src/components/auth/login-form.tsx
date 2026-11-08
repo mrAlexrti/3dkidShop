@@ -8,7 +8,6 @@ import { toast } from "sonner";
 
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
   invalid_credentials: "Невірний логін або пароль",
-  invalid_totp: "Невірний код Google Authenticator",
   admin_config_missing: "Авторизацію адміністратора не налаштовано на сервері",
   auth_secret_missing: "Auth secret не налаштований на сервері",
   Configuration: "Auth.js налаштований некоректно. Перевірте env у Vercel",
@@ -36,9 +35,8 @@ function getRedirectTarget(responseUrl: string | null | undefined, fallbackUrl: 
 export function LoginForm({ isTestMode }: { isTestMode: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [username, setUsername] = useState(isTestMode ? "admin" : "");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [totp, setTotp] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -53,7 +51,6 @@ export function LoginForm({ isTestMode }: { isTestMode: boolean }) {
       const response = await signIn("credentials", {
         username,
         password,
-        totp,
         redirect: false,
         callbackUrl,
       });
@@ -98,9 +95,9 @@ export function LoginForm({ isTestMode }: { isTestMode: boolean }) {
 
         {isTestMode && (
           <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-            ВНИМАНИЕ: включен TEST_MODE
+            Увімкнено TEST_MODE
             <span className="mt-1 block text-xs font-normal text-amber-700">
-              Тестовый вход: admin / Pass12345. Используйте только для разработки и тестирования.
+              Режим розробки. Для входу потрібні налаштовані логін і пароль адміністратора.
             </span>
           </div>
         )}
@@ -124,19 +121,6 @@ export function LoginForm({ isTestMode }: { isTestMode: boolean }) {
             className="w-full rounded-xl border border-ink/10 bg-white px-4 py-2.5 text-sm outline-none focus:border-pink-400"
           />
 
-          {!isTestMode && (
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
-              placeholder="Код Google Authenticator"
-              value={totp}
-              onChange={(event) => setTotp(event.target.value.replace(/\D/g, "").slice(0, 6))}
-              autoComplete="one-time-code"
-              className="w-full rounded-xl border border-ink/10 bg-white px-4 py-2.5 text-sm outline-none focus:border-pink-400"
-            />
-          )}
         </div>
 
         {error && <p className="mt-4 rounded-xl bg-pink-50 px-4 py-2 text-sm text-pink-600">{error}</p>}

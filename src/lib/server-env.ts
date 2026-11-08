@@ -26,7 +26,6 @@ export function getAuthDiagnostics() {
     testModeEnabled: testMode === "1",
     hasAdminUsername: Boolean(readServerEnv("ADMIN_USERNAME")),
     hasAdminPasswordHash: Boolean(readServerEnv("ADMIN_PASSWORD_HASH")),
-    hasAdminTotpSecret: Boolean(readServerEnv("ADMIN_TOTP_SECRET")),
     hasAuthSecret: Boolean(readServerEnv("AUTH_SECRET")),
     hasNextAuthSecret: Boolean(readServerEnv("NEXTAUTH_SECRET")),
     hasAnyAuthSecret: Boolean(getAuthSecret()),
