@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { ProductSearchInput } from "@/components/catalog/product-search-input";
 import { ProductCard } from "@/components/product/product-card";
 import { getT } from "@/lib/i18n-server";
 
@@ -31,10 +31,7 @@ export async function FeaturedProducts({ products }: {
       <form action="/catalog" method="get" role="search" className="sf-home-search">
         <label htmlFor="home-product-search">{t.home.searchLabel}</label>
         <div className="sf-search-row">
-          <div className="sf-search-field">
-            <Search size={22} aria-hidden="true" />
-            <input id="home-product-search" name="q" type="search" placeholder={t.home.searchPlaceholder} />
-          </div>
+          <ProductSearchInput id="home-product-search" className="sf-search-field" label={t.home.searchLabel} placeholder={t.home.searchPlaceholder} />
           <button type="submit" className="sf-pill">{t.catalog.find}</button>
         </div>
       </form>

@@ -18,6 +18,11 @@ export const translations = {
       skip: "Перейти до вмісту",
     },
     language: { label: "Мова сайту", ua: "Українська", en: "Англійська" },
+    searchSuggestions: {
+      label: "Підказки товарів", loading: "Шукаємо товари…", empty: "Збігів немає. Спробуйте інший запит.",
+      unavailable: "Підказки тимчасово недоступні. Ви можете надіслати пошуковий запит.",
+      count: "Підказок: {count}. Використовуйте стрілки для вибору.",
+    },
     // Главная
     home: {
       newCollection: "Нова колекція",
@@ -320,6 +325,11 @@ export const translations = {
       skip: "Skip to content",
     },
     language: { label: "Site language", ua: "Ukrainian", en: "English" },
+    searchSuggestions: {
+      label: "Product suggestions", loading: "Searching products…", empty: "No matches. Try another query.",
+      unavailable: "Suggestions are temporarily unavailable. You can still submit your search.",
+      count: "Suggestions: {count}. Use the arrow keys to choose.",
+    },
     home: {
       newCollection: "New Collection",
       featured:      "Popular Items",

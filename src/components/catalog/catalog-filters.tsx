@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { Search, X, ChevronDown } from "lucide-react";
+import { X, ChevronDown } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { useLangStore } from "@/store/lang-store";
 import { getCategoryName } from "@/lib/category-name";
+import { ProductSearchInput } from "@/components/catalog/product-search-input";
 
 export type FilterCategory = {
   id: string;
@@ -71,16 +72,14 @@ export function CatalogFilters({ categories }: { categories: FilterCategory[] })
         }}
         className="flex gap-2"
       >
-        <div className="relative flex-1">
-          <Search
-            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-pink-400"
-            size={20}
-          />
-          <input
+        <div className="relative min-w-0 flex-1">
+          <ProductSearchInput
+            id="catalog-product-search"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onValueChange={setSearch}
             placeholder={t.catalog.search}
-            className="h-12 w-full rounded-full border-2 border-pink-100 bg-white pl-12 pr-10 text-sm font-medium outline-none transition-colors placeholder:text-ink/40 focus:border-pink-300 md:h-14 md:text-base"
+            label={t.catalog.search}
+            inputClassName="h-12 w-full rounded-full border-2 border-pink-100 bg-white pl-12 pr-10 text-sm font-medium outline-none transition-colors placeholder:text-ink/40 focus:border-pink-300 md:h-14 md:text-base"
           />
           {search && (
             <button
