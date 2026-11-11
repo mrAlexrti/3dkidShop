@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { formatPrice } from "@/lib/utils";
-import { getProductOptionLabel } from "@/lib/product-content";
+import { sizeLabel } from "@/lib/product-variants";
 
 export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: boolean }) {
   const { items, total } = useCartStore();
@@ -37,7 +37,7 @@ export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: 
               </div>
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-2 text-sm font-medium leading-snug">{item.name}</p>
-                {item.options && <p className="text-xs text-ink/60">{Object.entries(item.options).map(([key, value]) => `${getProductOptionLabel(key, locale)}: ${getProductOptionLabel(value, locale)}`).join(", ")}</p>}
+                {item.variant && <p className="text-xs text-ink/60">{`${t.product.size}: ${sizeLabel(item.variant, locale)}`}</p>}
                 <p className="text-xs text-ink/40">× {item.quantity}</p>
               </div>
               <span className="shrink-0 text-sm font-semibold">{formatPrice(item.price * item.quantity, "UAH")}</span>

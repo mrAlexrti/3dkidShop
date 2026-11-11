@@ -1,120 +1,58 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Minus, Plus, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
-import { getProductOptionLabel } from "@/lib/product-content";
+import { productLineId, sizeLabel, type SizeVariant } from "@/lib/product-variants";
 
-type OptionValue = { id: string; value: string; priceModifier: number };
-type Option      = { id: string; name: string; values: OptionValue[] };
-
-export function ProductOptions({
-  productId, name, slug, basePrice, image, stock, options,
-}: {
-  productId: string;
-  name:      string;
-  slug:      string;
-  basePrice: number;
-  image:     string;
-  stock:     number;
-  options:   Option[];
+export function ProductOptions({ productId, name, slug, basePrice, image, stock, variants }: {
+  productId: string; name: string; slug: string; basePrice: number; image: string; stock: number; variants: SizeVariant[];
 }) {
-  const [selected, setSelected] = useState<Record<string, OptionValue>>(() =>
-    Object.fromEntries(options.map((o) => [o.name, o.values[0]]))
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const addItem  = useCartStore((s) => s.addItem);
-  const openCart = useCartStore((s) => s.openCart);
+  const addItem = useCartStore((state) => state.addItem);
+  const openCart = useCartStore((state) => state.openCart);
   const { t, locale } = useLangStore();
-  const currency = "UAH";
-
-  const finalPrice = useMemo(() => {
-    const mod = Object.values(selected).reduce((s, v) => s + (v?.priceModifier ?? 0), 0);
-    return basePrice + mod;
-  }, [selected, basePrice]);
-
-  const cartLineId = useMemo(() => {
-    const key = Object.values(selected).map((v) => v?.id).join("-");
-    return `${productId}-${key}`;
-  }, [productId, selected]);
-
-  function handleAddToCart() {
-    if (stock <= 0) {
-      toast.error(t.product.outOfStock);
-      return;
-    }
-    addItem({
-      id:        cartLineId,
-      productId,
-      name,
-      slug,
-      price:     finalPrice,
-      image,
-      quantity,
-      options:   Object.fromEntries(Object.entries(selected).map(([k, v]) => [k, v.value])),
-    });
-    toast.success(`${name} ${t.cart.addedToCart} 🎉`);
+  const selected = variants.find((variant) => variant.id === selectedId);
+  const validPrices = variants.flatMap((variant) => variant.price == null ? [] : [variant.price]);
+  const unitPrice = variants.length ? selected?.price ?? (validPrices.length ? Math.min(...validPrices) : null) : basePrice;
+  const ready = stock > 0 && (!variants.length || (selected != null && selected.price != null));
+  function add() {
+    if (!ready || unitPrice == null) return;
+    addItem({ id: productLineId(productId, selected?.id), productId, name, slug, price: unitPrice, image, quantity,
+      ...(selected ? { variant: { id: selected.id, labelUa: selected.labelUa, labelEn: selected.labelEn } } : {}) });
+    toast.success(`${name} ${t.cart.addedToCart}`);
     openCart();
   }
-
-  return (
-    <div className="mt-6 space-y-6">
-      {/* Опции (размер, цвет и т.п.) */}
-      {options.map((option) => (
-        <div key={option.id}>
-          <h3 className="mb-2 text-sm font-semibold">{getProductOptionLabel(option.name, locale)}</h3>
-          <div className="flex flex-wrap gap-2">
-            {option.values.map((value) => (
-              <button
-                key={value.id}
-                aria-pressed={selected[option.name]?.id === value.id}
-                onClick={() => setSelected((s) => ({ ...s, [option.name]: value }))}
-                className={`rounded-full border px-4 py-2 text-sm transition-colors ${
-                  selected[option.name]?.id === value.id
-                    ? "border-pink-500 bg-pink-500 text-white"
-                    : "border-ink/15 hover:border-pink-400"
-                }`}
-              >
-                {getProductOptionLabel(value.value, locale)}
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-
-      {/* Количество + цена */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3 rounded-full border border-ink/15 px-4 py-2">
-          <button
-            aria-label={t.cart.decrease}
-            onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-            className="transition-colors hover:text-pink-600"
-          >
-            <Minus size={16} />
-          </button>
-          <span className="w-6 text-center font-medium tabular-nums">{quantity}</span>
-          <button
-            aria-label={t.cart.increase}
-            onClick={() => setQuantity((q) => Math.min(stock, q + 1))}
-            disabled={quantity >= stock}
-            className="transition-colors hover:text-pink-600"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
-        <span className="text-2xl font-semibold text-pink-600">
-          {formatPrice(finalPrice * quantity, currency)}
-        </span>
+  const note = selected && (locale === "en" ? selected.noteEn || selected.noteUa : selected.noteUa);
+  return <div className="mt-6 space-y-5">
+    {variants.length > 0 && <fieldset className="space-y-3" aria-describedby="size-selection-help">
+      <legend className="mb-2 text-sm">{t.product.size}</legend>
+      <div className="flex flex-wrap gap-2">
+        {variants.map((variant) => <button key={variant.id} type="button" aria-pressed={selectedId === variant.id} disabled={variant.price == null}
+          onClick={() => setSelectedId(variant.id)} className={`rounded-full border px-4 py-2 text-sm disabled:opacity-40 ${selectedId === variant.id ? "border-pink-500 bg-pink-500 text-white" : "border-ink/15 hover:border-pink-400"}`}>
+          {sizeLabel(variant, locale)}
+        </button>)}
       </div>
-
-      <Button size="lg" className="w-full text-base" onClick={handleAddToCart} disabled={stock <= 0}>
-        <ShoppingBag size={18} />
-        {stock > 0 ? t.product.addToCart : t.product.outOfStock}
-      </Button>
+      <p id="size-selection-help" className="text-sm text-ink/60">{selected ? note : t.product.chooseSize}</p>
+    </fieldset>}
+    <div className="flex flex-wrap items-center gap-4">
+      <div className="flex items-center gap-3 rounded-full border border-ink/15 px-4 py-2">
+        <button type="button" aria-label={t.cart.decrease} disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}><Minus size={16} /></button>
+        <span className="w-6 text-center tabular-nums">{quantity}</span>
+        <button type="button" aria-label={t.cart.increase} disabled={quantity >= stock} onClick={() => setQuantity((value) => Math.min(stock, value + 1))}><Plus size={16} /></button>
+      </div>
+      <p className="text-2xl text-pink-600" aria-live="polite" aria-atomic="true">
+        {variants.length > 0 && !selected && unitPrice != null && <span className="mr-2 text-sm">{t.product.from}</span>}
+        {unitPrice == null ? t.product.sizeUnavailable : formatPrice(unitPrice * quantity, "UAH")}
+      </p>
     </div>
-  );
+    <Button type="button" size="lg" className="w-full text-base" onClick={add} disabled={!ready}>
+      <ShoppingBag size={18} />{stock <= 0 ? t.product.outOfStock : variants.length && !selected ? t.product.chooseSize : t.product.addToCart}
+    </Button>
+  </div>;
 }

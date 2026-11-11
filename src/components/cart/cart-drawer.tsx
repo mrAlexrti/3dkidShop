@@ -9,7 +9,7 @@ import { useLangStore } from "@/store/lang-store";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef } from "react";
-import { getProductOptionLabel } from "@/lib/product-content";
+import { sizeLabel } from "@/lib/product-variants";
 
 export function CartDrawer() {
   const { items, isOpen, closeCart, removeItem, updateQuantity, total } = useCartStore();
@@ -109,9 +109,9 @@ export function CartDrawer() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium line-clamp-2 leading-snug">{item.name}</p>
-                        {item.options && (
+                        {item.variant && (
                           <p className="mt-0.5 text-xs text-ink/40">
-                            {Object.entries(item.options).map(([k, v]) => `${getProductOptionLabel(k, locale)}: ${getProductOptionLabel(v, locale)}`).join(", ")}
+                            {`${t.product.size}: ${sizeLabel(item.variant, locale)}`}
                           </p>
                         )}
                         <p className="mt-1 text-sm font-semibold text-pink-600">

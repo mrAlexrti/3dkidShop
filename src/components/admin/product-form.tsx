@@ -7,8 +7,12 @@ import { Button } from "@/components/ui/button";
 import { useLangStore } from "@/store/lang-store";
 import type { CategoryTreeNode } from "@/lib/categories";
 import { MediaUrlField } from "@/components/admin/media-url-field";
+import { SizeEditor } from "@/components/admin/size-editor";
+import type { LegacySize, SizeVariant } from "@/lib/product-variants";
 
 type ProductDefaults = {
+  variants?: SizeVariant[];
+  legacySizes?: LegacySize[];
   name?: string;
   nameEn?: string | null;
   slug?: string;
@@ -122,6 +126,7 @@ export function ProductForm({
       </div>
 
       <MediaUrlField name="hoverGifUrl" label={tp.hoverGif} help={tp.hoverGifHelp} defaultValue={defaults?.hoverGifUrl ?? ""} animated />
+      <SizeEditor defaults={defaults?.variants} legacySizes={defaults?.legacySizes} />
 
       <div className="flex gap-6 text-sm">
         <label className="flex items-center gap-2">

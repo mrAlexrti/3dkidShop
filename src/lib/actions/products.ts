@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/actions/require-admin";
 import { optionalHoverGifUrl, updateMainProductImage } from "@/lib/product-media";
+import { sizeInputSchema } from "@/lib/product-variants";
+import { syncProductSizes } from "@/lib/product-size-admin";
 
 const productSchema = z.object({
   name: z.string().min(2),
@@ -18,6 +20,7 @@ const productSchema = z.object({
   categoryId: z.string().min(1),
   imageUrl: z.string().url(),
   hoverGifUrl: optionalHoverGifUrl,
+  variants: z.preprocess((value) => typeof value === "string" ? JSON.parse(value) : value, sizeInputSchema.optional()),
   isFeatured: z.coerce.boolean().optional(),
   isNew: z.coerce.boolean().optional(),
   isActive: z.coerce.boolean().optional(),
@@ -34,7 +37,8 @@ export async function createProduct(formData: FormData) {
     isActive: raw.isActive === "on",
   });
 
-  await prisma.product.create({
+  await prisma.$transaction(async (tx) => {
+  const product = await tx.product.create({
     data: {
       name: parsed.name,
       nameEn: parsed.nameEn,
@@ -51,6 +55,8 @@ export async function createProduct(formData: FormData) {
       images: { create: [{ url: parsed.imageUrl, order: 0 }] },
       hoverGifUrl: parsed.hoverGifUrl,
     },
+  });
+  await syncProductSizes(tx, product.id, parsed.variants ?? []);
   });
 
   revalidatePath("/admin/products");
@@ -89,6 +95,7 @@ export async function updateProduct(id: string, formData: FormData) {
       },
     });
     await updateMainProductImage(tx, id, parsed.imageUrl);
+    if (parsed.variants !== undefined) await syncProductSizes(tx, id, parsed.variants);
   });
 
   revalidatePath("/admin/products");

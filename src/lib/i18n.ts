@@ -82,6 +82,7 @@ export const translations = {
       backToCatalog:   "Повернутися до каталогу",
       outOfStock: "Товару немає в наявності",
       chooseOptions: "Оберіть опції товару",
+      size: "Розмір", chooseSize: "Оберіть розмір", from: "від", sizeUnavailable: "Цей розмір недоступний",
     },
     // Корзина
     cart: {
@@ -204,6 +205,7 @@ export const translations = {
     },
     // Адмінка
     admin: {
+      sizes: { title: "Розміри (необов'язково)", help: "Без розмірів продається товар за основною ціною. Для кожного розміру вкажіть повну ціну, а не доплату. Запас спільний для всіх розмірів.", enabled: "Використовувати налаштовані розміри", labelUa: "Назва розміру UA", labelEn: "Назва розміру EN", price: "Повна ціна (грн)", noteUa: "Примітка UA", noteEn: "Примітка EN", add: "Додати розмір", remove: "Прибрати розмір", none: "Простий товар: розміри не потрібні.", legacyTitle: "Старі розміри потребують перегляду", legacyHelp: "Ці записи не мають явної ціни розміру й не активують вибір розміру. Звичайне збереження товару їх не змінює. Додавайте потрібні розміри свідомо; очищення старих записів виконується окремо після погодження.", legacyModifier: "стара доплата", disableHelp: "Збереження вимкнених розмірів прибере лише налаштовані розміри. Старі записи буде збережено." },
       nav: {
         dashboard:  "Дашборд",
         products:   "Товари",
@@ -396,6 +398,7 @@ export const translations = {
       backToCatalog:   "Back to Catalog",
       outOfStock: "This product is out of stock",
       chooseOptions: "Choose product options",
+      size: "Size", chooseSize: "Choose a size", from: "from", sizeUnavailable: "This size is unavailable",
     },
     cart: {
       title:      "Cart",
@@ -512,6 +515,7 @@ export const translations = {
       retry:    "Try again",
     },
     admin: {
+      sizes: { title: "Sizes (optional)", help: "With no sizes, the product sells at its base price. Enter the full selling price for each size, not a surcharge. All sizes share product stock.", enabled: "Use configured sizes", labelUa: "Size label UA", labelEn: "Size label EN", price: "Full price (UAH)", noteUa: "Note UA", noteEn: "Note EN", add: "Add size", remove: "Remove size", none: "Simple product: no sizes required.", legacyTitle: "Legacy sizes need review", legacyHelp: "These records have no explicit size price and do not activate size selection. Saving other product fields leaves them unchanged. Add wanted sizes deliberately; legacy cleanup is a separate approved step.", legacyModifier: "legacy surcharge", disableHelp: "Saving with sizes disabled removes only configured sizes. Legacy records are preserved." },
       nav: {
         dashboard:  "Dashboard",
         products:   "Products",

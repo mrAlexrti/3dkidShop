@@ -74,7 +74,7 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, ho
       return;
     }
     if (hasOptions) {
-      toast.message(t.product.chooseOptions);
+      toast.message(t.product.chooseSize);
       router.push(`/product/${slug}`);
       return;
     }
@@ -94,7 +94,7 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, ho
           <h3><Link href={`/product/${slug}`}>{localizedName}</Link></h3>
           <div className="sf-product-bottom">
             <div className="sf-product-price">
-              <span>{formatPrice(price, currency)}</span>
+              <span>{hasOptions && `${t.product.from} `}{formatPrice(price, currency)}</span>
               {oldPrice && <del>{formatPrice(oldPrice, currency)}</del>}
             </div>
             <button type="button" className="sf-product-add" onClick={handleQuickAdd} aria-label={`${t.product.addToCart}: ${localizedName}`}>
@@ -143,7 +143,7 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, ho
           <h3 className="text-sm font-medium text-ink line-clamp-2 leading-snug">{localizedName}</h3>
           <div className="mt-1.5 flex items-center gap-2">
             <span className="text-base font-semibold text-pink-600">
-              {formatPrice(price, currency)}
+              {hasOptions && `${t.product.from} `}{formatPrice(price, currency)}
             </span>
             {oldPrice && (
               <span className="text-sm text-ink/40 line-through">

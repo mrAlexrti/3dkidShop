@@ -1,3 +1,4 @@
+import { hasConfiguredSizes, startingPrice } from "@/lib/product-variants";
 import { prisma } from "@/lib/prisma";
 import { CatalogFilters, type FilterCategory } from "@/components/catalog/catalog-filters";
 import { ProductGrid } from "@/components/catalog/product-grid";
@@ -61,7 +62,7 @@ export default async function CatalogPage({
     prisma.product.findMany({
       where,
       orderBy,
-      include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 1 }, _count: { select: { options: true } } },
+      include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 1 }, options: { select: { name: true, values: { select: { price: true } } } } },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
@@ -107,11 +108,11 @@ export default async function CatalogPage({
           name:     p.name,
           nameEn:   p.nameEn,
           hoverGifUrl: p.hoverGifUrl,
-          price:    Number(p.price),
+          price:    startingPrice(p.price, p.options),
           oldPrice: p.oldPrice ? Number(p.oldPrice) : null,
           image:    p.images[0]?.url ?? "/images/placeholder.svg",
           isNew:    p.isNew,
-          hasOptions: p._count.options > 0,
+          hasOptions: hasConfiguredSizes(p.options),
           stock: p.stock,
         }))}
       />

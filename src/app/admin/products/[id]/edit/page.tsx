@@ -6,12 +6,13 @@ import { ProductForm } from "@/components/admin/product-form";
 import { updateProduct } from "@/lib/actions/products";
 import { getT } from "@/lib/i18n-server";
 import { getCategoryTree } from "@/lib/categories";
+import { getLegacySizes, getSizeVariants } from "@/lib/product-variants";
 
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const t = await getT();
   const [product, categories] = await Promise.all([
-    prisma.product.findUnique({ where: { id }, include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }] } } }),
+    prisma.product.findUnique({ where: { id }, include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }] }, options: { include: { values: true } } } }),
     getCategoryTree(),
   ]);
 
@@ -27,6 +28,8 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
           categories={categories}
           action={boundUpdate}
           defaults={{
+            variants: getSizeVariants(product.options),
+            legacySizes: getLegacySizes(product.options),
             name: product.name,
             nameEn: product.nameEn,
             slug: product.slug,

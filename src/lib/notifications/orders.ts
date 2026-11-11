@@ -1,3 +1,4 @@
+import { orderSizeLabel } from "@/lib/product-variants";
 import type { OrderStatus } from "@prisma/client";
 import { getOrderStatusLabel } from "@/lib/order-status";
 import { formatPrice } from "@/lib/utils";
@@ -64,15 +65,7 @@ function formatDate(value: Date) {
   return new Intl.DateTimeFormat("uk-UA", { dateStyle: "medium", timeStyle: "short" }).format(value);
 }
 
-function safeOptions(optionsJson: string | null) {
-  if (!optionsJson) return "";
-
-  try {
-    return Object.values(JSON.parse(optionsJson)).join(", ");
-  } catch {
-    return "";
-  }
-}
+function safeOptions(optionsJson: string | null) { return orderSizeLabel(optionsJson); }
 
 function deliveryLabel(order: OrderForNotification) {
   if (order.deliveryMethod === "np_warehouse") return "Відділення Нової Пошти";

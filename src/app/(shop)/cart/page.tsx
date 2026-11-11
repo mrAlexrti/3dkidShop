@@ -8,7 +8,7 @@ import { useLangStore } from "@/store/lang-store";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
-import { getProductOptionLabel } from "@/lib/product-content";
+import { sizeLabel } from "@/lib/product-variants";
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity, total } = useCartStore();
@@ -57,9 +57,9 @@ export default function CartPage() {
                     >
                       {item.name}
                     </Link>
-                    {item.options && (
+                    {item.variant && (
                       <p className="text-xs text-ink/40 mt-0.5">
-                        {Object.entries(item.options).map(([k, v]) => `${getProductOptionLabel(k, locale)}: ${getProductOptionLabel(v, locale)}`).join(", ")}
+                        {`${t.product.size}: ${sizeLabel(item.variant, locale)}`}
                       </p>
                     )}
                   </div>

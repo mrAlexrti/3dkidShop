@@ -1,4 +1,7 @@
 "use server";
+import { getSizeVariants, snapshotSize } from "@/lib/product-variants";
+import { requestedSizeId } from "@/lib/cart-items";
+
 
 import { translations, type Locale } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
@@ -71,36 +74,17 @@ async function priceOrderItems(items: CartItem[], errors: (typeof translations)[
       return { success: false as const, error: errors.notFound };
     }
 
-    const selectedOptions = item.options ?? {};
-    const allowedOptionNames = new Set(product.options.map((option) => option.name));
-    const hasUnknownOption = Object.keys(selectedOptions).some((name) => !allowedOptionNames.has(name));
-    if (hasUnknownOption) {
-      return { success: false as const, error: errors.options };
-    }
-
-    const canonicalOptions: Record<string, string> = {};
-    let price = Number(product.price);
-
-    for (const option of product.options) {
-      const selectedValue = selectedOptions[option.name];
-      if (!selectedValue) {
-        return { success: false as const, error: errors.chooseOptions };
-      }
-
-      const value = option.values.find((optionValue) => optionValue.value === selectedValue);
-      if (!value) {
-        return { success: false as const, error: errors.options };
-      }
-
-      canonicalOptions[option.name] = value.value;
-      price += Number(value.priceModifier);
-    }
-
+    const variants = getSizeVariants(product.options);
+    const sizeId = requestedSizeId(item);
+    const size = variants.find((value) => value.id === sizeId);
+    if (variants.length && !sizeId) return { success: false as const, error: errors.chooseOptions };
+    if (sizeId && (!size || size.price == null)) return { success: false as const, error: errors.options };
+    const price = size?.price ?? Number(product.price);
     subtotal += price * item.quantity;
     pricedItems.push({
       productId: product.id,
       productName: product.name,
-      optionsJson: Object.keys(canonicalOptions).length > 0 ? JSON.stringify(canonicalOptions) : null,
+      optionsJson: size ? snapshotSize(size) : null,
       price,
       quantity: item.quantity,
     });
@@ -122,6 +106,9 @@ export async function createOrder(
   }
   if (!items || items.length === 0) {
     return { success: false, error: errors.empty };
+  }
+  if (!Array.isArray(items) || items.length > 100 || items.some((item) => !item || typeof item.productId !== "string" || !item.productId)) {
+    return { success: false, error: errors.products };
   }
 
   const d = parsed.data;

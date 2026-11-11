@@ -1,5 +1,5 @@
 export type CartItem = {
-  id: string; // уникальный id строки корзины (productId + options)
+  id: string; // productId for simple products; productId + stable size ID for variants.
   productId: string;
   name: string;
   slug: string;
@@ -7,6 +7,7 @@ export type CartItem = {
   image: string;
   quantity: number;
   options?: Record<string, string>;
+  variant?: { id: string; labelUa: string; labelEn: string | null };
 };
 
 export type ProductWithRelations = {

@@ -1,3 +1,4 @@
+import { getSizeVariants, hasConfiguredSizes, startingPrice } from "@/lib/product-variants";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -5,7 +6,6 @@ import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductOptions } from "@/components/product/product-options";
 import { RelatedProducts } from "@/components/product/related-products";
 import { AnimatedSection } from "@/components/shared/animated-section";
-import { formatPrice } from "@/lib/utils";
 import { getLocale } from "@/lib/i18n-server";
 import { getCategoryName } from "@/lib/category-name";
 import { getProductDescription, getProductName } from "@/lib/product-content";
@@ -92,7 +92,7 @@ export default async function ProductPage({
       id: { not: product.id },
       isActive: true,
     },
-    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 1 }, _count: { select: { options: true } } },
+    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 1 }, options: { select: { name: true, values: { select: { price: true } } } } },
     take: 4,
   });
 
@@ -108,16 +108,6 @@ export default async function ProductPage({
             {getCategoryName(product.category, locale)}
           </p>
           <h1 className="mt-2 font-display text-3xl text-ink">{productName}</h1>
-          <div className="mt-2 flex items-center gap-3">
-            <p className="text-2xl font-semibold text-pink-600">
-              {formatPrice(Number(product.price))}
-            </p>
-            {product.oldPrice && (
-              <p className="text-lg text-ink/40 line-through">
-                {formatPrice(Number(product.oldPrice))}
-              </p>
-            )}
-          </div>
 
           <p className="mt-5 text-sm leading-relaxed text-ink/70">
             {productDescription}
@@ -130,15 +120,7 @@ export default async function ProductPage({
             basePrice={Number(product.price)}
             image={product.images[0]?.url ?? "/images/placeholder.svg"}
             stock={product.stock}
-            options={product.options.map((o) => ({
-              id: o.id,
-              name: o.name,
-              values: o.values.map((v) => ({
-                id: v.id,
-                value: v.value,
-                priceModifier: Number(v.priceModifier),
-              })),
-            }))}
+            variants={getSizeVariants(product.options)}
           />
 
           {product.attributes.length > 0 && (
@@ -168,10 +150,10 @@ export default async function ProductPage({
           name: p.name,
           nameEn: p.nameEn,
           hoverGifUrl: p.hoverGifUrl,
-          price: Number(p.price),
+          price: startingPrice(p.price, p.options),
           image: p.images[0]?.url ?? "/images/placeholder.svg",
           isNew: p.isNew,
-          hasOptions: p._count.options > 0,
+          hasOptions: hasConfiguredSizes(p.options),
           stock: p.stock,
         }))}
       />

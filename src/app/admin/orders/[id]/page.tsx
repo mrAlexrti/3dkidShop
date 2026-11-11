@@ -7,15 +7,10 @@ import { OrderStatusSelect } from "@/components/admin/order-status-select";
 import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/lib/utils";
 
-function safeOptionLabel(optionsJson: string | null) {
-  if (!optionsJson) return "—";
+import { orderSizeLabel } from "@/lib/product-variants";
 
-  try {
-    const values = Object.values(JSON.parse(optionsJson));
-    return values.length ? values.join(", ") : "—";
-  } catch {
-    return "—";
-  }
+function safeOptionLabel(optionsJson: string | null) {
+  return orderSizeLabel(optionsJson) || "—";
 }
 
 function formatDateTime(value: Date | null) {
