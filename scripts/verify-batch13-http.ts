@@ -4,7 +4,8 @@ import { setTimeout as pause } from "node:timers/promises";
 import { loadEnvConfig } from "@next/env";
 import { PrismaClient } from "@prisma/client";
 import { translations } from "../src/lib/i18n";
-import { getProductName, getProductOptionLabel } from "../src/lib/product-content";
+import { getProductName } from "../src/lib/product-content";
+import { getSizeVariants, sizeLabel } from "../src/lib/product-variants";
 import { filterWarehousesByDelivery, NP_LOCKER_TYPE, NP_WAREHOUSE_TYPE, type NPWarehouse } from "../src/lib/np-warehouse-types";
 
 loadEnvConfig(process.cwd());
@@ -56,9 +57,15 @@ async function verifyStorefront() {
     assert.ok(empty.includes(t.catalog.empty));
     const detail = await page(`/product/${product.slug}`, locale);
     assert.ok(detail.includes(getProductName(product, locale)) && detail.includes("sf-categories"));
-    for (const option of product.options) {
-      assert.ok(detail.includes(getProductOptionLabel(option.name, locale)));
-      for (const value of option.values) assert.ok(detail.includes(getProductOptionLabel(value.value, locale)));
+    for (const record of products) {
+      const html = record.id === product.id ? detail : await page(`/product/${record.slug}`, locale);
+      const sizes = getSizeVariants(record.options);
+      if (sizes.length) {
+        assert.ok(html.includes('id="size-selection-help"'));
+        for (const size of sizes) assert.ok(html.includes(sizeLabel(size, locale)), `${record.slug}: localized configured size`);
+      } else {
+        assert.ok(!html.includes('id="size-selection-help"'), `${record.slug}: simple product has no size selector`);
+      }
     }
     assert.ok((await page("/cart", locale)).includes(t.cart.empty));
     // Persisted cart state is resolved after hydration; HTTP verifies its safe loading shell.

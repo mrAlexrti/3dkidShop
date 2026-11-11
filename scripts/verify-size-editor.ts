@@ -165,6 +165,8 @@ async function verify() {
     await updateProduct(product.id, form([{ labelUa: "Новий", labelEn: "New", price: 200 }]));
     assert.equal(variants.getSizeVariants(await groups()).length, 1);
     const selected = variants.getSizeVariants(await groups())[0];
+    // Rollback-only fixture: even a stale nonzero modifier cannot alter the explicit price.
+    await tx.productOptionValue.update({ where: { id: selected.id }, data: { priceModifier: 987.65 } });
     await checkAuthoritativePrice({ id: selected.id, labelUa: "Forged client label", labelEn: "Forged client label" }, 200);
     assert.deepEqual(await tx.productOptionValue.findUniqueOrThrow({ where: { id: legacy.id } }), legacy);
     await assert.rejects(updateProduct(product.id, form([{ id: legacy.id, labelUa: "Legacy", labelEn: "Legacy", price: 99 }])));
