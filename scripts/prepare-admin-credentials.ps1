@@ -19,7 +19,7 @@ try {
         $previousInputEncoding = $OutputEncoding
         try {
             $OutputEncoding = [Text.UTF8Encoding]::new($false)
-            $preparedConfiguration = $credentialInput | node scripts/prepare-admin-credentials.cjs
+            $preparedConfiguration = $credentialInput | node scripts/prepare-admin-credentials.mjs
             if ($LASTEXITCODE -ne 0) { throw 'Credential preparation failed.' }
         } finally { $OutputEncoding = $previousInputEncoding }
         # Copy only on the user's local machine. No hash/secret is printed or written to a file.

@@ -1,7 +1,7 @@
 // stdin -> prepared env lines, consumed privately by the interactive PowerShell wrapper.
-const fs = require("node:fs");
-const crypto = require("node:crypto");
-const bcrypt = require("bcryptjs");
+import fs from "node:fs";
+import crypto from "node:crypto";
+import bcrypt from "bcryptjs";
 
 (async () => {
   const input = JSON.parse(fs.readFileSync(0, "utf8").replace(/^\uFEFF/, ""));

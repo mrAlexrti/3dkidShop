@@ -37,7 +37,7 @@ async function verify() {
   assert.equal((await config!.callbacks.session({ session: { user: {} }, token })).user.role, "ADMIN");
   process.env.ADMIN_PASSWORD_HASH = "invalid";
   await assert.rejects(provider.authorize({ username: "isolated-admin", password }));
-  const prepared = execFileSync(process.execPath, ["scripts/prepare-admin-credentials.cjs"], { input: JSON.stringify({ username: "reset-test", password }), encoding: "utf8" });
+  const prepared = execFileSync(process.execPath, ["scripts/prepare-admin-credentials.mjs"], { input: JSON.stringify({ username: "reset-test", password }), encoding: "utf8" });
   assert.ok(!prepared.includes(password), "Plaintext must never appear in helper output.");
   const directory = mkdtempSync(join(tmpdir(), "stikr-reset-qa-"));
   const savedEnv = { ...process.env };
