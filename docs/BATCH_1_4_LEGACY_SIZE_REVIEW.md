@@ -1,6 +1,6 @@
 # Batch 1.4 — optional-size Admin editor and legacy-data review
 
-Status: **proposal only; no catalog cleanup/conversion approved or applied**. Existing social/auth commits are preserved. No push, deployment, `.env` change, or real credential reset.
+Status: **revised proposal only; final combined cleanup/configuration approval pending**. The owner approved the eight non-toy removals in principle and supplied intentional Bear/Cosmos fixture prices. No catalog cleanup/configuration has been applied. Existing commits are preserved. No push, deployment, `.env` change, or real credential reset.
 
 ## Audit and classification
 
@@ -23,7 +23,7 @@ These are classified as **legacy/test data awaiting review**, not automatically 
 
 ## Exact proposed cleanup — awaiting approval
 
-Every targeted removal below means **only that product's listed legacy group and its three null-price values**. No product, category, image, order, order item, stock, base price, or historical option snapshot would be modified. No legacy record would be converted into an active size.
+Every targeted removal below means **only that product's listed legacy group and its three null-price values**. The six retained toy values would be updated into intentional configurations using the owner's explicit prices. No product, product ID, category, image, order, order item, stock, base price, or historical option snapshot would be modified. No records would be created.
 
 | Product | Base price, UAH | Proposed action | Exact legacy group ID |
 |---|---:|---|---|
@@ -35,14 +35,25 @@ Every targeted removal below means **only that product's listed legacy group and
 | Мінікурс «Моделюємо іграшку» | 349 | Remove group + 3 legacy values; keep simple | `cmrb2qwxd002j1jjbn3gq1ov6` |
 | Шопер «3D Kid Heart» | 399 | Remove group + 3 legacy values; keep simple | `cmrb2qs9m001s1jjbs8fjp38a` |
 | Шопер «Playful Shapes» | 549 | Remove group + 3 legacy values; keep simple | `cmrb2qu2b00211jjb557xqkmu` |
-| 3D іграшка «Ведмедик» | 149 | Retain 3 legacy values inactive for owner review; no conversion | `cmrb2qjf7000a1jjbynm46h26` |
-| Набір 3D фігурок «Космос» | 299 | Retain 3 legacy values inactive for owner review; no conversion | `cmrb2qmsq000s1jjbi1bcxzgd` |
+| 3D іграшка «Ведмедик» | 149 | Update 3 existing values into intentional explicit-price sizes below | `cmrb2qjf7000a1jjbynm46h26` |
+| Набір 3D фігурок «Космос» | 299 | Update 3 existing values into intentional explicit-price sizes below | `cmrb2qmsq000s1jjbi1bcxzgd` |
 
-The two toy products might eventually warrant sizes, but the current generic labels/modifiers do not establish that. They would remain simple until the administrator deliberately enters real labels and explicit prices in the new editor. If sizes are wanted, their physical meaning and selling prices need confirmation rather than automatic inheritance.
+The following are intentional owner-specified development fixtures, not an inference that old modifiers establish valid sizes. Existing group/value IDs and UA labels stay unchanged. Update `price`, `valueEn` and set `priceModifier = 0` on these six rows only; leave notes null.
 
-If this precise proposal is approved, expected counts are: products 10 → 10; images 10 → 10; categories 5 → 5; orders 2 → 2; option groups 10 → 2; legacy values 30 → 6; explicitly configured size values 0 → 0. Stock remains 49 for the bear/cosmos products and 50 for the other eight products.
+| Product | Existing value ID | UA label retained | EN label set | Explicit price, UAH | Modifier before → after |
+|---|---|---|---|---:|---|
+| Bear | `cmrb2qjf7000b1jjbx8uq0bra` | Маленький | Small | 149.00 | 0 → 0 |
+| Bear | `cmrb2qjf7000c1jjbbhx40rqk` | Середній | Medium | 199.00 | 50 → 0 |
+| Bear | `cmrb2qjf7000d1jjb83mbxkby` | Великий | Large | 249.00 | 100 → 0 |
+| Cosmos | `cmrb2qmsq000t1jjbkylncewg` | Маленький | Small | 299.00 | 0 → 0 |
+| Cosmos | `cmrb2qmsq000u1jjbe4yng99b` | Середній | Medium | 349.00 | 50 → 0 |
+| Cosmos | `cmrb2qmsq000v1jjbjmanxsiv` | Великий | Large | 399.00 | 100 → 0 |
 
-Before any future cleanup: re-read the exact IDs, verify that all targeted values still have null explicit prices and the reviewed labels/modifiers, check that no configured rows have been added, run the operation in a transaction, and assert protected data/IDs before committing. Any mismatch requires a fresh review. No cleanup command has been implemented or executed by this checkpoint.
+Bear product ID remains `cmrb2qjf700081jjbohggu03b`; Cosmos product ID remains `cmrb2qmsq000q1jjb1rbniyby`. The deprecated `priceModifier` column remains in the schema but no storefront/order price calculation reads it. All six remaining modifiers become zero, eliminating a parallel surcharge interpretation. Sizes use the explicit database `price` directly; simple products use `Product.price`.
+
+If this precise proposal is approved, expected counts are: products 10 → 10; images 10 → 10; categories 5 → 5; orders 2 → 2; order items 2 → 2; option groups 10 → 2; option values 30 → 6; intentionally configured explicit-price size values 0 → 6; remaining null-price legacy values 30 → 0. Stock remains 49 for the bear/cosmos products and 50 for the other eight products. The eight simple products keep their listed base prices.
+
+Before any future cleanup/configuration: re-read the exact group/value/product IDs; verify null explicit prices, null translations/notes and the reviewed labels/modifiers; check no configured rows have been added; then perform the eight deletions and six updates in one transaction, asserting the protected data/IDs and exact final state before commit. Any mismatch requires a fresh review. No cleanup/configuration command has been executed. The old bulk conversion script remains disabled.
 
 ## Verification
 
