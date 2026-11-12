@@ -82,7 +82,7 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, ho
   return (
     <article className="sf-product-card" {...interaction}>
       <Link className="sf-product-visual" href={`/product/${slug}`} aria-label={localizedName}>
-        <Image src={image} alt={localizedName} fill sizes="(max-width: 380px) 85vw, (max-width: 680px) 44vw, (max-width: 980px) 42vw, 260px" className="object-cover" />
+        <Image src={image} alt={localizedName} fill sizes="(max-width: 680px) 44vw, (max-width: 980px) 42vw, 260px" className="object-cover" />
         {animatedOverlay}
         {isNew && <span className="absolute left-2 top-2 rounded-full bg-pink-700 px-3 py-1 text-xs font-semibold text-white">{t.common.new}</span>}
       </Link>

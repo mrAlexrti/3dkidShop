@@ -17,7 +17,7 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="container-shop flex flex-col items-center py-32 text-center">
+      <div className="sf-cart-page container-shop flex flex-col items-center py-32 text-center">
         <ShoppingBag size={52} className="text-pink-200" />
         <h1 className="mt-6 font-display text-3xl">{t.cart.empty}</h1>
         <p className="mt-2 text-ink/60">{t.cart.emptyDesc}</p>
@@ -29,7 +29,7 @@ export default function CartPage() {
   }
 
   return (
-    <div className="container-shop py-10">
+    <div className="sf-cart-page container-shop py-10">
       <h1 className="font-display text-3xl">{t.cart.title}</h1>
 
       <div className="mt-8 grid gap-10 lg:grid-cols-3">
@@ -43,7 +43,7 @@ export default function CartPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                className="glass flex gap-4 rounded-xl2 p-4 shadow-soft"
+                className="sf-cart-item glass flex gap-4 rounded-xl2 p-4 shadow-soft"
               >
                 <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-white">
                   <Image sizes="96px"
@@ -63,8 +63,8 @@ export default function CartPage() {
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 rounded-full border border-ink/10 px-3 py-1">
+                  <div className="sf-cart-item-controls flex items-center justify-between">
+                    <div className="sf-quantity-control flex items-center gap-2 rounded-full border border-ink/10 px-3 py-1">
                       <button
                         onClick={() => updateQuantity(item.id, item.quantity - 1)}
                               aria-label={`${t.cart.decrease}: ${item.name}`}

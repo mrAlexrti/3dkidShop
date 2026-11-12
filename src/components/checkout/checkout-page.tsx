@@ -17,13 +17,13 @@ export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: 
   useEffect(() => { setMounted(true); }, []);
 
   if (!mounted) return <div className="container-shop py-20 text-center text-ink/40">{t.common.loading}</div>;
-  if (items.length === 0) return <div className="container-shop flex flex-col items-center py-32 text-center">
+  if (items.length === 0) return <div className="sf-checkout-page container-shop flex flex-col items-center py-32 text-center">
     <h1 className="font-display text-3xl">{t.cart.empty}</h1>
     <p className="mt-2 text-ink/60">{t.cart.emptyDesc}</p>
     <Link href="/catalog" className="mt-6"><Button size="lg">{t.cart.toCatalog}</Button></Link>
   </div>;
 
-  return <div className="container-shop py-10">
+  return <div className="sf-checkout-page container-shop py-10">
     <h1 className="font-display text-3xl">{t.checkout.title}</h1>
     <div className="mt-8 grid gap-10 lg:grid-cols-3">
       <div className="lg:col-span-2"><CheckoutForm onlineCardEnabled={onlineCardEnabled} /></div>
@@ -31,7 +31,7 @@ export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: 
         <div className="glass rounded-xl2 p-6 shadow-soft">
           <h2 className="mb-4 font-display text-lg">{t.checkout.yourOrder}</h2>
           <ul className="space-y-3">
-            {items.map((item) => <li key={item.id} className="flex items-center gap-3">
+            {items.map((item) => <li key={item.id} className="sf-checkout-item flex items-center gap-3">
               <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-white shadow-soft">
                 <Image src={item.image} alt={item.name} fill sizes="56px" className="object-cover" />
               </div>

@@ -66,7 +66,7 @@ export function CartDrawer() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 280 }}
-            className="fixed right-0 top-0 z-[70] flex h-full w-full max-w-sm flex-col bg-cream shadow-2xl"
+            className="sf-cart-drawer fixed right-0 top-0 z-[70] flex h-full w-full max-w-sm flex-col bg-cream shadow-2xl"
           >
             {/* Шапка */}
             <div className="flex items-center justify-between border-b border-pink-100 p-5">
@@ -96,7 +96,7 @@ export function CartDrawer() {
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 20 }}
-                      className="flex gap-3"
+                      className="sf-cart-item flex gap-3"
                     >
                       <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-white shadow-soft">
                         <Image
@@ -117,8 +117,8 @@ export function CartDrawer() {
                         <p className="mt-1 text-sm font-semibold text-pink-600">
                           {formatPrice(item.price, currency)}
                         </p>
-                        <div className="mt-2 flex items-center gap-2">
-                          <div className="flex items-center gap-2 rounded-full border border-ink/10 px-2 py-0.5">
+                        <div className="sf-cart-item-controls mt-2 flex items-center gap-2">
+                          <div className="sf-quantity-control flex items-center gap-2 rounded-full border border-ink/10 px-2 py-0.5">
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity - 1)}
                               aria-label={`${t.cart.decrease}: ${item.name}`}

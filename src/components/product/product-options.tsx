@@ -29,7 +29,7 @@ export function ProductOptions({ productId, name, slug, basePrice, image, stock,
     openCart();
   }
   const note = selected && (locale === "en" ? selected.noteEn || selected.noteUa : selected.noteUa);
-  return <div className="mt-6 space-y-5">
+  return <div className="sf-product-options mt-6 space-y-5">
     {variants.length > 0 && <fieldset className="space-y-3" aria-describedby="size-selection-help">
       <legend className="mb-2 text-sm">{t.product.size}</legend>
       <div className="flex flex-wrap gap-2">
@@ -41,7 +41,7 @@ export function ProductOptions({ productId, name, slug, basePrice, image, stock,
       <p id="size-selection-help" className="text-sm text-ink/60">{selected ? note : t.product.chooseSize}</p>
     </fieldset>}
     <div className="flex flex-wrap items-center gap-4">
-      <div className="flex items-center gap-3 rounded-full border border-ink/15 px-4 py-2">
+      <div className="sf-quantity-control flex items-center gap-3 rounded-full border border-ink/15 px-4 py-2">
         <button type="button" aria-label={t.cart.decrease} disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}><Minus size={16} /></button>
         <span className="w-6 text-center tabular-nums">{quantity}</span>
         <button type="button" aria-label={t.cart.increase} disabled={quantity >= stock} onClick={() => setQuantity((value) => Math.min(stock, value + 1))}><Plus size={16} /></button>

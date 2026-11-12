@@ -10,7 +10,7 @@ export function ProductGallery({ images, name }: { images: { id: string; url: st
   const list = images.length > 0 ? images : [{ id: "placeholder", url: "/images/placeholder.svg" }];
 
   return (
-    <div>
+    <div className="sf-product-gallery">
       <div className="relative aspect-square overflow-hidden rounded-xl2 bg-white shadow-soft">
         <AnimatePresence mode="wait">
           <motion.div
@@ -27,7 +27,7 @@ export function ProductGallery({ images, name }: { images: { id: string; url: st
       </div>
 
       {list.length > 1 && (
-        <div className="mt-4 flex gap-3">
+        <div className="sf-gallery-thumbnails mt-4 flex gap-3">
           {list.map((img, i) => (
             <button
               key={img.id}

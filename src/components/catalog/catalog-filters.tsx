@@ -36,6 +36,7 @@ export function CatalogFilters({ categories }: { categories: FilterCategory[] })
     (c) => c.slug === activeCategory || c.children.some((ch) => ch.slug === activeCategory)
   );
   const subcats = activeParent?.children ?? [];
+  const activeChild = subcats.find((child) => child.slug === activeCategory);
 
   const sortOptions = [
     { value: "newest", label: t.catalog.sort.newest },
@@ -80,7 +81,15 @@ export function CatalogFilters({ categories }: { categories: FilterCategory[] })
       </form>
 
       <div className="sf-filter-row">
-        <div className="sf-filter-chips" role="group" aria-label={t.nav.categories}>
+        <label className="sf-mobile-category-filter sf-sort">
+          <span>{t.nav.categories}</span>
+          <select value={activeChild?.slug ?? activeParent?.slug ?? ""} onChange={(event) => handleCategoryClick(event.target.value || null)}>
+            <option value="">{t.catalog.all}</option>
+            {activeParent && activeChild && <option value={activeChild.slug}>{`${getCategoryName(activeParent, locale)} / ${getCategoryName(activeChild, locale)}`}</option>}
+            {categories.map((category) => <option key={category.id} value={category.slug}>{getCategoryName(category, locale)}</option>)}
+          </select>
+        </label>
+        <div className="sf-filter-chips sf-primary-category-chips" role="group" aria-label={t.nav.categories}>
           <button type="button" onClick={() => handleCategoryClick(null)} aria-pressed={!activeCategory}
             className={cn("sf-pill", !activeCategory && "sf-filter-active")}>{t.catalog.all}</button>
           {categories.map((category) => {

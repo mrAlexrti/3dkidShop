@@ -194,7 +194,7 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
   };
 
   return (
-    <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form noValidate onSubmit={handleSubmit(onSubmit)} className="sf-checkout-form space-y-6">
 
       {/* 1. Контактні дані */}
       <section className="glass rounded-xl2 p-6 shadow-soft">
@@ -232,7 +232,7 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
         </h2>
 
         {/* Тип */}
-        <div className="mb-5 grid grid-cols-3 gap-2">
+        <div className="sf-delivery-options mb-5 grid grid-cols-3 gap-2">
           <DeliveryBtn id="np_warehouse"     label={c.delivery.warehouse} icon="🏢" control={control} setValue={changeDelivery} />
           <DeliveryBtn id="np_parcel_locker" label={c.delivery.locker}   icon="📦" control={control} setValue={changeDelivery} />
           <DeliveryBtn id="np_courier"       label={c.delivery.courier}  icon="🚚" control={control} setValue={changeDelivery} />

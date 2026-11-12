@@ -97,7 +97,7 @@ export default async function ProductPage({
   });
 
   return (
-    <div className="container-shop py-10">
+    <div className="sf-product-page container-shop py-10">
       <div className="grid gap-10 md:grid-cols-2">
         <AnimatedSection>
           <ProductGallery images={product.images} name={productName} />
@@ -126,7 +126,7 @@ export default async function ProductPage({
           {product.attributes.length > 0 && (
             <div className="mt-8 border-t border-pink-100 pt-6">
               <h3 className="mb-3 text-sm font-semibold">{t.product.characteristics}</h3>
-              <dl className="space-y-2 text-sm">
+              <dl className="sf-characteristics space-y-2 text-sm">
                 {product.attributes.map((attr) => (
                   <div
                     key={attr.id}
