@@ -32,33 +32,24 @@ function statusByTtnKey(ttn: string) {
   return ttn.replace(/\D/g, "");
 }
 
-function normalizedText(...values: Array<string | null | undefined>) {
-  return values.filter(Boolean).join(" ").toLowerCase();
+function normalizedText(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+// Explicit legacy text fallbacks, not a provider-code mapping. Unknown phrases
+// (including negated positives) must not establish delivery or payment facts.
+const DELIVERED_TEXT_STATUSES = new Set(["отримано", "доставлено", "получено", "delivered", "received"]);
+const COD_PAID_TEXT_STATUSES = new Set(["оплачено", "отримано", "получено", "перераховано", "зараховано", "paid", "received"]);
+
 function isDeliveredStatus(status: { status: string; statusCode: string }) {
-  const text = normalizedText(status.status);
-  return (
-    status.statusCode === "9" ||
-    text.includes("отримано") ||
-    text.includes("доставлено") ||
-    text.includes("получено") ||
-    text.includes("delivered") ||
-    text.includes("received")
-  );
+  return normalizedText(status.statusCode) === "9" || DELIVERED_TEXT_STATUSES.has(normalizedText(status.status));
 }
 
 function isCodPaidStatus(status: { codStatus: string; codStatusCode: string }) {
-  const text = normalizedText(status.codStatus, status.codStatusCode);
-  return (
-    text.includes("оплач") ||
-    text.includes("отриман") ||
-    text.includes("получен") ||
-    text.includes("перерах") ||
-    text.includes("зарах") ||
-    text.includes("paid") ||
-    text.includes("received")
-  );
+  // No verified numeric COD-paid mapping exists here. Retain a text-code fallback
+  // only when the provider supplies no status text; never override negative text.
+  const text = normalizedText(status.codStatus) || normalizedText(status.codStatusCode);
+  return COD_PAID_TEXT_STATUSES.has(text);
 }
 
 export async function GET(request: Request) {
