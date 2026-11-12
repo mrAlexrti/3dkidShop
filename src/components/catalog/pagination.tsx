@@ -20,15 +20,16 @@ export function Pagination({
   };
 
   return (
-    <div className="mt-12 flex justify-center gap-2">
+    <div className="sf-pagination">
       {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
         <Link
           key={page}
           href={buildHref(page)}
           className={cn(
-            "grid h-9 w-9 place-items-center rounded-full text-sm font-medium transition-colors",
-            page === currentPage ? "bg-pink-500 text-white" : "bg-white text-ink/70 hover:bg-pink-50"
+            "sf-pill",
+            page === currentPage && "sf-filter-active"
           )}
+          aria-current={page === currentPage ? "page" : undefined}
         >
           {page}
         </Link>

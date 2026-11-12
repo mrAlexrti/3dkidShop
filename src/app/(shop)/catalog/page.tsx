@@ -10,6 +10,7 @@ import { getT } from "@/lib/i18n-server";
 import { getCategoryIdsForSlug, getCategoryTree } from "@/lib/categories";
 import { getLocale } from "@/lib/i18n-server";
 import { getProductNameField } from "@/lib/product-content";
+import { getCategoryName } from "@/lib/category-name";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
@@ -83,6 +84,8 @@ export default async function CatalogPage({
   }));
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
+  const activeCategory = categoryTree.flatMap((category) => [category, ...category.children])
+    .find((category) => category.slug === params.category);
   if (totalPages > 0 && page > totalPages) {
     const nextParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
@@ -93,13 +96,16 @@ export default async function CatalogPage({
   }
 
   return (
-    <div className="container-shop py-10">
-      <h1 className="font-display text-4xl text-ink md:text-5xl">{t.catalog.title}</h1>
-      <p className="mt-2 text-ink/50">{total} {t.catalog.products}</p>
-
-      <div className="mt-6">
-        <CatalogFilters categories={filterCategories} />
+    <div className="sf-shell sf-home-panel sf-catalog">
+      <div className="sf-section-heading">
+        <div>
+          <h1>{t.catalog.title}</h1>
+          {activeCategory && <p className="sf-catalog-category">{getCategoryName(activeCategory, locale)}</p>}
+          <p role="status">{total} {t.catalog.products}</p>
+        </div>
       </div>
+
+      <CatalogFilters categories={filterCategories} />
 
       <ProductGrid
         products={products.map((p) => ({

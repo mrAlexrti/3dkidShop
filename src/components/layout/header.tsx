@@ -61,7 +61,7 @@ export function Header({ categories }: { categories: CategoryTreeNode[] }) {
           </nav>
         )}
       </header>
-      {!isHome && !isInformationPage && <CategoryNav categories={categories} />}
+      {!isHome && !isInformationPage && pathname !== "/catalog" && <CategoryNav categories={categories} />}
     </>
   );
 }

@@ -37,7 +37,7 @@ export async function FeaturedProducts({ products }: {
       </form>
       {products.length > 0 ? (
         <div className="sf-product-grid">
-          {products.map((product) => <ProductCard key={product.id} {...product} presentation="home" />)}
+          {products.map((product) => <ProductCard key={product.id} {...product} />)}
         </div>
       ) : <p className="py-10 text-center">{t.catalog.empty}</p>}
     </section>
