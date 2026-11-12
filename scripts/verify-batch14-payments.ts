@@ -92,6 +92,10 @@ async function verify() {
   }
   reset(); order.status = "CANCELLED"; assert.equal((await post()).status, 409); assert.equal(writes, 0);
   reset(); order.paymentProvider = null; order.status = "PROCESSING"; assert.equal(states.paymentResultState(order), "confirmed");
+  for (const paymentMethod of ["Картка онлайн", "Card online", "LiqPay"]) {
+    assert.equal(states.paymentResultState({ ...order, paymentMethod }), "pending", "Unbound legacy online orders must never be mistaken for confirmed offline orders.");
+    assert.equal(states.paymentResultState({ ...order, paymentMethod, status: "PAID", paidAt: new Date() }), "pending", "Legacy paid flags need reconciliation; the old callback did not validate amount/currency.");
+  }
 
   let prepared: Prisma.OrderCreateArgs | undefined; let notifications = 0; let transactionCalls = 0;
   const { createOrder } = sourceModule<{ createOrder: typeof Action }>("src/lib/actions/create-order.ts", {

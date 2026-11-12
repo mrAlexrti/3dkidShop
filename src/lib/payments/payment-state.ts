@@ -1,5 +1,5 @@
 export type PaymentResultState = "confirmed" | "pending" | "paid" | "failed" | "unavailable";
-export type PaymentOrderState = { paymentProvider: string | null; paymentStatus: string | null; status: string; paidAt: Date | null };
+export type PaymentOrderState = { paymentProvider: string | null; paymentStatus: string | null; paymentMethod?: string; status: string; paidAt: Date | null };
 
 export function paymentResultState(order: PaymentOrderState): PaymentResultState {
   if (order.paymentStatus === "REFUNDED" || order.paymentStatus === "FAILED") return "failed";
@@ -8,6 +8,6 @@ export function paymentResultState(order: PaymentOrderState): PaymentResultState
     return order.status === "CANCELLED" ? "failed" : "pending";
   }
   // Legacy online orders lack the provider snapshot. Never infer paid from a return URL.
-  if (order.status === "AWAITING_PAYMENT") return "pending";
+  if (order.status === "AWAITING_PAYMENT" || /онлайн|online|liqpay/i.test(order.paymentMethod ?? "")) return order.status === "CANCELLED" ? "failed" : "pending";
   return order.status === "CANCELLED" ? "failed" : "confirmed";
 }
