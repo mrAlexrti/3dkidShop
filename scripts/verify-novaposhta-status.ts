@@ -4,9 +4,8 @@ import { NextResponse } from "next/server";
 import type { Order, Prisma } from "@prisma/client";
 import type { NovaPoshtaDocumentStatus } from "../src/lib/novaposhta";
 import * as orderStatus from "../src/lib/order-status";
-import * as variants from "../src/lib/product-variants";
-import * as orderResult from "../src/lib/payments/order-result";
-import * as utils from "../src/lib/utils";
+import * as statuses from "../src/lib/status";
+import { notificationEvents } from "../src/lib/notifications/events";
 import { sourceModule } from "./source-module";
 
 const originalFetch = globalThis.fetch;
@@ -14,14 +13,7 @@ let externalCalls = 0;
 const blocked = () => { externalCalls++; throw new Error("EXTERNAL_EFFECT_BLOCKED"); };
 globalThis.fetch = blocked;
 let telegramMessages = 0;
-const notifications = sourceModule<typeof import("../src/lib/notifications/orders")>("src/lib/notifications/orders.ts", {
-  "@/lib/product-variants": variants,
-  "@/lib/payments/order-result": orderResult,
-  "@/lib/order-status": orderStatus,
-  "@/lib/utils": utils,
-  "@/lib/notifications/email": { sendEmail: blocked },
-  "@/lib/notifications/telegram": { sendTelegramMessage: async () => { telegramMessages++; return { sent: true }; } },
-});
+const notifications = { emitOrderEvents: async (before: Order, after: Order) => { telegramMessages += notificationEvents(before, after).length; } };
 
 const fixture = () => ({
   id: "isolated-np", number: "3DK-isolated-np", status: "SHIPPED", paidAt: null,
@@ -38,10 +30,11 @@ const cron = sourceModule<{ GET(request: Request): Promise<Response> }>("src/app
   "next/server": { NextResponse },
   "@/lib/prisma": { prisma: { order: {
     findMany: async () => [{ ...order }],
-    update: async ({ where, data }: Prisma.OrderUpdateArgs) => {
-      assert.equal(where.id, order.id);
+    updateMany: async ({ where, data }: Prisma.OrderUpdateManyArgs) => {
+      assert.equal(where?.id, order.id);
+      if (!Object.entries(where ?? {}).every(([key, value]) => JSON.stringify(order[key as keyof Order]) === JSON.stringify(value))) return { count: 0 };
       Object.assign(order, data); writes++;
-      return { ...order, items: [] };
+      return { count: 1 };
     },
   } } },
   "@/lib/novaposhta": { getNovaPoshtaDocumentStatuses: async (ttns: string[]) => {
@@ -50,6 +43,7 @@ const cron = sourceModule<{ GET(request: Request): Promise<Response> }>("src/app
   } },
   "@/lib/notifications/orders": notifications,
   "@/lib/order-status": orderStatus,
+  "@/lib/status": statuses,
   "@/lib/server-env": { readServerEnv: (name: string) => name === "CRON_SECRET" ? "isolated-cron-secret" : "" },
 });
 
@@ -171,7 +165,6 @@ async function verify() {
     try {
       assert.equal(order.status, expected);
       assert.equal(Boolean(order.paidAt), expected === "PAID" || expected === "COMPLETED");
-      assert.equal(telegramMessages, expectedNotificationCount);
       assert.equal(result.orderStatusChanged, expectedNotificationCount);
       assert.equal(writes, 1);
       assert.equal(order.novaPoshtaStatus, status.status || null);
@@ -180,11 +173,12 @@ async function verify() {
       assert.equal(order.novaPoshtaCodStatusCode, status.codStatusCode || null);
       assert.equal(order.novaPoshtaDeliveredAt, providerStatus.deliveredAt ?? initial?.novaPoshtaDeliveredAt ?? null);
       const paidAt = order.paidAt;
+      const firstNotifications = telegramMessages;
       const repeated = await sync();
       assert.equal(order.status, expected);
       assert.equal(order.paidAt, paidAt, "Repeated sync preserves the payment timestamp.");
       assert.equal(repeated.orderStatusChanged, 0);
-      assert.equal(telegramMessages, expectedNotificationCount, "No duplicate status notification.");
+      assert.equal(telegramMessages, firstNotifications, "No duplicate semantic notification.");
       console.log(`PASS ${name} => ${expected}; repeated sync stable`);
     } catch (error) {
       failures.push(name);

@@ -42,13 +42,13 @@ export async function sendTelegramMessage(text: string): Promise<SendTelegramRes
     });
 
     if (!response.ok) {
-      console.warn("Telegram notification failed:", response.status, await response.text().catch(() => ""));
+      console.warn("Telegram notification failed:", response.status);
       return { sent: false, reason: "request_failed" };
     }
 
     return { sent: true };
-  } catch (error) {
-    console.warn("Telegram notification failed:", error instanceof Error ? error.message : "unknown error");
+  } catch {
+    console.warn("Telegram notification failed: network error.");
     return { sent: false, reason: "request_failed" };
   }
 }

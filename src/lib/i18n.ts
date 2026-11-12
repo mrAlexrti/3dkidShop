@@ -4,6 +4,20 @@ export type Locale = "ua" | "en";
 
 export const translations = {
   ua: {
+    statuses: {
+      fields: { order: "Замовлення", payment: "Оплата", delivery: "Доставка" },
+      updated: "Статус оновлено", updateFailed: "Не вдалося оновити статус. Оновіть сторінку та повторіть спробу.",
+      providerDetails: "Дані перевізника", providerStatus: "Статус перевізника (оригінал)", providerCode: "Код перевізника", providerCod: "Післяплата перевізника (оригінал)",
+      order: { NEW: "Нове замовлення", CONFIRMED: "Замовлення підтверджено", PROCESSING: "Замовлення в роботі", COMPLETED: "Замовлення завершено", CANCELLED: "Скасовано" },
+      payment: { PENDING: "Очікуємо оплату", PAID: "Оплату підтверджено", FAILED: "Оплата не вдалася", CANCELLED: "Оплату скасовано", REFUNDED: "Кошти повернено", UNKNOWN: "Статус оплати уточнюється" },
+      delivery: { NOT_CREATED: "Доставку ще не оформлено", TTN_CREATED: "Створено ТТН", SHIPPED: "Посилка передана перевізнику", IN_TRANSIT: "Посилка прямує до вас", ARRIVED: "Готово до отримання", DELIVERED: "Доставлено", RETURNED: "Повернуто відправнику", UNKNOWN: "Статус доставки уточнюється" },
+    },
+    notifications: {
+      title: "Сповіщення", description: "Оберіть події окремо для кожного каналу. Збереження налаштувань не надсилає повідомлень.",
+      telegram: "Telegram власника", email: "Email клієнта", save: "Зберегти сповіщення",
+      order: "Замовлення", total: "Сума", tracking: "ТТН", items: "Товари", view: "Переглянути замовлення",
+      events: { ORDER_CREATED: "Замовлення отримано", ORDER_CONFIRMED: "Замовлення підтверджено", ORDER_PROCESSING: "Замовлення в роботі", ORDER_CANCELLED: "Замовлення скасовано", ORDER_COMPLETED: "Замовлення завершено", PAYMENT_PENDING: "Очікуємо оплату", PAYMENT_PAID: "Оплату підтверджено", PAYMENT_FAILED: "Оплата не вдалася", PAYMENT_CANCELLED: "Оплату скасовано", PAYMENT_REFUNDED: "Кошти повернено", DELIVERY_TTN_CREATED: "Створено ТТН", DELIVERY_SHIPPED: "Посилка передана перевізнику", DELIVERY_IN_TRANSIT: "Посилка в дорозі", DELIVERY_ARRIVED: "Готово до отримання", DELIVERY_DELIVERED: "Посилку доставлено", DELIVERY_RETURNED: "Посилку повернуто відправнику" },
+    },
     // Навигация
     nav: {
       all:      "Усі",
@@ -335,6 +349,20 @@ export const translations = {
   },
 
   en: {
+    statuses: {
+      fields: { order: "Order", payment: "Payment", delivery: "Delivery" },
+      updated: "Status updated", updateFailed: "Could not update status. Reload the page and try again.",
+      providerDetails: "Carrier diagnostics", providerStatus: "Carrier status (original)", providerCode: "Carrier code", providerCod: "Carrier COD status (original)",
+      order: { NEW: "New order", CONFIRMED: "Order confirmed", PROCESSING: "Processing", COMPLETED: "Order completed", CANCELLED: "Cancelled" },
+      payment: { PENDING: "Awaiting payment", PAID: "Payment confirmed", FAILED: "Payment failed", CANCELLED: "Payment cancelled", REFUNDED: "Payment refunded", UNKNOWN: "Payment status being checked" },
+      delivery: { NOT_CREATED: "Delivery not arranged", TTN_CREATED: "Tracking number created", SHIPPED: "Handed to carrier", IN_TRANSIT: "In transit", ARRIVED: "Ready for pickup", DELIVERED: "Delivered", RETURNED: "Returned to sender", UNKNOWN: "Delivery status being checked" },
+    },
+    notifications: {
+      title: "Notifications", description: "Choose events separately for each channel. Saving settings does not send messages.",
+      telegram: "Owner Telegram", email: "Customer email", save: "Save notifications",
+      order: "Order", total: "Total", tracking: "Tracking number", items: "Items", view: "View order",
+      events: { ORDER_CREATED: "Order received", ORDER_CONFIRMED: "Order confirmed", ORDER_PROCESSING: "Order processing", ORDER_CANCELLED: "Order cancelled", ORDER_COMPLETED: "Order completed", PAYMENT_PENDING: "Awaiting payment", PAYMENT_PAID: "Payment confirmed", PAYMENT_FAILED: "Payment failed", PAYMENT_CANCELLED: "Payment cancelled", PAYMENT_REFUNDED: "Payment refunded", DELIVERY_TTN_CREATED: "Tracking number created", DELIVERY_SHIPPED: "Handed to carrier", DELIVERY_IN_TRANSIT: "In transit", DELIVERY_ARRIVED: "Ready for pickup", DELIVERY_DELIVERED: "Delivered", DELIVERY_RETURNED: "Returned to sender" },
+    },
     nav: {
       all:      "All",
       catalog:  "Catalog",

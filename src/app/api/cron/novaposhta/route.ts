@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getNovaPoshtaDocumentStatuses } from "@/lib/novaposhta";
-import { notifyOrderStatusChanged } from "@/lib/notifications/orders";
+import { emitOrderEvents } from "@/lib/notifications/orders";
+import { isNovaPoshtaDelivered, isNovaPoshtaCodPaid } from "@/lib/status";
 import { getOrderStatusAfterNovaPoshtaSync } from "@/lib/order-status";
 import { readServerEnv } from "@/lib/server-env";
 
@@ -30,26 +31,6 @@ function isAuthorized(request: Request) {
 
 function statusByTtnKey(ttn: string) {
   return ttn.replace(/\D/g, "");
-}
-
-function normalizedText(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-// Explicit legacy text fallbacks, not a provider-code mapping. Unknown phrases
-// (including negated positives) must not establish delivery or payment facts.
-const DELIVERED_TEXT_STATUSES = new Set(["отримано", "доставлено", "получено", "delivered", "received"]);
-const COD_PAID_TEXT_STATUSES = new Set(["оплачено", "отримано", "получено", "перераховано", "зараховано", "paid", "received"]);
-
-function isDeliveredStatus(status: { status: string; statusCode: string }) {
-  return normalizedText(status.statusCode) === "9" || DELIVERED_TEXT_STATUSES.has(normalizedText(status.status));
-}
-
-function isCodPaidStatus(status: { codStatus: string; codStatusCode: string }) {
-  // No verified numeric COD-paid mapping exists here. Retain a text-code fallback
-  // only when the provider supplies no status text; never override negative text.
-  const text = normalizedText(status.codStatus) || normalizedText(status.codStatusCode);
-  return COD_PAID_TEXT_STATUSES.has(text);
 }
 
 export async function GET(request: Request) {
@@ -108,41 +89,42 @@ export async function GET(request: Request) {
       continue;
     }
 
-    const deliveredNow = isDeliveredStatus(status);
-    const codPaidNow = isCodPaidStatus(status);
+    const deliveredNow = isNovaPoshtaDelivered(status);
+    const codPaidNow = !order.paymentProvider && isNovaPoshtaCodPaid(status);
     const deliveredAt = status.deliveredAt ?? order.novaPoshtaDeliveredAt;
     const paidAt = order.paidAt ?? (codPaidNow ? new Date() : null);
     const nextOrderStatus = getOrderStatusAfterNovaPoshtaSync({
       currentStatus: order.status,
       isDelivered: Boolean(deliveredAt) || deliveredNow,
-      isPaid: Boolean(paidAt),
+      isPaid: Boolean(paidAt) && !["REFUNDED", "FAILED", "CANCELLED"].includes(order.paymentStatus ?? ""),
     });
-    if (nextOrderStatus !== order.status) orderStatusChanged += 1;
-
-    const updatedOrder = await prisma.order.update({
-      where: { id: order.id },
-      data: {
-        status: nextOrderStatus,
-        paidAt,
-        novaPoshtaStatus: status.status || null,
-        novaPoshtaStatusCode: status.statusCode || null,
-        novaPoshtaDeliveredAt: deliveredAt,
-        novaPoshtaCodStatus: status.codStatus || null,
-        novaPoshtaCodStatusCode: status.codStatusCode || null,
-        novaPoshtaCodAmount: status.codAmount,
-        novaPoshtaSyncedAt: new Date(),
-        novaPoshtaError: null,
+    const data = {
+      status: nextOrderStatus,
+      paidAt,
+      novaPoshtaStatus: status.status || null,
+      novaPoshtaStatusCode: status.statusCode || null,
+      novaPoshtaDeliveredAt: deliveredAt,
+      novaPoshtaCodStatus: status.codStatus || null,
+      novaPoshtaCodStatusCode: status.codStatusCode || null,
+      novaPoshtaCodAmount: status.codAmount,
+      novaPoshtaSyncedAt: new Date(),
+      novaPoshtaError: null,
+    };
+    // Compare every state input used above. Another cron, payment callback or
+    // Admin edit can win, but this stale snapshot cannot overwrite it or notify.
+    const changed = await prisma.order.updateMany({
+      where: {
+        id: order.id, status: order.status, paidAt: order.paidAt,
+        paymentStatus: order.paymentStatus, novaPoshtaTtn: ttn,
+        novaPoshtaStatus: order.novaPoshtaStatus, novaPoshtaStatusCode: order.novaPoshtaStatusCode,
+        novaPoshtaDeliveredAt: order.novaPoshtaDeliveredAt, novaPoshtaSyncedAt: order.novaPoshtaSyncedAt,
+        novaPoshtaCodStatus: order.novaPoshtaCodStatus, novaPoshtaCodStatusCode: order.novaPoshtaCodStatusCode,
       },
-      include: { items: true },
+      data,
     });
-
-    await notifyOrderStatusChanged({
-      order: updatedOrder,
-      previousStatus: order.status,
-      nextStatus: updatedOrder.status,
-      source: "Нова Пошта",
-    });
-
+    if (changed.count !== 1) continue;
+    if (nextOrderStatus !== order.status) orderStatusChanged += 1;
+    await emitOrderEvents(order, { ...order, ...data });
     updated += 1;
   }
 

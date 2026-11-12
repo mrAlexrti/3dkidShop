@@ -9,10 +9,14 @@ import { translations } from "@/lib/i18n";
 import { FONT_THEMES, resolveFontTheme } from "@/lib/fonts";
 import { SITE_FONT_KEY } from "@/lib/site-settings";
 import { heroAssets } from "@/lib/hero-assets";
+import { updateNotificationSettings } from "@/lib/actions/notification-settings";
+import { getNotificationSettings } from "@/lib/notifications/settings";
+import { CONFIGURABLE_EVENTS } from "@/lib/notifications/events";
 
 export default async function AdminContentPage() {
   const t = await getT();
   const tc = t.admin.content;
+  const notificationSettings = await getNotificationSettings();
 
   const content = await prisma.siteContent.findMany();
   const map = Object.fromEntries(content.map((c) => [c.key, c.value]));
@@ -71,6 +75,20 @@ export default async function AdminContentPage() {
           <p className="mt-1 text-xs text-ink/40">{tc.fontHint}</p>
         </div>
         <Button type="submit">{tc.save}</Button>
+      </form>
+      <form action={updateNotificationSettings} className="glass mt-6 max-w-3xl space-y-6 rounded-xl2 p-6 shadow-soft">
+        <h2 className="font-display text-xl">{t.notifications.title}</h2>
+        <p className="text-sm text-ink/60">{t.notifications.description}</p>
+        <div className="grid gap-6 sm:grid-cols-2">
+          {(["telegram", "email"] as const).map((channel) => <fieldset key={channel} className="space-y-3">
+            <legend className="mb-3 font-semibold">{t.notifications[channel]}</legend>
+            {CONFIGURABLE_EVENTS.map((event) => <label key={event} className="flex items-start gap-3 text-sm">
+              <input type="checkbox" name={`${channel}.${event}`} defaultChecked={notificationSettings[channel][event]} className="mt-1 accent-pink-500" />
+              {t.notifications.events[event]}
+            </label>)}
+          </fieldset>)}
+        </div>
+        <Button type="submit">{t.notifications.save}</Button>
       </form>
     </div>
   );

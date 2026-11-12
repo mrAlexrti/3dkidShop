@@ -1,23 +1,20 @@
 import { OrderStatus } from "@prisma/client";
+import { translations, type Locale } from "@/lib/i18n";
 
-export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  PENDING: "Очікує",
-  AWAITING_PAYMENT: "Очікує оплати",
-  PROCESSING: "В обробці",
-  SHIPPED: "Відправлено",
-  DELIVERED: "Доставлено",
-  PAID: "Оплачено",
-  COMPLETED: "Завершено",
-  CANCELLED: "Скасовано",
-};
+export const ORDER_STATUS_LABELS = Object.fromEntries(Object.values(OrderStatus).map((status) => [status, getOrderStatusLabel(status)])) as Record<OrderStatus, string>;
 
-export const ORDER_STATUS_OPTIONS = Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => ({
-  value: value as OrderStatus,
-  label,
-}));
+export const EDITABLE_ORDER_STATUSES = [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.COMPLETED, OrderStatus.CANCELLED] as const;
+export const ORDER_STATUS_OPTIONS = EDITABLE_ORDER_STATUSES.map((value) => ({ value, label: getOrderStatusLabel(value) }));
 
-export function getOrderStatusLabel(status: OrderStatus | string) {
-  return ORDER_STATUS_LABELS[status as OrderStatus] ?? status;
+export function getOrderStatusLabel(status: OrderStatus | string, locale: Locale = "ua") {
+  const t = translations[locale].statuses;
+  const labels: Record<OrderStatus, string> = {
+    PENDING: t.order.NEW, AWAITING_PAYMENT: t.payment.PENDING,
+    PROCESSING: t.order.PROCESSING, PAID: t.payment.PAID,
+    SHIPPED: t.delivery.SHIPPED, DELIVERED: t.delivery.DELIVERED,
+    COMPLETED: t.order.COMPLETED, CANCELLED: t.order.CANCELLED,
+  };
+  return Object.hasOwn(labels, status) ? labels[status as OrderStatus] : t.order.NEW;
 }
 
 function isFinalStatus(status: OrderStatus) {
@@ -34,8 +31,8 @@ export function getOrderStatusAfterPaymentReceived(currentStatus: OrderStatus, i
 }
 
 export function getOrderStatusAfterTtnCreated(currentStatus: OrderStatus) {
-  if (isFinalStatus(currentStatus)) return currentStatus;
-  return OrderStatus.SHIPPED;
+  // A label being created is not evidence of carrier handover.
+  return currentStatus;
 }
 
 export function getOrderStatusAfterNovaPoshtaSync({

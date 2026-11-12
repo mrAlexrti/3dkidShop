@@ -204,7 +204,7 @@ export async function createOrder(
     include: { items: true },
   });
 
-  const emailSent = order ? await notifyOrderCreated(order) : false;
+  const emailSent = order ? await notifyOrderCreated(order, locale) : false;
 
   return { success: true, orderNumber, resultUrl, emailSent };
 }

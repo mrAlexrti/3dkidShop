@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { notifyOrderCreated, notifyOrderStatusChanged } from "@/lib/notifications/orders";
+import { emitOrderEvents } from "@/lib/notifications/orders";
 import { getOrderStatusAfterPaymentReceived } from "@/lib/order-status";
 import { getOnlinePaymentConfig } from "@/lib/payments/online-payment";
 import { isPaidLiqPayStatus, isFailedLiqPayStatus, isValidLiqPaySignature, parseLiqPayCallback, matchesLiqPayPayment } from "@/lib/payments/liqpay";
@@ -27,13 +27,14 @@ export async function POST(req: Request) {
   if (!paid && !failed) return NextResponse.json({ success: true });
   if (paid && (order.status === "CANCELLED" || order.paymentStatus === "REFUNDED")) return response(409, "Order requires manual reconciliation.");
   if ((paid && order.paymentStatus === "PAID") || (!paid && order.paymentStatus === "REFUNDED") || (!paid && !reversed && order.paidAt)) return NextResponse.json({ success: true });
-  const nextPaymentStatus = paid ? "PAID" : reversed ? "REFUNDED" : "FAILED";
+  const nextPaymentStatus = paid ? "PAID" : reversed ? "REFUNDED" : ["cancelled", "canceled"].includes(payload.status) ? "CANCELLED" : "FAILED";
   if (order.paymentStatus === nextPaymentStatus) return NextResponse.json({ success: true });
   const nextStatus = paid ? getOrderStatusAfterPaymentReceived(order.status, Boolean(order.novaPoshtaDeliveredAt)) : order.status;
   // Compare-and-set prevents duplicate/concurrent callbacks from repeating the transition.
+  const paidAt = paid ? new Date() : order.paidAt;
   const updated = await prisma.order.updateMany({
     where: { id: order.id, status: order.status, paymentProvider: config.provider, paymentMode: config.mode, paymentStatus: order.paymentStatus, paidAt: order.paidAt },
-    data: { paymentStatus: nextPaymentStatus, ...(paid ? { paidAt: new Date(), status: nextStatus } : {}) },
+    data: { paymentStatus: nextPaymentStatus, ...(paid ? { paidAt, status: nextStatus } : {}) },
   });
   if (updated.count !== 1) {
     const current = await prisma.order.findUnique({ where: { id: order.id } });
@@ -41,12 +42,11 @@ export async function POST(req: Request) {
     return response(409, "Payment state changed; retry callback.");
   }
   // Sandbox must never email/notify real recipients. Live acquiring remains disabled.
-  if (paid && order.paymentMode !== "sandbox") {
-    const confirmed = { ...order, status: nextStatus, paidAt: new Date(), paymentStatus: nextPaymentStatus };
+  if (order.paymentMode !== "sandbox") {
+    const confirmed = { ...order, status: nextStatus, paidAt, paymentStatus: nextPaymentStatus };
     try {
-      await notifyOrderCreated(confirmed);
-      await notifyOrderStatusChanged({ order: confirmed, previousStatus: order.status, nextStatus, source: "LiqPay" });
-    } catch { console.error("Payment confirmed; notification delivery needs review."); }
+      await emitOrderEvents(order, confirmed);
+    } catch { console.error("Payment updated; notification delivery needs review."); }
   }
   return NextResponse.json({ success: true });
 }

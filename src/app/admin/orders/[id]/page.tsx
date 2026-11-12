@@ -8,6 +8,10 @@ import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/lib/utils";
 
 import { orderSizeLabel } from "@/lib/product-variants";
+import { OrderStatusSummary } from "@/components/admin/order-status-summary";
+import { getLocale } from "@/lib/i18n-server";
+import { translations } from "@/lib/i18n";
+import { statusLabels } from "@/lib/status";
 
 function safeOptionLabel(optionsJson: string | null) {
   return orderSizeLabel(optionsJson) || "—";
@@ -31,6 +35,8 @@ function deliveryTypeLabel(value: string | null) {
 
 export default async function AdminOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const locale = await getLocale();
+  const statusCopy = translations[locale].statuses;
   const order = await prisma.order.findUnique({
     where: { id },
     include: { items: true },
@@ -50,6 +56,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
         <OrderStatusSelect orderId={order.id} status={order.status} />
       </div>
 
+      <div className="glass mt-6 rounded-xl2 p-4"><OrderStatusSummary order={order} locale={locale} /></div>
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="glass rounded-xl2 p-6 shadow-soft lg:col-span-2">
           <h2 className="mb-4 font-display text-lg">Товари</h2>
@@ -115,14 +122,20 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
               <div><dt className="text-ink/50">City Ref</dt><dd className="break-all">{order.novaPoshtaCityRef || "—"}</dd></div>
               <div><dt className="text-ink/50">Відділення / поштомат</dt><dd>{order.novaPoshtaBranch || order.shippingAddress || "—"}</dd></div>
               <div><dt className="text-ink/50">Branch Ref</dt><dd className="break-all">{order.novaPoshtaBranchRef || "—"}</dd></div>
-              <div><dt className="text-ink/50">Статус</dt><dd>{order.novaPoshtaStatus || "—"}</dd></div>
-              <div><dt className="text-ink/50">Код статусу</dt><dd>{order.novaPoshtaStatusCode || "—"}</dd></div>
-              <div><dt className="text-ink/50">Післяплата</dt><dd>{order.novaPoshtaCodStatus || "—"}</dd></div>
+              <div><dt className="text-ink/50">{statusCopy.fields.delivery}</dt><dd>{statusLabels(order, locale).delivery}</dd></div>
               <div><dt className="text-ink/50">Сума післяплати</dt><dd>{order.novaPoshtaCodAmount ? formatPrice(Number(order.novaPoshtaCodAmount)) : "—"}</dd></div>
               <div><dt className="text-ink/50">Доставлено</dt><dd>{formatDateTime(order.novaPoshtaDeliveredAt)}</dd></div>
               <div><dt className="text-ink/50">Створено</dt><dd>{formatDateTime(order.novaPoshtaCreatedAt)}</dd></div>
               <div><dt className="text-ink/50">Остання синхронізація</dt><dd>{formatDateTime(order.novaPoshtaSyncedAt)}</dd></div>
             </dl>
+            <details className="mt-4 text-sm">
+              <summary className="cursor-pointer text-ink/60">{statusCopy.providerDetails}</summary>
+              <dl className="mt-2 space-y-2">
+                <div><dt className="text-ink/50">{statusCopy.providerStatus}</dt><dd>{order.novaPoshtaStatus || "—"}</dd></div>
+                <div><dt className="text-ink/50">{statusCopy.providerCode}</dt><dd>{order.novaPoshtaStatusCode || "—"}</dd></div>
+                <div><dt className="text-ink/50">{statusCopy.providerCod}</dt><dd>{order.novaPoshtaCodStatus || "—"}</dd></div>
+              </dl>
+            </details>
 
             {order.novaPoshtaTtn ? (
               <div className="mt-4 rounded-2xl bg-pink-50 p-4 text-sm">

@@ -1,13 +1,14 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { getOrderStatusLabel } from "@/lib/order-status";
+import { OrderStatusSummary } from "@/components/admin/order-status-summary";
 import { formatPrice } from "@/lib/utils";
-import { getT } from "@/lib/i18n-server";
+import { getT, getLocale } from "@/lib/i18n-server";
 import { Package, FolderTree, ShoppingCart, TrendingUp } from "lucide-react";
 
 export default async function AdminDashboard() {
   const t = await getT();
+  const locale = await getLocale();
   const [productsCount, categoriesCount, ordersCount, orders] = await Promise.all([
     prisma.product.count(),
     prisma.category.count(),
@@ -55,7 +56,7 @@ export default async function AdminDashboard() {
                 <tr key={o.id} className="border-t border-pink-100">
                   <td className="px-4 py-3">{o.number}</td>
                   <td className="px-4 py-3">{o.customerName}</td>
-                  <td className="px-4 py-3">{getOrderStatusLabel(o.status)}</td>
+                  <td className="px-4 py-3"><OrderStatusSummary order={o} locale={locale} /></td>
                   <td className="px-4 py-3 font-medium">{formatPrice(Number(o.total))}</td>
                 </tr>
               ))}

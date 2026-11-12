@@ -43,7 +43,7 @@ async function verify() {
     const { OrderResult } = sourceModule<{ OrderResult: typeof ResultComponent }>("src/components/checkout/order-result.tsx", { ...bindings, react: React });
     for (const state of ["confirmed", "pending", "paid", "failed", "unavailable"] as PaymentResultState[]) {
       const html = renderToStaticMarkup(React.createElement(OrderResult, { initialState: state, number: "3DK-isolated", token: "isolated" }));
-      const title = state === "confirmed" ? t.success.title : t.success[`${state}Title`];
+      const title = state === "confirmed" ? t.success.title : state === "paid" ? t.statuses.payment.PAID : state === "pending" ? t.statuses.payment.PENDING : t.success[`${state}Title`];
       assert.ok(html.includes(title)); assert.ok(html.includes('role="status"'));
       assert.equal(/lucide-(?:circle-check|check-circle)/.test(html), state === "confirmed" || state === "paid");
       if (state === "pending") assert.ok(!html.includes(t.success.paidTitle) && !html.includes(t.success.title));

@@ -2,7 +2,7 @@ export type PaymentResultState = "confirmed" | "pending" | "paid" | "failed" | "
 export type PaymentOrderState = { paymentProvider: string | null; paymentStatus: string | null; paymentMethod?: string; status: string; paidAt: Date | null };
 
 export function paymentResultState(order: PaymentOrderState): PaymentResultState {
-  if (order.paymentStatus === "REFUNDED" || order.paymentStatus === "FAILED") return "failed";
+  if (["REFUNDED", "FAILED", "CANCELLED"].includes(order.paymentStatus ?? "")) return "failed";
   if (order.paymentProvider) {
     if (order.paymentStatus === "PAID" && order.paidAt) return "paid";
     return order.status === "CANCELLED" ? "failed" : "pending";

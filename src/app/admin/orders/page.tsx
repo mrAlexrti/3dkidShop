@@ -2,12 +2,13 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { getOrderStatusLabel } from "@/lib/order-status";
+import { OrderStatusSummary } from "@/components/admin/order-status-summary";
 import { formatPrice } from "@/lib/utils";
-import { getT } from "@/lib/i18n-server";
+import { getT, getLocale } from "@/lib/i18n-server";
 
 export default async function AdminOrdersPage() {
   const t = await getT();
+  const locale = await getLocale();
   const td = t.admin.dashboard;
   const orders = await prisma.order.findMany({ orderBy: { createdAt: "desc" } });
 
@@ -36,7 +37,7 @@ export default async function AdminOrdersPage() {
                 </td>
                 <td className="px-4 py-3">{o.customerName}</td>
                 <td className="px-4 py-3 text-ink/50">{o.createdAt.toLocaleDateString("uk-UA")}</td>
-                <td className="px-4 py-3">{getOrderStatusLabel(o.status)}</td>
+                <td className="px-4 py-3"><OrderStatusSummary order={o} locale={locale} /></td>
                 <td className="px-4 py-3 font-medium">{formatPrice(Number(o.total))}</td>
               </tr>
             ))}

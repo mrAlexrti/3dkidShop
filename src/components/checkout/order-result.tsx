@@ -30,8 +30,8 @@ export function OrderResult({ initialState, number, token }: { initialState: Pay
     return () => { clearTimeout(timer); controller.abort(); };
   }, [state, number, token, retry]);
 
-  const copy = state === "paid" ? [t.success.paidTitle, t.success.paidDescription]
-    : state === "pending" ? [t.success.pendingTitle, t.success.pendingDescription]
+  const copy = state === "paid" ? [t.statuses.payment.PAID, t.success.paidDescription]
+    : state === "pending" ? [t.statuses.payment.PENDING, t.success.pendingDescription]
     : state === "failed" ? [t.success.failedTitle, t.success.failedDescription]
     : state === "unavailable" ? [t.success.unavailableTitle, t.success.unavailableDescription]
     : [t.success.title, t.success.pending];

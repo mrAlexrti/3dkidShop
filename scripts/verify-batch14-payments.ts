@@ -36,7 +36,7 @@ const memory = { order: {
 } };
 const callback = sourceModule<Callback>("src/app/api/payments/liqpay/callback/route.ts", {
   "next/server": { NextResponse }, "@/lib/prisma": { prisma: memory },
-  "@/lib/notifications/orders": { notifyOrderCreated: blocked, notifyOrderStatusChanged: blocked },
+  "@/lib/notifications/orders": { emitOrderEvents: blocked },
   "@/lib/order-status": orderStatus, "@/lib/payments/online-payment": online, "@/lib/payments/liqpay": liqpay,
 });
 const status = sourceModule<{ GET(req: Request): Promise<Response> }>("src/app/api/payments/status/route.ts", {

@@ -4,22 +4,19 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { OrderStatus } from "@prisma/client";
 import { requireAdmin } from "@/lib/actions/require-admin";
-import { notifyOrderStatusChanged } from "@/lib/notifications/orders";
+import { emitOrderEvents } from "@/lib/notifications/orders";
+import { EDITABLE_ORDER_STATUSES } from "@/lib/order-status";
 
 export async function updateOrderStatus(id: string, status: OrderStatus) {
   await requireAdmin();
+  if (!(EDITABLE_ORDER_STATUSES as readonly string[]).includes(status)) throw new Error("INVALID_ORDER_STAGE");
 
   const order = await prisma.order.findUnique({ where: { id }, include: { items: true } });
-  if (!order) return;
+  if (!order || order.status === status) return;
 
-  const updatedOrder = await prisma.order.update({ where: { id }, data: { status }, include: { items: true } });
-
-  await notifyOrderStatusChanged({
-    order: updatedOrder,
-    previousStatus: order.status,
-    nextStatus: updatedOrder.status,
-    source: "Адмінка",
-  });
+  const updated = await prisma.order.updateMany({ where: { id, status: order.status }, data: { status } });
+  if (updated.count !== 1) throw new Error("ORDER_CHANGED_RELOAD");
+  await emitOrderEvents(order, { ...order, status });
 
   revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${id}`);

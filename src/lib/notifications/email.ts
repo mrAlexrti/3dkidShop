@@ -56,13 +56,13 @@ export async function sendEmail({
     });
 
     if (!response.ok) {
-      console.warn("Email notification failed:", response.status, await response.text().catch(() => ""));
+      console.warn("Email notification failed:", response.status);
       return { sent: false, reason: "request_failed" };
     }
 
     return { sent: true };
-  } catch (error) {
-    console.warn("Email notification failed:", error instanceof Error ? error.message : "unknown error");
+  } catch {
+    console.warn("Email notification failed: network error.");
     return { sent: false, reason: "request_failed" };
   }
 }

@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { createNovaPoshtaWaybill } from "@/lib/novaposhta";
-import { notifyOrderStatusChanged } from "@/lib/notifications/orders";
-import { getOrderStatusAfterTtnCreated } from "@/lib/order-status";
+import { emitOrderEvents } from "@/lib/notifications/orders";
 
 function unauthorized() {
   return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -48,26 +47,20 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       );
     }
 
-    const updatedOrder = await prisma.order.update({
-      where: { id: order.id },
-      data: {
-        status: getOrderStatusAfterTtnCreated(order.status),
-        novaPoshtaTtn: result.ttn,
-        novaPoshtaTtnRef: result.ref,
-        novaPoshtaStatus: result.status ?? null,
-        novaPoshtaStatusCode: result.statusCode ?? null,
-        novaPoshtaCreatedAt: new Date(),
-        novaPoshtaError: null,
-      },
-      include: { items: true },
+    const shipment = {
+      novaPoshtaTtn: result.ttn,
+      novaPoshtaTtnRef: result.ref,
+      novaPoshtaStatus: result.status ?? null,
+      novaPoshtaStatusCode: result.statusCode ?? null,
+      novaPoshtaCreatedAt: new Date(),
+      novaPoshtaError: null,
+    };
+    const saved = await prisma.order.updateMany({
+      where: { id: order.id, novaPoshtaTtn: null },
+      data: shipment,
     });
-
-    await notifyOrderStatusChanged({
-      order: updatedOrder,
-      previousStatus: order.status,
-      nextStatus: updatedOrder.status,
-      source: "Створення ТТН",
-    });
+    if (saved.count !== 1) return NextResponse.json({ success: false, error: "Shipment changed; reload order." }, { status: 409 });
+    await emitOrderEvents(order, { ...order, ...shipment });
 
     return NextResponse.json({ success: true, ttn: result.ttn, ref: result.ref });
   } catch (error) {
