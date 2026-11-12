@@ -60,7 +60,7 @@ export function ProductForm({
           }
         });
       }}
-      className="glass max-w-2xl space-y-5 rounded-xl2 p-6 shadow-soft"
+      className="glass max-w-2xl space-y-5 rounded-xl2 p-4 shadow-soft sm:p-6"
     >
       <div>
         <label className="mb-1 block text-sm font-medium">{tp.nameUa}</label>
@@ -87,7 +87,7 @@ export function ProductForm({
         <textarea name="descriptionEn" defaultValue={defaults?.descriptionEn ?? ""} rows={4} required className={inputClass} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-sm font-medium">{tp.price}</label>
           <input name="price" type="number" step="0.01" defaultValue={defaults?.price} required className={inputClass} />
@@ -98,7 +98,7 @@ export function ProductForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-sm font-medium">{tp.stock}</label>
           <input name="stock" type="number" defaultValue={defaults?.stock ?? 0} required className={inputClass} />
@@ -128,7 +128,7 @@ export function ProductForm({
       <MediaUrlField name="hoverGifUrl" label={tp.hoverGif} help={tp.hoverGifHelp} defaultValue={defaults?.hoverGifUrl ?? ""} animated />
       <SizeEditor defaults={defaults?.variants} legacySizes={defaults?.legacySizes} />
 
-      <div className="flex gap-6 text-sm">
+      <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
         <label className="flex items-center gap-2">
           <input type="checkbox" name="isFeatured" defaultChecked={defaults?.isFeatured} /> {tp.featured}
         </label>

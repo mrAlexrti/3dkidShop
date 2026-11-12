@@ -30,13 +30,13 @@ export default async function AdminCategoriesPage() {
       <h1 className="font-display text-3xl">{tc.title}</h1>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <div className="glass rounded-xl2 p-6 shadow-soft lg:col-span-1">
+        <div className="glass min-w-0 rounded-xl2 p-4 shadow-soft sm:p-6 lg:col-span-1">
           <h2 className="mb-4 font-display text-lg">{tc.newCategory}</h2>
           <CategoryForm parents={parents} action={createCategory} mode="create" />
         </div>
 
-        <div className="glass overflow-hidden rounded-xl2 shadow-soft lg:col-span-2">
-          <table className="w-full text-left text-sm">
+        <div tabIndex={0} role="region" aria-label={tc.title} className="glass min-w-0 overflow-x-auto rounded-xl2 shadow-soft lg:col-span-2">
+          <table className="w-full min-w-[560px] text-left text-sm lg:min-w-0">
             <thead className="bg-pink-50/60 text-ink/60">
               <tr>
                 <th className="px-4 py-3">{tc.thImage}</th>

@@ -1,0 +1,45 @@
+/* Keep native fieldset/select minimum sizes from widening the Admin content. */
+.admin-shell fieldset {
+  min-width: 0;
+}
+
+@media (max-width: 1023px) {
+  .admin-shell #admin-content {
+    overflow-wrap: anywhere;
+  }
+
+  .admin-shell input,
+  .admin-shell select,
+  .admin-shell textarea {
+    min-width: 0;
+    max-width: 100%;
+    /* Avoid automatic zoom when focusing a field in mobile Safari. */
+    font-size: 16px;
+  }
+
+  .admin-shell button,
+  .admin-shell select,
+  .admin-shell input:not([type="checkbox"]):not([type="hidden"]),
+  .admin-shell label:has(input[type="checkbox"]),
+  .admin-shell a[href$="/edit"],
+  .admin-shell summary {
+    min-height: 44px;
+  }
+
+  .admin-shell a[href$="/edit"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+  }
+
+  .admin-shell button {
+    min-width: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .admin-shell input[type="checkbox"] {
+    flex-shrink: 0;
+  }
+}

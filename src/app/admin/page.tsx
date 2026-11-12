@@ -41,8 +41,8 @@ export default async function AdminDashboard() {
 
       <div className="mt-10">
         <h2 className="mb-4 font-display text-xl">{t.admin.dashboard.recentOrders}</h2>
-        <div className="glass overflow-hidden rounded-xl2 shadow-soft">
-          <table className="w-full text-left text-sm">
+        <div tabIndex={0} role="region" aria-label={t.admin.dashboard.recentOrders} className="glass overflow-x-auto rounded-xl2 shadow-soft">
+          <table className="w-full min-w-[640px] text-left text-sm lg:min-w-0">
             <thead className="bg-pink-50/60 text-ink/60">
               <tr>
                 <th className="px-4 py-3">{t.admin.dashboard.thNumber}</th>

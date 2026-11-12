@@ -20,7 +20,7 @@ export default async function AdminProductsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3 lg:gap-0">
         <h1 className="font-display text-3xl">{t.admin.nav.products}</h1>
         <Link href="/admin/products/new">
           <Button>
@@ -29,8 +29,8 @@ export default async function AdminProductsPage() {
         </Link>
       </div>
 
-      <div className="glass mt-6 overflow-hidden rounded-xl2 shadow-soft">
-        <table className="w-full text-left text-sm">
+      <div tabIndex={0} role="region" aria-label={t.admin.nav.products} className="glass mt-6 overflow-x-auto rounded-xl2 shadow-soft">
+        <table className="w-full min-w-[720px] text-left text-sm lg:min-w-0">
           <thead className="bg-pink-50/60 text-ink/60">
             <tr>
               <th className="px-4 py-3">{tl.thProduct}</th>

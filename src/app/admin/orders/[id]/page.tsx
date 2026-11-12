@@ -51,16 +51,17 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="font-display text-3xl">Замовлення {order.number}</h1>
+      <div className="flex flex-col items-start justify-between gap-4 lg:flex-row lg:items-center">
+        <h1 className="min-w-0 font-display text-3xl [overflow-wrap:anywhere]">Замовлення {order.number}</h1>
         <OrderStatusSelect orderId={order.id} status={order.status} />
       </div>
 
       <div className="glass mt-6 rounded-xl2 p-4"><OrderStatusSummary order={order} locale={locale} /></div>
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <div className="glass rounded-xl2 p-6 shadow-soft lg:col-span-2">
+        <div className="glass min-w-0 rounded-xl2 p-4 shadow-soft sm:p-6 lg:col-span-2">
           <h2 className="mb-4 font-display text-lg">Товари</h2>
-          <table className="w-full text-left text-sm">
+          <div tabIndex={0} role="region" aria-label="Товари" className="overflow-x-auto">
+          <table className="w-full min-w-[520px] text-left text-sm lg:min-w-0">
             <thead className="text-ink/50">
               <tr>
                 <th className="pb-2">Товар</th>
@@ -80,6 +81,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
               ))}
             </tbody>
           </table>
+          </div>
 
           <div className="mt-4 space-y-1 border-t border-pink-100 pt-4 text-sm">
             <div className="flex justify-between">
@@ -97,8 +99,8 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="glass rounded-xl2 p-6 shadow-soft">
+        <div className="min-w-0 space-y-6 [overflow-wrap:anywhere]">
+          <div className="glass rounded-xl2 p-4 shadow-soft sm:p-6">
             <h2 className="mb-4 font-display text-lg">Клієнт</h2>
             <dl className="space-y-2 text-sm">
               <div><dt className="text-ink/50">Ім&apos;я</dt><dd>{order.customerName}</dd></div>
@@ -110,8 +112,8 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             </dl>
           </div>
 
-          <div className="glass rounded-xl2 p-6 shadow-soft">
-            <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="glass rounded-xl2 p-4 shadow-soft sm:p-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 lg:flex-nowrap">
               <h2 className="font-display text-lg">Нова Пошта</h2>
               {order.novaPoshtaTtn && <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">ТТН створена</span>}
             </div>

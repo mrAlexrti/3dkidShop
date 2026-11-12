@@ -16,8 +16,8 @@ export default async function AdminOrdersPage() {
     <div>
       <h1 className="font-display text-3xl">{t.admin.nav.orders}</h1>
 
-      <div className="glass mt-6 overflow-hidden rounded-xl2 shadow-soft">
-        <table className="w-full text-left text-sm">
+      <div tabIndex={0} role="region" aria-label={t.admin.nav.orders} className="glass mt-6 overflow-x-auto rounded-xl2 shadow-soft">
+        <table className="w-full min-w-[720px] text-left text-sm lg:min-w-0">
           <thead className="bg-pink-50/60 text-ink/60">
             <tr>
               <th className="px-4 py-3">{td.thNumber}</th>

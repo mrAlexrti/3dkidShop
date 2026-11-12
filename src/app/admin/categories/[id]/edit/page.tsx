@@ -41,7 +41,7 @@ export default async function EditCategoryPage({
 
       <h1 className="font-display text-3xl">{t.admin.categories.editCategory}</h1>
 
-      <div className="glass mt-6 rounded-xl2 p-6 shadow-soft">
+      <div className="glass mt-6 rounded-xl2 p-4 shadow-soft sm:p-6">
         <CategoryForm
           parents={parents}
           defaults={{

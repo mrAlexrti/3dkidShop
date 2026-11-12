@@ -30,7 +30,7 @@ export default async function AdminContentPage() {
       <h1 className="font-display text-3xl">{tc.title}</h1>
       <p className="mt-2 text-ink/60">{tc.subtitle}</p>
 
-      <form action={updateSiteContent} className="glass mt-6 max-w-3xl space-y-8 rounded-xl2 p-6 shadow-soft">
+      <form action={updateSiteContent} className="glass mt-6 max-w-3xl space-y-8 rounded-xl2 p-4 shadow-soft sm:p-6">
         <fieldset className="space-y-4">
           <legend className="mb-4 text-lg font-semibold">{tc.heroText}</legend>
           {(["ua", "en"] as const).map((locale) => (
@@ -76,7 +76,7 @@ export default async function AdminContentPage() {
         </div>
         <Button type="submit">{tc.save}</Button>
       </form>
-      <form action={updateNotificationSettings} className="glass mt-6 max-w-3xl space-y-6 rounded-xl2 p-6 shadow-soft">
+      <form action={updateNotificationSettings} className="glass mt-6 max-w-3xl space-y-6 rounded-xl2 p-4 shadow-soft sm:p-6">
         <h2 className="font-display text-xl">{t.notifications.title}</h2>
         <p className="text-sm text-ink/60">{t.notifications.description}</p>
         <div className="grid gap-6 sm:grid-cols-2">
