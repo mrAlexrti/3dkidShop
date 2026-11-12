@@ -77,7 +77,7 @@ async function verify() {
       assert.deepEqual(categoryButtons.map(({ text }) => text), expected.map((item) => item[1]));
       assert.ok(categoryButtons.find(({ text }) => text === getCategoryName(category, locale))?.attributes.includes('aria-pressed="true"'));
       const expectedProducts = products.filter(({ categoryId }) => categoryId === category.id).map(({ slug }) => `/product/${slug}`).sort();
-      const cardLinks = links(catalog).filter((match) => match[0].includes('class="group block"')).map((match) => match[1]).sort();
+      const cardLinks = links(catalog).filter((match) => match[0].includes('class="sf-product-visual"')).map((match) => match[1]).sort();
       assert.deepEqual(cardLinks, expectedProducts);
       filteredCounts[category.slug] = expectedProducts.length;
     }

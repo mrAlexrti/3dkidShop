@@ -39,7 +39,9 @@ async function verifyStorefront() {
       }
     }
     const catalog = await page("/catalog", locale);
-    assert.ok(catalog.includes('id="catalog-product-search"') && catalog.includes('role="combobox"') && catalog.includes("sf-categories"));
+    assert.ok(catalog.includes('id="catalog-product-search"') && catalog.includes('role="combobox"') && catalog.includes("sf-catalog-filters"));
+    assert.ok(!catalog.includes('class="sf-shell sf-categories"'), "Catalog filters replace the duplicate header category strip.");
+    assert.ok(catalog.includes('class="sf-product-grid"') && catalog.includes('class="sf-product-card"'));
     for (const sort of ["newest", "price_asc", "price_desc", "name"]) {
       const html = await page(`/catalog?sort=${sort}`, locale);
       const positions = products.map((product) => ({ product, index: html.indexOf(`href="/product/${product.slug}"`) })).filter((item) => item.index >= 0).sort((a, b) => a.index - b.index);
