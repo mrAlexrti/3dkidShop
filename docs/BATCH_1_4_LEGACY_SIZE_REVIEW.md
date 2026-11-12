@@ -72,4 +72,4 @@ Local production HTTP QA checks all ten product pages in both locales: exactly t
 
 Manual browser follow-up: check simple-card immediate Add, toy-card navigation to size selection, selected-price changes, repeated same-size quantity merging, different-size separation and selected labels in cart/checkout. Recheck GIF hover/reduced-motion/touch behavior. Stop before placing an actual order; automated order checks already cover that transaction with mandatory rollback.
 
-Batch 1.4 payment correction and remaining end-to-end QA are still in progress. This checkpoint does not mark the whole batch complete or start Batch 1.5.
+This document records the completed size-data checkpoint. The remaining Batch 1.4 payment correction and safe final QA were subsequently completed; see `BATCH_1_4_REPORT.md` for the final architecture, validation evidence and manual browser/provider checks. Batch 1.5 was not started.
