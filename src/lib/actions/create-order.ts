@@ -1,6 +1,8 @@
 "use server";
 import { getSizeVariants, snapshotSize } from "@/lib/product-variants";
 import { requestedSizeId } from "@/lib/cart-items";
+import { getOnlinePaymentConfig } from "@/lib/payments/online-payment";
+import { getOrderResultPath } from "@/lib/payments/order-result";
 
 
 import { translations, type Locale } from "@/lib/i18n";
@@ -12,12 +14,11 @@ import { notifyOrderCreated } from "@/lib/notifications/orders";
 import { getInitialOrderStatus } from "@/lib/order-status";
 import {
   createLiqPayCheckout,
-  isLiqPayConfigured,
   type LiqPayCheckout,
 } from "@/lib/payments/liqpay";
 
 export type CreateOrderResult =
-  | { success: true; orderNumber: string; emailSent: boolean; payment?: LiqPayCheckout }
+  | { success: true; orderNumber: string; emailSent: boolean; resultUrl: string; payment?: LiqPayCheckout }
   | { success: false; error: string };
 
 type PricedOrderItem = {
@@ -113,7 +114,8 @@ export async function createOrder(
 
   const d = parsed.data;
 
-  if (d.paymentMethod === "card_online" && !isLiqPayConfigured()) {
+  const onlineConfig = d.paymentMethod === "card_online" ? getOnlinePaymentConfig() : null;
+  if (d.paymentMethod === "card_online" && !onlineConfig) {
     return {
       success: false,
       error: errors.payment,
@@ -136,6 +138,9 @@ export async function createOrder(
   const shippingCost = 0;
   const total = subtotal + shippingCost;
   const orderNumber = `3DK-${Date.now().toString().slice(-8)}`;
+  const resultUrl = getOrderResultPath(orderNumber);
+  // Prepare the signed handoff before reserving stock; no network request is made.
+  const payment = onlineConfig ? createLiqPayCheckout({ orderNumber, amount: total, resultPath: resultUrl }) : undefined;
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -168,6 +173,7 @@ export async function createOrder(
           novaPoshtaBranchRef: d.npWarehouseRef,
           comment: d.comment,
           paymentMethod: PAYMENT_LABELS[d.paymentMethod],
+          ...(onlineConfig ? { paymentProvider: onlineConfig.provider, paymentMode: onlineConfig.mode, paymentStatus: "PENDING" } : {}),
           status: getInitialOrderStatus(d.paymentMethod),
           subtotal,
           shippingCost,
@@ -191,24 +197,14 @@ export async function createOrder(
     throw error;
   }
 
+  if (payment) return { success: true, orderNumber, resultUrl, emailSent: false, payment };
+
   const order = await prisma.order.findUnique({
     where: { number: orderNumber },
     include: { items: true },
   });
 
-  if (d.paymentMethod === "card_online") {
-    return {
-      success: true,
-      orderNumber,
-      emailSent: order ? await notifyOrderCreated(order) : false,
-      payment: createLiqPayCheckout({
-        orderNumber,
-        amount: total,
-      }),
-    };
-  }
-
   const emailSent = order ? await notifyOrderCreated(order) : false;
 
-  return { success: true, orderNumber, emailSent };
+  return { success: true, orderNumber, resultUrl, emailSent };
 }

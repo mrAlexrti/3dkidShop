@@ -1,5 +1,5 @@
 import { CheckoutPageContent } from "@/components/checkout/checkout-page";
-import { isLiqPayConfigured } from "@/lib/payments/liqpay";
+import { isOnlinePaymentAvailable } from "@/lib/payments/online-payment";
 import { getT } from "@/lib/i18n-server";
 
 export async function generateMetadata() {
@@ -7,5 +7,5 @@ export async function generateMetadata() {
 }
 
 export default function CheckoutPage() {
-  return <CheckoutPageContent onlineCardEnabled={isLiqPayConfigured()} />;
+  return <CheckoutPageContent onlineCardEnabled={isOnlinePaymentAvailable()} />;
 }

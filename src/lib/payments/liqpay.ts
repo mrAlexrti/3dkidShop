@@ -29,8 +29,10 @@ type PublicLiqPayPaymentPayload = Omit<LiqPayPaymentPayload, "public_key"> & {
 export type LiqPayCallbackPayload = {
   order_id?: string;
   status?: string;
-  amount?: number;
+  amount?: number | string;
   currency?: string;
+  public_key?: string;
+  action?: string;
   transaction_id?: number;
 };
 
@@ -120,9 +122,11 @@ export function signLiqPayData(data: string) {
 export function createLiqPayCheckout({
   orderNumber,
   amount,
+  resultPath,
 }: {
   orderNumber: string;
   amount: number;
+  resultPath: string;
 }): LiqPayCheckout {
   if (!isLiqPayConfigured()) {
     throw new Error("LIQPAY_NOT_CONFIGURED");
@@ -138,7 +142,7 @@ export function createLiqPayCheckout({
     description: `3D Kid order ${orderNumber}`,
     order_id: orderNumber,
     server_url: `${siteUrl}/api/payments/liqpay/callback`,
-    result_url: `${siteUrl}/checkout/success?order=${encodeURIComponent(orderNumber)}&payment=return`,
+    result_url: `${siteUrl}${resultPath}`,
     ...(isSandboxEnabled() ? { sandbox: 1 } : {}),
   };
 
@@ -157,17 +161,35 @@ export function createLiqPayCheckout({
 }
 
 export function parseLiqPayCallback(data: string): LiqPayCallbackPayload {
-  return JSON.parse(Buffer.from(data, "base64").toString("utf8")) as LiqPayCallbackPayload;
+  if (data.length > 65536 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) throw new Error("INVALID_CALLBACK_DATA");
+  const value: unknown = JSON.parse(Buffer.from(data, "base64").toString("utf8"));
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("INVALID_CALLBACK_DATA");
+  return value as LiqPayCallbackPayload;
 }
 
 export function isValidLiqPaySignature(data: string, signature: string) {
-  return signLiqPayData(data) === signature;
+  if (!getPrivateKey() || !/^[A-Za-z0-9+/]{27}=$/.test(signature)) return false;
+  const expected = Buffer.from(signLiqPayData(data), "base64");
+  const received = Buffer.from(signature, "base64");
+  return received.length === expected.length && crypto.timingSafeEqual(expected, received);
 }
 
-export function isPaidLiqPayStatus(status?: string) {
-  return status === "success" || status === "sandbox";
+export function isPaidLiqPayStatus(status: string | undefined, mode: string) {
+  return status === "success" || (status === "sandbox" && mode === "sandbox");
 }
 
 export function isFailedLiqPayStatus(status?: string) {
-  return ["failure", "error", "reversed"].includes(status ?? "");
+  return ["failure", "error", "reversed", "cancelled", "canceled"].includes(status ?? "");
+}
+
+export function moneyMinorUnits(value: unknown): number | null {
+  const text = typeof value === "number" || typeof value === "string" ? String(value) : "";
+  if (!/^(0|[1-9]\d{0,7})(\.\d{1,2})?$/.test(text)) return null;
+  const [whole, decimal = ""] = text.split(".");
+  return Number(whole) * 100 + Number(decimal.padEnd(2, "0"));
+}
+export function matchesLiqPayPayment(payload: LiqPayCallbackPayload, order: { number: string; total: { toString(): string } }) {
+  const amount = moneyMinorUnits(payload.amount);
+  return payload.order_id === order.number && payload.public_key === getPublicKey() && payload.action === "pay" &&
+    payload.currency === "UAH" && amount !== null && amount > 0 && amount === moneyMinorUnits(order.total.toString());
 }

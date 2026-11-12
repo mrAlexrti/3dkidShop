@@ -36,7 +36,7 @@ export function Header({ categories }: { categories: CategoryTreeNode[] }) {
         <Link href="/catalog" className="sf-header-link">{t.nav.catalog}</Link></>}
         <div className="sf-controls">
           <LangSwitcher />
-          <button type="button" className="sf-icon-button" disabled aria-label={t.nav.account} title={t.nav.account}>
+          <button type="button" className="sf-icon-button" disabled aria-label={t.nav.accountUnavailable} title={t.nav.accountUnavailable}>
             <UserRound size={21} aria-hidden="true" />
           </button>
           <button type="button" onClick={openCart} className="sf-icon-button" aria-label={`${t.nav.openCart} (${count})`}>

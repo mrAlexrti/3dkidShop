@@ -168,14 +168,15 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
     try {
       const result = await createOrder(data, items, locale);
       if (result.success) {
-        clear();
         if (result.payment) {
-          toast.success(c.feedback.redirect);
+          toast.message(c.feedback.redirect);
           submitLiqPayForm(result.payment);
+          clear();
           return;
         }
+        clear();
         toast.success(result.emailSent ? c.feedback.emailed : c.feedback.created);
-        router.push(`/checkout/success?order=${result.orderNumber}&email=${result.emailSent ? "sent" : "pending"}`);
+        router.push(result.resultUrl);
       } else {
         toast.error(result.error);
       }

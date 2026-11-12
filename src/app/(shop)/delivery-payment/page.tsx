@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getT } from "@/lib/i18n-server";
-import { isLiqPayConfigured } from "@/lib/payments/liqpay";
+import { isOnlinePaymentAvailable } from "@/lib/payments/online-payment";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { pages: { deliveryPayment: page } } = await getT();
@@ -18,7 +18,7 @@ export default async function DeliveryPaymentPage() {
     <section aria-labelledby="payment-heading">
       <h2 id="payment-heading">{page.paymentTitle}</h2>
       <p>{page.payment}</p>
-      {isLiqPayConfigured() && <p>{page.card}</p>}
+      {isOnlinePaymentAvailable() && <p>{page.card}</p>}
     </section>
     <section aria-labelledby="order-heading">
       <h2 id="order-heading">{page.orderTitle}</h2>

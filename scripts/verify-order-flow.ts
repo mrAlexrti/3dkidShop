@@ -32,7 +32,9 @@ const action = sourceModule<{ createOrder: typeof OrderAction }>("src/lib/action
   "@/lib/product-variants": variants,
   "@/lib/cart-items": cartItems,
   "@/lib/notifications/orders": { notifyOrderCreated: blocked },
-  "@/lib/payments/liqpay": { isLiqPayConfigured: () => paymentConfigured, createLiqPayCheckout: blocked },
+  "@/lib/payments/online-payment": { getOnlinePaymentConfig: () => paymentConfigured ? { provider: "liqpay", mode: "sandbox" } : null },
+  "@/lib/payments/order-result": { getOrderResultPath: () => "/checkout/success?isolated-qa" },
+  "@/lib/payments/liqpay": { createLiqPayCheckout: () => ({ provider: "liqpay", action: "https://example.invalid", data: "isolated", signature: "isolated" }) },
   "@/lib/prisma": { prisma: {
     product: db.product,
     order: { findUnique: blocked }, // Must never reach the post-commit phase.

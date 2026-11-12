@@ -1,4 +1,5 @@
 import { orderSizeLabel } from "@/lib/product-variants";
+import { getOrderResultPath } from "@/lib/payments/order-result";
 import type { OrderStatus } from "@prisma/client";
 import { getOrderStatusLabel } from "@/lib/order-status";
 import { formatPrice } from "@/lib/utils";
@@ -108,7 +109,7 @@ function productLines(order: OrderForNotification) {
 function renderCustomerOrderEmail(order: OrderForNotification) {
   const statusLabel = getOrderStatusLabel(order.status);
   const note = paymentNote(order);
-  const orderUrl = `${siteUrl()}/checkout/success?order=${encodeURIComponent(order.number)}`;
+  const orderUrl = `${siteUrl()}${getOrderResultPath(order.number)}`;
   const brandPink = "#f94f8e";
   const softPink = "#fff0f6";
   const ink = "#24191f";

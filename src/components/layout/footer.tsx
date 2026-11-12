@@ -30,7 +30,7 @@ export function Footer({ categories, content }: { categories: CategoryTreeNode[]
       </nav>
       <nav aria-label={t.footer.customers}>
         <h2>{t.footer.customers}</h2>
-        <button type="button" disabled className="sf-footer-account" title={t.nav.account}>{t.footer.account}</button>
+        <button type="button" disabled className="sf-footer-account" aria-label={t.nav.accountUnavailable} title={t.nav.accountUnavailable}>{t.footer.account}</button>
         <Link href="/about">{t.footer.about}</Link>
         <Link href="/delivery-payment">{t.footer.delivery}</Link>
       </nav>

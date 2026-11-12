@@ -119,7 +119,9 @@ async function verify() {
     const { createOrder } = sourceModule<{ createOrder: typeof OrderAction }>("src/lib/actions/create-order.ts", {
       "@/lib/i18n": { translations }, "@/lib/validations/checkout": checkout, "@/lib/order-status": orderStatus,
       "@/lib/product-variants": variants, "@/lib/cart-items": cartItems,
-      "@/lib/notifications/orders": { notifyOrderCreated: blocked }, "@/lib/payments/liqpay": { isLiqPayConfigured: () => false, createLiqPayCheckout: blocked },
+      "@/lib/notifications/orders": { notifyOrderCreated: blocked }, "@/lib/payments/liqpay": { createLiqPayCheckout: blocked },
+      "@/lib/payments/online-payment": { getOnlinePaymentConfig: () => null },
+      "@/lib/payments/order-result": { getOrderResultPath: () => "/checkout/success?isolated-qa" },
       "@/lib/prisma": { prisma: {
         product: tx.product, order: { findUnique: blocked },
         $transaction: (callback: (client: unknown) => Promise<unknown>) => callback({

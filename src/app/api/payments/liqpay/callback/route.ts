@@ -1,63 +1,52 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { notifyOrderStatusChanged } from "@/lib/notifications/orders";
+import { notifyOrderCreated, notifyOrderStatusChanged } from "@/lib/notifications/orders";
 import { getOrderStatusAfterPaymentReceived } from "@/lib/order-status";
-import {
-  isLiqPayConfigured,
-  isPaidLiqPayStatus,
-  isValidLiqPaySignature,
-  parseLiqPayCallback,
-} from "@/lib/payments/liqpay";
+import { getOnlinePaymentConfig } from "@/lib/payments/online-payment";
+import { isPaidLiqPayStatus, isFailedLiqPayStatus, isValidLiqPaySignature, parseLiqPayCallback, matchesLiqPayPayment } from "@/lib/payments/liqpay";
 
+const response = (status: number, error: string) => NextResponse.json({ success: false, error }, { status });
 export async function POST(req: Request) {
-  if (!isLiqPayConfigured()) {
-    return NextResponse.json({ success: false, error: "LiqPay is not configured." }, { status: 500 });
-  }
-
-  const formData = await req.formData();
-  const data = String(formData.get("data") ?? "");
-  const signature = String(formData.get("signature") ?? "");
-
-  if (!data || !signature || !isValidLiqPaySignature(data, signature)) {
-    return NextResponse.json({ success: false, error: "Invalid LiqPay signature." }, { status: 401 });
-  }
-
-  const payload = parseLiqPayCallback(data);
-  const orderNumber = payload.order_id;
-
-  if (!orderNumber) {
-    return NextResponse.json({ success: false, error: "Missing LiqPay order_id." }, { status: 400 });
-  }
-
-  const order = await prisma.order.findUnique({
-    where: { number: orderNumber },
-    include: { items: true },
+  const config = getOnlinePaymentConfig();
+  if (!config) return response(503, "Online payment is unavailable.");
+  if (Number(req.headers.get("content-length")) > 100000) return response(413, "Callback too large.");
+  let payload;
+  try {
+    const form = await req.formData();
+    const data = form.get("data"); const signature = form.get("signature");
+    if (typeof data !== "string" || typeof signature !== "string" || data.length > 65536 || !isValidLiqPaySignature(data, signature)) return response(401, "Invalid signature.");
+    payload = parseLiqPayCallback(data);
+  } catch { return response(400, "Invalid callback."); }
+  if (typeof payload.order_id !== "string" || !/^[\w-]{1,100}$/.test(payload.order_id) || typeof payload.status !== "string") return response(400, "Invalid payment reference.");
+  const order = await prisma.order.findUnique({ where: { number: payload.order_id }, include: { items: true } });
+  if (!order) return response(404, "Order not found.");
+  if (order.paymentProvider !== config.provider || order.paymentMode !== config.mode || !matchesLiqPayPayment(payload, order)) return response(400, "Payment does not match order.");
+  const paid = isPaidLiqPayStatus(payload.status, order.paymentMode);
+  const reversed = payload.status === "reversed";
+  const failed = isFailedLiqPayStatus(payload.status);
+  if (!paid && !failed) return NextResponse.json({ success: true });
+  if (paid && (order.status === "CANCELLED" || order.paymentStatus === "REFUNDED")) return response(409, "Order requires manual reconciliation.");
+  if ((paid && order.paymentStatus === "PAID") || (!paid && order.paymentStatus === "REFUNDED") || (!paid && !reversed && order.paidAt)) return NextResponse.json({ success: true });
+  const nextPaymentStatus = paid ? "PAID" : reversed ? "REFUNDED" : "FAILED";
+  if (order.paymentStatus === nextPaymentStatus) return NextResponse.json({ success: true });
+  const nextStatus = paid ? getOrderStatusAfterPaymentReceived(order.status, Boolean(order.novaPoshtaDeliveredAt)) : order.status;
+  // Compare-and-set prevents duplicate/concurrent callbacks from repeating the transition.
+  const updated = await prisma.order.updateMany({
+    where: { id: order.id, status: order.status, paymentProvider: config.provider, paymentMode: config.mode, paymentStatus: order.paymentStatus, paidAt: order.paidAt },
+    data: { paymentStatus: nextPaymentStatus, ...(paid ? { paidAt: new Date(), status: nextStatus } : {}) },
   });
-
-  if (!order) {
-    return NextResponse.json({ success: false, error: "Order not found." }, { status: 404 });
+  if (updated.count !== 1) {
+    const current = await prisma.order.findUnique({ where: { id: order.id } });
+    if (current?.paymentStatus === nextPaymentStatus) return NextResponse.json({ success: true });
+    return response(409, "Payment state changed; retry callback.");
   }
-
-  if (isPaidLiqPayStatus(payload.status)) {
-    const previousStatus = order.status;
-    const updatedOrder = await prisma.order.update({
-      where: { id: order.id },
-      data: {
-        paidAt: order.paidAt ?? new Date(),
-        status: getOrderStatusAfterPaymentReceived(order.status, Boolean(order.novaPoshtaDeliveredAt)),
-      },
-      include: { items: true },
-    });
-
-    await notifyOrderStatusChanged({
-      order: updatedOrder,
-      previousStatus,
-      nextStatus: updatedOrder.status,
-      source: "LiqPay",
-    });
-
-    return NextResponse.json({ success: true });
+  // Sandbox must never email/notify real recipients. Live acquiring remains disabled.
+  if (paid && order.paymentMode !== "sandbox") {
+    const confirmed = { ...order, status: nextStatus, paidAt: new Date(), paymentStatus: nextPaymentStatus };
+    try {
+      await notifyOrderCreated(confirmed);
+      await notifyOrderStatusChanged({ order: confirmed, previousStatus: order.status, nextStatus, source: "LiqPay" });
+    } catch { console.error("Payment confirmed; notification delivery needs review."); }
   }
-
   return NextResponse.json({ success: true });
 }

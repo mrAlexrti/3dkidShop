@@ -7,6 +7,12 @@ import { join } from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { sourceModule } from "./source-module";
 import * as serverEnv from "../src/lib/server-env";
+import { NextRequest, NextResponse } from "next/server";
+import * as jsxRuntime from "react/jsx-runtime";
+import * as icons from "lucide-react";
+import { translations } from "../src/lib/i18n";
+import type { AdminSidebar as Sidebar } from "../src/components/admin/admin-sidebar";
+import type { ReactElement } from "react";
 
 type Config = {
   session: { strategy: string };
@@ -35,6 +41,29 @@ async function verify() {
   await assert.rejects(provider.authorize({ username: "admin", password: "Pass12345" }));
   const token = await config!.callbacks.jwt({ token: {}, user: { role: "ADMIN" } });
   assert.equal((await config!.callbacks.session({ session: { user: {} }, token })).user.role, "ADMIN");
+  let role: string | undefined;
+  process.env.AUTH_DEBUG = "0";
+  const { default: middleware } = sourceModule<{ default: (request: NextRequest) => Promise<Response> }>("src/middleware.ts", {
+    "next-auth/jwt": { getToken: async () => role ? { role } : null }, "next/server": { NextResponse }, "@/lib/server-env": serverEnv,
+  });
+  const { requireAdmin } = sourceModule<{ requireAdmin: () => Promise<void> }>("src/lib/actions/require-admin.ts", {
+    "@/lib/auth": { auth: async () => role ? { user: { role } } : null },
+  });
+  for (role of [undefined, "MANAGER", "ADMIN"]) {
+    const response = await middleware(new NextRequest("http://127.0.0.1/admin/products"));
+    assert.equal(response.status, role === "ADMIN" ? 200 : 307);
+    if (role === "ADMIN") await requireAdmin(); else await assert.rejects(requireAdmin());
+  }
+  let logout: unknown;
+  const { AdminSidebar } = sourceModule<{ AdminSidebar: typeof Sidebar }>("src/components/admin/admin-sidebar.tsx", {
+    "react/jsx-runtime": jsxRuntime, "next/link": { default: "a", __esModule: true }, "next/navigation": { usePathname: () => "/admin" },
+    "next-auth/react": { signOut: (args: unknown) => { logout = args; } }, "lucide-react": icons, "@/lib/utils": { cn: () => "" },
+    "@/store/lang-store": { useLangStore: () => ({ t: translations.ua }) }, "@/components/layout/lang-switcher": { LangSwitcher: () => null },
+  });
+  const sidebar = AdminSidebar() as ReactElement<{ children: ReactElement<Record<string, unknown>>[] }>;
+  const logoutButton = sidebar.props.children.find((child) => child.type === "button")!;
+  (logoutButton.props.onClick as () => void)();
+  assert.deepEqual(logout, { callbackUrl: "/login" });
   process.env.ADMIN_PASSWORD_HASH = "invalid";
   await assert.rejects(provider.authorize({ username: "isolated-admin", password }));
   const prepared = execFileSync(process.execPath, ["scripts/prepare-admin-credentials.mjs"], { input: JSON.stringify({ username: "reset-test", password }), encoding: "utf8" });
@@ -55,6 +84,6 @@ async function verify() {
     assert.ok(directory.startsWith(join(tmpdir(), "stikr-reset-qa-")));
     rmSync(directory, { recursive: true, force: true });
   }
-  console.log("PASS admin credentials: configured login/password only, invalid/old/test-bypass credentials denied, JWT ADMIN role retained; reset helper hash survives Next env parsing, plaintext not output; repository .env untouched.");
+  console.log("PASS admin credentials: configured login/password only, invalid/old/test-bypass credentials denied, JWT ADMIN role retained; middleware/actions deny absent/MANAGER and allow ADMIN; logout calls Auth.js; reset helper hash survives Next env parsing, plaintext not output; repository .env untouched.");
 }
 verify().catch((error) => { console.error(error); process.exitCode = 1; });
