@@ -14,24 +14,45 @@ export type MonoSnapshot = {
 
 type MonoEndpoint = "invoice/create" | "invoice/status" | "invoice/remove" | "pubkey" | "local";
 type MonoCategory = "configuration" | "local_validation" | "http_rejection" | "provider_uncertain" | "transport" | "timeout" | "invalid_response" | "attachment";
+export type MonoCreateInvoiceDiagnostics = {
+  responseJsonParsed: boolean; responseIsObject: boolean;
+  invoiceIdPresent: boolean; invoiceIdType: string; invoiceIdValid: boolean; invoiceIdLength: number | null;
+  pageUrlPresent: boolean; pageUrlType: string; pageUrlParsable: boolean;
+  pageUrlProtocol: "https:" | "http:" | "other" | null; pageUrlHostname: string | null;
+  pageUrlHostnameMatchesExpected: boolean; pageUrlHostnameRedacted: boolean;
+  pageUrlHasPort: boolean; pageUrlHasCredentials: boolean; pageUrlPathMatchesInvoice: boolean;
+  pageUrlHasQuery: boolean; pageUrlHasHash: boolean;
+};
+const createDiagnosticFields = [
+  "responseJsonParsed", "responseIsObject", "invoiceIdPresent", "invoiceIdType", "invoiceIdValid", "invoiceIdLength",
+  "pageUrlPresent", "pageUrlType", "pageUrlParsable", "pageUrlProtocol", "pageUrlHostname",
+  "pageUrlHostnameMatchesExpected", "pageUrlHostnameRedacted", "pageUrlHasPort", "pageUrlHasCredentials",
+  "pageUrlPathMatchesInvoice", "pageUrlHasQuery", "pageUrlHasHash",
+] as const satisfies readonly (keyof MonoCreateInvoiceDiagnostics)[];
 export class MonoError extends Error {
   readonly category: MonoCategory;
   readonly endpoint: MonoEndpoint;
   readonly httpStatus: number | null;
   readonly invoiceId?: string;
+  readonly createInvoiceDiagnostics?: MonoCreateInvoiceDiagnostics;
   constructor(public readonly code: "MONO_UNAVAILABLE" | "MONO_INVALID_RESPONSE" | "MONO_NOT_CONFIGURED" | "MONO_HTTP_REJECTED" | "MONO_INVALID_INPUT", details: {
     category?: MonoCategory; endpoint?: MonoEndpoint; httpStatus?: number; invoiceId?: string;
+    createInvoiceDiagnostics?: MonoCreateInvoiceDiagnostics;
   } = {}) {
     super(code);
     this.category = details.category ?? (code === "MONO_NOT_CONFIGURED" ? "configuration" : code === "MONO_INVALID_RESPONSE" ? "invalid_response" : "transport");
     this.endpoint = details.endpoint ?? "local"; this.httpStatus = details.httpStatus ?? null;
     this.invoiceId = details.invoiceId;
+    this.createInvoiceDiagnostics = details.createInvoiceDiagnostics;
   }
   get definiteRejection() { return ["configuration", "local_validation", "http_rejection"].includes(this.category); }
 }
 export function logMonoInitializationError(error: unknown, orderNumber?: string) {
   const safe = error instanceof MonoError ? error : new MonoError("MONO_UNAVAILABLE", { category: "attachment", endpoint: "invoice/create" });
-  console.warn("Mono initialization", { endpoint: safe.endpoint, category: safe.category, httpStatus: safe.httpStatus, ...(orderNumber ? { orderNumber } : {}) });
+  // Never spread the error, response, URL or an arbitrary diagnostics object.
+  const diagnostics = safe.endpoint === "invoice/create" && safe.category === "invalid_response" && safe.httpStatus === 200 && safe.createInvoiceDiagnostics
+    ? Object.fromEntries(createDiagnosticFields.map((field) => [field, safe.createInvoiceDiagnostics![field]])) : {};
+  console.warn("Mono initialization", { endpoint: safe.endpoint, category: safe.category, httpStatus: safe.httpStatus, ...(orderNumber ? { orderNumber } : {}), ...diagnostics });
 }
 
 export function monoSiteOrigin(): string | null {
@@ -46,12 +67,43 @@ export function validInvoiceId(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 }
 export function validHostedPage(value: unknown, invoiceId: string): value is string {
-  try {
-    if (typeof value !== "string") return false;
-    const url = new URL(value);
-    return url.protocol === "https:" && url.hostname === "pay.mbnk.biz" && !url.port && !url.username && !url.password &&
-      url.pathname === `/${invoiceId}` && !url.search && !url.hash;
-  } catch { return false; }
+  return inspectHostedPage(value, invoiceId).valid;
+}
+
+function inspectHostedPage(value: unknown, invoiceId: unknown) {
+  let url: URL | undefined;
+  if (typeof value === "string") { try { url = new URL(value); } catch { /* Syntax failure is metadata only. */ } }
+  const pathMatches = Boolean(url && typeof invoiceId === "string" && url.pathname === `/${invoiceId}`);
+  const hostnameMatches = url?.hostname === "pay.mbnk.biz";
+  const valid = Boolean(url && url.protocol === "https:" && hostnameMatches && !url.port && !url.username && !url.password && pathMatches && !url.search && !url.hash);
+  // Even an identifier embedded in a malformed hostname must not become a log value.
+  const hostnameRedacted = Boolean(url && typeof invoiceId === "string" && invoiceId && url.hostname.toLowerCase().includes(invoiceId.toLowerCase()));
+  return { valid, fields: {
+    pageUrlParsable: Boolean(url),
+    pageUrlProtocol: url ? url.protocol === "https:" || url.protocol === "http:" ? url.protocol : "other" : null,
+    pageUrlHostname: url && !hostnameRedacted ? url.hostname : null,
+    pageUrlHostnameMatchesExpected: hostnameMatches, pageUrlHostnameRedacted: hostnameRedacted,
+    pageUrlHasPort: Boolean(url?.port), pageUrlHasCredentials: Boolean(url && (url.username || url.password)),
+    pageUrlPathMatchesInvoice: pathMatches, pageUrlHasQuery: Boolean(url?.search), pageUrlHasHash: Boolean(url?.hash),
+  } satisfies Pick<MonoCreateInvoiceDiagnostics, "pageUrlParsable" | "pageUrlProtocol" | "pageUrlHostname" | "pageUrlHostnameMatchesExpected" | "pageUrlHostnameRedacted" | "pageUrlHasPort" | "pageUrlHasCredentials" | "pageUrlPathMatchesInvoice" | "pageUrlHasQuery" | "pageUrlHasHash"> };
+}
+
+export function inspectMonoCreateInvoiceResponse(value: unknown, responseJsonParsed = true) {
+  // Access the same fields as the previous validator; metadata does not impose
+  // new schema restrictions. Provider JSON cannot carry prototype/getter logic.
+  const response = value as { invoiceId?: unknown; pageUrl?: unknown } | null | undefined;
+  const invoiceId = response?.invoiceId; const pageUrl = response?.pageUrl;
+  const invoiceIdValid = validInvoiceId(invoiceId);
+  const hosted = inspectHostedPage(pageUrl, invoiceId);
+  const type = (entry: unknown) => entry === null ? "null" : Array.isArray(entry) ? "array" : typeof entry;
+  const diagnostics: MonoCreateInvoiceDiagnostics = {
+    responseJsonParsed, responseIsObject: Boolean(value && typeof value === "object" && !Array.isArray(value)),
+    invoiceIdPresent: value != null && Object.hasOwn(Object(value), "invoiceId"), invoiceIdType: type(invoiceId),
+    invoiceIdValid, invoiceIdLength: typeof invoiceId === "string" ? invoiceId.length : null,
+    pageUrlPresent: value != null && Object.hasOwn(Object(value), "pageUrl"), pageUrlType: type(pageUrl), ...hosted.fields,
+  };
+  if (value && invoiceIdValid && hosted.valid) return { valid: true as const, invoiceId, pageUrl: pageUrl as string, diagnostics };
+  return { valid: false as const, invoiceId: invoiceIdValid ? invoiceId : undefined, diagnostics };
 }
 
 async function api(path: string, body?: unknown, empty = false): Promise<unknown> {
@@ -71,7 +123,10 @@ async function api(path: string, body?: unknown, empty = false): Promise<unknown
     if (response.status !== 200) throw new MonoError("MONO_INVALID_RESPONSE", { endpoint, category: "invalid_response", httpStatus: response.status });
     if (empty) return undefined; // remove returns an empty successful response.
     try { return await response.json(); }
-    catch { throw new MonoError("MONO_INVALID_RESPONSE", { endpoint, category: "invalid_response", httpStatus: response.status }); }
+    catch { throw new MonoError("MONO_INVALID_RESPONSE", {
+      endpoint, category: "invalid_response", httpStatus: response.status,
+      ...(endpoint === "invoice/create" ? { createInvoiceDiagnostics: inspectMonoCreateInvoiceResponse(undefined, false).diagnostics } : {}),
+    }); }
   } catch (error) {
     if (error instanceof MonoError) throw error;
     // Never propagate upstream response bodies, headers or credential-bearing errors.
@@ -89,12 +144,13 @@ export async function createMonoInvoice(input: { number: string; amount: number;
     merchantPaymInfo: { reference: input.number, destination: `3D Kid — ${formatOrderReference(input.number)}`, ...(input.email ? { customerEmails: [input.email] } : {}) },
     redirectUrl: `${origin}${input.resultPath}`, webHookUrl: `${origin}/api/payments/mono/webhook`,
     validity: MONO_VALIDITY_SECONDS, paymentType: "debit",
-  }) as { invoiceId?: unknown; pageUrl?: unknown } | null;
-  if (!value || !validInvoiceId(value.invoiceId) || !validHostedPage(value.pageUrl, value.invoiceId)) throw new MonoError("MONO_INVALID_RESPONSE", {
-    category: "invalid_response", endpoint: "invoice/create", httpStatus: 200,
-    ...(value && validInvoiceId(value.invoiceId) ? { invoiceId: value.invoiceId } : {}),
   });
-  return { invoiceId: value.invoiceId, pageUrl: value.pageUrl };
+  const inspected = inspectMonoCreateInvoiceResponse(value);
+  if (!inspected.valid) throw new MonoError("MONO_INVALID_RESPONSE", {
+    category: "invalid_response", endpoint: "invoice/create", httpStatus: 200,
+    ...(inspected.invoiceId ? { invoiceId: inspected.invoiceId } : {}), createInvoiceDiagnostics: inspected.diagnostics,
+  });
+  return { invoiceId: inspected.invoiceId, pageUrl: inspected.pageUrl };
 }
 
 export async function invalidateUnpaidMonoInvoice(invoiceId: string) {
