@@ -5,6 +5,8 @@ import type { Order, Prisma } from "@prisma/client";
 import * as status from "../src/lib/status";
 import * as events from "../src/lib/notifications/events";
 import * as templates from "../src/lib/notifications/templates";
+import * as reference from "../src/lib/order-reference";
+import * as initializationState from "../src/lib/payments/initialization-state";
 import * as orderStatus from "../src/lib/order-status";
 import { translations } from "../src/lib/i18n";
 import { sourceModule } from "./source-module";
@@ -71,6 +73,7 @@ async function verify() {
     const raw = { ...ttn, items: ttn.items.map((item, index) => ({ ...item, id: `isolated-item-${index}` })), deliveryMethod: "np_warehouse", subtotal: 199, shippingCost: 0, novaPoshtaStatus: "RAW_PROVIDER_UNKNOWN", novaPoshtaStatusCode: "RAW_CODE_UNKNOWN", novaPoshtaCodStatus: "RAW_COD_UNKNOWN" };
     const detail = sourceModule<{ default(args: { params: Promise<{ id: string }> }): Promise<React.ReactElement> }>("src/app/admin/orders/[id]/page.tsx", {
       "react/jsx-runtime": jsxRuntime, "@/lib/i18n": { translations }, "@/lib/status": status,
+      "@/lib/order-reference": reference,
       "next/link": { default: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => React.createElement("a", props), __esModule: true },
       "next/navigation": { notFound: () => { throw new Error("UNEXPECTED_NOT_FOUND"); } },
       "@/components/admin/create-ttn-button": { CreateTtnButton: () => null },
@@ -106,6 +109,7 @@ async function verify() {
   let settingsReads = 0; let settingsUnavailable = false;
   const deliveries: string[] = [];
   const dispatcher = sourceModule<typeof import("../src/lib/notifications/orders")>("src/lib/notifications/orders.ts", {
+    "@/lib/payments/initialization-state": initializationState,
     "./email": { sendEmail: async ({ html }: { html: string }) => { assert.match(html, /&lt;QA/); deliveries.push("email"); return { sent: true }; } },
     "./telegram": { sendTelegramMessage: async (message: string) => { assert.ok(!message.includes("token=")); deliveries.push("telegram"); return { sent: true }; } },
     "./settings": { getNotificationSettings: async () => { settingsReads++; if (settingsUnavailable) throw new Error("QA_FAILURE"); return settings; } },

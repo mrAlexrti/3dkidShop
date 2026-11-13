@@ -10,12 +10,14 @@ import { prisma } from "@/lib/prisma";
 import { getCheckoutSchema } from "@/lib/validations/checkout";
 import type { CartItem } from "@/types";
 import { DELIVERY_LABELS, PAYMENT_LABELS } from "@/lib/validations/checkout";
-import { notifyOrderCreated } from "@/lib/notifications/orders";
+import { notifyOrderCreated, emitOrderEvents } from "@/lib/notifications/orders";
 import { getInitialOrderStatus } from "@/lib/order-status";
-import { createMonoInvoice, MONO_VALIDITY_SECONDS, type HostedCheckout } from "@/lib/payments/mono";
-import { attachPaymentInvoice, cancelPendingPayment } from "@/lib/payments/transitions";
+import { createMonoInvoice, MONO_VALIDITY_SECONDS, MonoError, logMonoInitializationError, type HostedCheckout } from "@/lib/payments/mono";
+import { acceptPaymentInvoice } from "@/lib/payments/transitions";
+import { removeRejectedProvisionalOrder, recoverUnacceptedInvoice } from "@/lib/payments/initialization";
+import { INVOICE_INITIALIZING } from "@/lib/payments/initialization-state";
 import { moneyMinorUnits, moneyDecimal } from "@/lib/payments/money";
-import { createOrderNumber, isOrderNumberCollision } from "@/lib/order-number";
+import { allocateOrderNumber, isOrderNumberCollision } from "@/lib/order-number";
 import { Prisma } from "@prisma/client";
 
 export type CreateOrderResult =
@@ -117,6 +119,7 @@ export async function createOrder(
 
   const onlineConfig = d.paymentMethod === "card_online" ? getOnlinePaymentConfig() : null;
   if (d.paymentMethod === "card_online" && !onlineConfig) {
+    logMonoInitializationError(new MonoError("MONO_NOT_CONFIGURED", { endpoint: "invoice/create" }));
     return {
       success: false,
       error: errors.payment,
@@ -135,14 +138,14 @@ export async function createOrder(
   let orderNumber = "";
   let resultUrl = "";
   let order;
-  // A number collision rolls back order acceptance before a fresh-number retry.
+  // The lock, numeric allocation and creation share a READ COMMITTED transaction.
   for (let attempt = 0; attempt < 5; attempt++) {
-    orderNumber = createOrderNumber();
-    resultUrl = getOrderResultPath(orderNumber);
     try {
       order = await prisma.$transaction(async (tx) => {
         const priced = await priceOrderItems(tx, items, errors);
         if (!priced.success) throw new CheckoutInputError(priced.error);
+        orderNumber = await allocateOrderNumber(tx);
+        resultUrl = getOrderResultPath(orderNumber);
         const subtotal = moneyDecimal(priced.subtotalMinor);
         return tx.order.create({
           data: {
@@ -164,6 +167,7 @@ export async function createOrder(
             paymentMethod: PAYMENT_LABELS[d.paymentMethod],
             ...(onlineConfig ? {
               paymentProvider: onlineConfig.provider, paymentMode: onlineConfig.mode, paymentStatus: "PENDING",
+              paymentErrorCode: INVOICE_INITIALIZING,
               // Initialization recovery includes a grace period for in-flight setup.
               paymentExpiresAt: new Date(Date.now() + (MONO_VALIDITY_SECONDS + 120) * 1000),
               paymentNextCheckAt: new Date(Date.now() + 300000),
@@ -183,7 +187,7 @@ export async function createOrder(
             },
           }, include: { items: true },
         });
-      });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
       break;
     } catch (error) {
       if (error instanceof CheckoutInputError) return { success: false, error: error.message };
@@ -192,20 +196,39 @@ export async function createOrder(
     }
   }
   if (!order) return { success: false, error: errors.invalid };
-  const emailSent = order ? await notifyOrderCreated(order, locale) : false;
   if (onlineConfig) {
+    let invoiceId: string | undefined;
+    let invoice;
+    let accepted;
     try {
-      const invoice = await createMonoInvoice({ number: orderNumber, amount: moneyMinorUnits(order.total.toString())!, email: order.customerEmail, resultPath: resultUrl });
-      const attached = await attachPaymentInvoice(orderNumber, invoice.invoiceId, new Date(Date.now() + MONO_VALIDITY_SECONDS * 1000));
-      if (!attached) throw new Error("INVOICE_STATE_CHANGED");
-      return { success: true, orderNumber, resultUrl, emailSent, payment: { provider: "mono", pageUrl: invoice.pageUrl } };
-    } catch {
-      // Includes ambiguous network failures: do not pretend no external invoice
-      // could exist, or retry invoice creation. A late success is manual review.
-      try { await cancelPendingPayment(orderNumber, "INVOICE_CREATE_UNCERTAIN"); }
-      catch { console.warn("Payment initialization needs scheduled reconciliation."); }
+      invoice = await createMonoInvoice({ number: orderNumber, amount: moneyMinorUnits(order.total.toString())!, email: order.customerEmail, resultPath: resultUrl });
+      invoiceId = invoice.invoiceId;
+      accepted = await acceptPaymentInvoice(orderNumber, invoiceId, new Date(Date.now() + MONO_VALIDITY_SECONDS * 1000));
+      if (!accepted) throw new MonoError("MONO_UNAVAILABLE", { category: "attachment", endpoint: "invoice/create" });
+    } catch (error) {
+      logMonoInitializationError(error, orderNumber);
+      try {
+        if (error instanceof MonoError && error.definiteRejection && !invoiceId) {
+          if (!await removeRejectedProvisionalOrder(order)) await recoverUnacceptedInvoice(orderNumber);
+        } else await recoverUnacceptedInvoice(orderNumber, invoiceId || (error instanceof MonoError ? error.invoiceId : undefined));
+      } catch { console.warn("Mono initialization cleanup/reconciliation required", { orderNumber }); }
       return { success: false, error: errors.payment };
     }
+    // Acceptance is already persisted; notification failures cannot invalidate it.
+    let emailSent = false;
+    try {
+      if (accepted.notify) {
+        emailSent = await notifyOrderCreated(accepted.order, locale);
+        // A verified early success was deliberately silent while provisional.
+        // Defer that semantic payment event to the single acceptance winner.
+        if (accepted.order.paidAt && accepted.order.paymentStatus === "PAID") {
+          await emitOrderEvents({ ...accepted.order, paymentStatus: "PENDING", paidAt: null }, accepted.order, locale);
+        }
+      }
+    }
+    catch { console.warn("Accepted order notification unavailable", { orderNumber }); }
+    return { success: true, orderNumber, resultUrl, emailSent, payment: { provider: "mono", pageUrl: invoice.pageUrl } };
   }
+  const emailSent = await notifyOrderCreated(order, locale);
   return { success: true, orderNumber, resultUrl, emailSent };
 }

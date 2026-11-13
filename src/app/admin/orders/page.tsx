@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { OrderStatusSummary } from "@/components/admin/order-status-summary";
 import { formatPrice } from "@/lib/utils";
 import { getT, getLocale } from "@/lib/i18n-server";
+import { formatOrderReference } from "@/lib/order-reference";
 
 export default async function AdminOrdersPage() {
   const t = await getT();
@@ -32,7 +33,7 @@ export default async function AdminOrdersPage() {
               <tr key={o.id} className="border-t border-pink-100 hover:bg-pink-50/40">
                 <td className="px-4 py-3">
                   <Link href={`/admin/orders/${o.id}`} className="font-medium text-pink-600">
-                    {o.number}
+                    {formatOrderReference(o.number, locale)}
                   </Link>
                 </td>
                 <td className="px-4 py-3">{o.customerName}</td>

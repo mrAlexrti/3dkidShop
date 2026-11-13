@@ -13,6 +13,7 @@ import { OrderStatusSummary } from "@/components/admin/order-status-summary";
 import { getLocale } from "@/lib/i18n-server";
 import { translations } from "@/lib/i18n";
 import { statusLabels } from "@/lib/status";
+import { formatOrderReference } from "@/lib/order-reference";
 
 function safeOptionLabel(optionsJson: string | null) {
   return orderSizeLabel(optionsJson) || "—";
@@ -53,7 +54,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
   return (
     <div>
       <div className="flex flex-col items-start justify-between gap-4 lg:flex-row lg:items-center">
-        <h1 className="min-w-0 font-display text-3xl [overflow-wrap:anywhere]">Замовлення {order.number}</h1>
+        <h1 className="min-w-0 font-display text-3xl [overflow-wrap:anywhere]">{formatOrderReference(order.number, locale)}</h1>
         <div className="flex flex-wrap items-center gap-3">
           <TakeOrderIntoWorkButton orderId={order.id} status={order.status} />
           <OrderStatusSelect orderId={order.id} status={order.status} />

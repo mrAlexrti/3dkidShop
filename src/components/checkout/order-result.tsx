@@ -6,9 +6,10 @@ import { CheckCircle2, Clock3, CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLangStore } from "@/store/lang-store";
 import type { PaymentResultState } from "@/lib/payments/payment-state";
+import { formatOrderReference } from "@/lib/order-reference";
 
 export function OrderResult({ initialState, number, token }: { initialState: PaymentResultState; number: string; token: string }) {
-  const { t } = useLangStore();
+  const { t, locale } = useLangStore();
   const [state, setState] = useState(initialState);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
@@ -45,7 +46,7 @@ export function OrderResult({ initialState, number, token }: { initialState: Pay
     <Icon size={64} className="text-pink-500" aria-hidden="true" />
     <div role="status" aria-live="polite" aria-atomic="true">
       <h1 className="mt-6 font-display text-3xl">{copy[0]}</h1>
-      {number && <p className="mt-3 text-sm text-ink/60">{t.success.order} <span className="text-ink">{number}</span></p>}
+      {number && <p className="mt-3 text-sm text-ink/60">{formatOrderReference(number, locale)}</p>}
       <p className="mt-3 max-w-md text-ink/70">{copy[1]}</p>
     </div>
     {(state === "pending" || state === "unknown") && <Button className="mt-6" variant="outline" onClick={() => setRetry((value) => value + 1)}>{t.success.checkAgain}</Button>}

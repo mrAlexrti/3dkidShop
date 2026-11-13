@@ -1,11 +1,15 @@
-import { randomBytes } from "node:crypto";
+import { Prisma } from "@prisma/client";
 
-const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-export function createOrderNumber(now = new Date()): string {
-  const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Kyiv", year: "numeric", month: "2-digit", day: "2-digit" }).format(now).replaceAll("-", "");
-  // 32 divides 256: masking is unbiased, 10 characters carry 50 random bits.
-  const suffix = [...randomBytes(10)].map((byte) => alphabet[byte & 31]).join("");
-  return `3DK-${date}-${suffix}`;
+export async function allocateOrderNumber(tx: Prisma.TransactionClient): Promise<string> {
+  // Dedicated two-int key; transaction-scoped, never session-scoped (pooler safe).
+  // Cast void to text so Prisma does not have to deserialize PostgreSQL void.
+  await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(334354, 173)::text AS locked`);
+  const rows = await tx.$queryRaw<{ maximum: string }[]>(Prisma.sql`SELECT COALESCE(MAX("number"::numeric), 0)::text AS maximum FROM "Order" WHERE "number" ~ '^[0-9]+$'`);
+  const maximum = rows[0]?.maximum;
+  if (typeof maximum !== "string" || !/^[0-9]+$/.test(maximum) || maximum.length > 100) throw new Error("ORDER_NUMBER_OUT_OF_RANGE");
+  const next = (BigInt(maximum) + BigInt(1)).toString().padStart(4, "0");
+  if (next.length > 100) throw new Error("ORDER_NUMBER_OUT_OF_RANGE");
+  return next;
 }
 
 export function isOrderNumberCollision(error: unknown): boolean {

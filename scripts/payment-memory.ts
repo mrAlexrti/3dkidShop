@@ -34,6 +34,8 @@ export class PaymentMemory {
   lockReads = 0;
   productReads = 0;
   productWrites = 0;
+  numberLocks = 0;
+  private allocating = false;
   private queue: Promise<unknown> = Promise.resolve();
   order = {
     findUnique: async ({ where }: { where: Row }) => structuredClone(this.orders.find((row) => matches(row, where)) ?? null),
@@ -46,13 +48,17 @@ export class PaymentMemory {
       for (const row of found) assign(row, data);
       return { count: found.length };
     },
+    deleteMany: async ({ where }: { where: Row }) => {
+      const before = this.orders.length; this.orders = this.orders.filter((row) => !matches(row, where));
+      return { count: before - this.orders.length }; // Embedded items model FK cascade.
+    },
     create: async ({ data }: { data: Row }) => {
       if (this.collisions-- > 0 || this.orders.some((row) => row.number === data.number)) throw { code: "P2002", meta: { target: ["number"] } };
       const items = (data.items as { create: Row[] }).create.map((item, index) => ({ id: `item-${index}`, ...item }));
       const row = {
         id: `order-${this.orders.length}`, createdAt: new Date(), paymentProvider: null, paymentMode: null, paymentStatus: null, paidAt: null,
         paymentInvoiceId: null, paymentProviderStatus: null, paymentModifiedAt: null, paymentExpiresAt: null, paymentNextCheckAt: null,
-        paymentErrorCode: null, novaPoshtaTtn: null, novaPoshtaDeliveredAt: null,
+        paymentErrorCode: null, novaPoshtaTtn: null, novaPoshtaDeliveredAt: null, novaPoshtaCreatedAt: null, novaPoshtaSyncedAt: null,
         ...data, items,
       };
       this.orders.push(row); return structuredClone(row);
@@ -67,6 +73,7 @@ export class PaymentMemory {
   };
   $transaction = async <T>(callback: (tx: { order: PaymentMemory["order"]; product: PaymentMemory["product"]; $queryRaw: PaymentMemory["$queryRaw"] }) => Promise<T>): Promise<T> => {
     const run = this.queue.then(async () => {
+      this.allocating = false;
       const beforeOrders = structuredClone(this.orders); const beforeProducts = structuredClone(this.products);
       try { return await callback({ order: this.order, product: this.product, $queryRaw: this.$queryRaw }); }
       catch (error) { this.orders = beforeOrders; this.products = beforeProducts; throw error; }
@@ -74,6 +81,12 @@ export class PaymentMemory {
     this.queue = run.catch(() => {}); return run;
   };
   $queryRaw = async (query: { sql: string; values: unknown[] }) => {
+    if (query.sql.includes("pg_advisory_xact_lock(334354, 173)::text")) { this.allocating = true; this.numberLocks++; return [{ locked: "" }]; }
+    if (query.sql.includes('MAX("number"::numeric)') && query.sql.includes("'^[0-9]+$'")) {
+      if (!this.allocating) throw new Error("UNLOCKED_ORDER_NUMBER_READ");
+      const maximum = this.orders.reduce((max, row) => typeof row.number === "string" && /^[0-9]+$/.test(row.number) && BigInt(row.number) > max ? BigInt(row.number) : max, BigInt(0));
+      return [{ maximum: String(maximum) }];
+    }
     if (!query.sql.includes('ORDER BY "id" FOR SHARE') || query.values.some((value) => typeof value !== "string")) throw new Error("INVALID_LOCK_READ");
     this.lockReads++;
     return this.products.filter((row) => query.values.includes(row.id)).map((row) => ({ id: row.id }));

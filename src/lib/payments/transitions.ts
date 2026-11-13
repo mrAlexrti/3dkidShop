@@ -4,6 +4,7 @@ import type { PaymentStage } from "@/lib/status";
 import { moneyMinorUnits } from "@/lib/payments/money";
 import { getOrderStatusAfterPaymentReceived } from "@/lib/order-status";
 import { emitOrderEvents } from "@/lib/notifications/orders";
+import { INVOICE_INITIALIZING, isUnacceptedOnlineOrder } from "@/lib/payments/initialization-state";
 
 export type PaymentEvidence = {
   provider: string; invoiceId: string; reference: string; amount: number; currency: number;
@@ -28,6 +29,7 @@ function unfulfilled(order: Order) {
 
 async function dispatch(transition: Transition | null) {
   if (!transition) return;
+  if (isUnacceptedOnlineOrder(transition.before) || isUnacceptedOnlineOrder(transition.after)) return;
   try { await emitOrderEvents(transition.before, transition.after); }
   catch { console.warn("Payment saved; notification delivery unavailable."); }
 }
@@ -76,6 +78,9 @@ export async function applyPaymentEvidence(evidence: PaymentEvidence, options: {
         data.paymentErrorCode = evidence.errorCode ?? "INCONSISTENT_PAYMENT_STATE";
         data.paymentNextCheckAt = new Date(Date.now() + 300000);
       }
+      // An early webhook can bind/update financial truth, but cannot accept the
+      // checkout or erase a pending initialization/review marker.
+      if (isUnacceptedOnlineOrder(order)) data.paymentErrorCode = order.paymentErrorCode;
       // Payment processing has no Product writes. Refunds preserve historical paidAt.
       const changed = await tx.order.updateMany({ where: paymentSnapshotWhere(order), data });
       if (changed.count !== 1) return { outcome: "conflict" };
@@ -99,9 +104,10 @@ export async function cancelPendingPayment(number: string, reason: "INVOICE_CREA
       if (!order || order.paymentProvider !== "mono" || order.paidAt || order.paymentStatus === "REFUNDED") return {};
       if (order.status === "COMPLETED") return {};
       if (order.status === "CANCELLED" && order.paymentStatus === "CANCELLED") return {};
+      if (reason === "INVOICE_CREATE_UNCERTAIN" && order.paymentStatus === "UNKNOWN" && order.paymentErrorCode === reason) return {};
       if (reason === "INITIALIZATION_EXPIRED" && (order.paymentInvoiceId || !order.paymentExpiresAt || order.paymentExpiresAt.getTime() > Date.now())) return {};
       const changed = await tx.order.updateMany({ where: paymentSnapshotWhere(order), data: {
-        paymentStatus: "CANCELLED", ...(reason === "ADMIN_CANCELLED" ? { status: "CANCELLED" } : {}),
+        paymentStatus: reason === "INVOICE_CREATE_UNCERTAIN" ? "UNKNOWN" : "CANCELLED", ...(reason === "ADMIN_CANCELLED" ? { status: "CANCELLED" } : {}),
         paymentErrorCode: unfulfilled(order) ? reason : "FULFILLMENT_REVIEW_REQUIRED", paymentNextCheckAt: null,
       } });
       if (changed.count !== 1) return { retry: true };
@@ -115,12 +121,30 @@ export async function cancelPendingPayment(number: string, reason: "INVOICE_CREA
   throw new Error("PAYMENT_STATE_CHANGED");
 }
 
+export async function acceptPaymentInvoice(number: string, invoiceId: string, expiresAt: Date): Promise<{ order: FullOrder; notify: boolean } | null> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const result = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { number }, include: { items: true } });
+      if (!order || order.paymentProvider !== "mono" || order.status === "CANCELLED" || ["FAILED", "CANCELLED", "REFUNDED", "UNKNOWN"].includes(order.paymentStatus ?? "") ||
+          (order.status === "COMPLETED" && !order.paidAt) ||
+          (order.paymentProviderStatus != null && !["created", "processing", "success"].includes(order.paymentProviderStatus)) ||
+          (order.paymentInvoiceId && order.paymentInvoiceId !== invoiceId)) return null;
+      const provisional = order.paymentErrorCode === INVOICE_INITIALIZING;
+      if (isUnacceptedOnlineOrder(order) && !provisional) return null; // No automatic uncertain-attempt retry.
+      if (order.paymentInvoiceId === invoiceId && !provisional) return { order, notify: false };
+      const changed = await tx.order.updateMany({ where: paymentSnapshotWhere(order), data: {
+        paymentInvoiceId: invoiceId, paymentExpiresAt: expiresAt, paymentErrorCode: provisional ? null : order.paymentErrorCode,
+        paymentNextCheckAt: order.paidAt ? null : new Date(Date.now() + 300000),
+      } });
+      if (changed.count !== 1) return "retry" as const;
+      return { order: await tx.order.findUniqueOrThrow({ where: { id: order.id }, include: { items: true } }), notify: provisional };
+    });
+    if (result !== "retry") return result;
+  }
+  return null;
+}
+
+// Compatibility helper; the checkout uses the claimed snapshot/notification flag.
 export async function attachPaymentInvoice(number: string, invoiceId: string, expiresAt: Date): Promise<boolean> {
-  const result = await prisma.order.updateMany({
-    where: { number, paymentProvider: "mono", paymentInvoiceId: null, paymentModifiedAt: null, paymentStatus: "PENDING", status: { not: "CANCELLED" } },
-    data: { paymentInvoiceId: invoiceId, paymentExpiresAt: expiresAt, paymentNextCheckAt: new Date(Date.now() + 300000) },
-  });
-  if (result.count === 1) return true;
-  const current = await prisma.order.findUnique({ where: { number } });
-  return current?.paymentInvoiceId === invoiceId && current.status !== "CANCELLED" && !["FAILED", "CANCELLED", "REFUNDED"].includes(current.paymentStatus ?? "");
+  return Boolean(await acceptPaymentInvoice(number, invoiceId, expiresAt));
 }

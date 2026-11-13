@@ -1,5 +1,6 @@
 import { createHash, createPublicKey, verify, type KeyObject } from "node:crypto";
 import { readServerEnv } from "@/lib/server-env";
+import { formatOrderReference } from "@/lib/order-reference";
 
 const API = "https://api.monobank.ua";
 export const MONO_VALIDITY_SECONDS = 3600;
@@ -11,8 +12,26 @@ export type MonoSnapshot = {
   cancelList?: { status: string; amount: number; ccy: number }[];
 };
 
+type MonoEndpoint = "invoice/create" | "invoice/status" | "invoice/remove" | "pubkey" | "local";
+type MonoCategory = "configuration" | "local_validation" | "http_rejection" | "provider_uncertain" | "transport" | "timeout" | "invalid_response" | "attachment";
 export class MonoError extends Error {
-  constructor(public readonly code: "MONO_UNAVAILABLE" | "MONO_INVALID_RESPONSE" | "MONO_NOT_CONFIGURED") { super(code); }
+  readonly category: MonoCategory;
+  readonly endpoint: MonoEndpoint;
+  readonly httpStatus: number | null;
+  readonly invoiceId?: string;
+  constructor(public readonly code: "MONO_UNAVAILABLE" | "MONO_INVALID_RESPONSE" | "MONO_NOT_CONFIGURED" | "MONO_HTTP_REJECTED" | "MONO_INVALID_INPUT", details: {
+    category?: MonoCategory; endpoint?: MonoEndpoint; httpStatus?: number; invoiceId?: string;
+  } = {}) {
+    super(code);
+    this.category = details.category ?? (code === "MONO_NOT_CONFIGURED" ? "configuration" : code === "MONO_INVALID_RESPONSE" ? "invalid_response" : "transport");
+    this.endpoint = details.endpoint ?? "local"; this.httpStatus = details.httpStatus ?? null;
+    this.invoiceId = details.invoiceId;
+  }
+  get definiteRejection() { return ["configuration", "local_validation", "http_rejection"].includes(this.category); }
+}
+export function logMonoInitializationError(error: unknown, orderNumber?: string) {
+  const safe = error instanceof MonoError ? error : new MonoError("MONO_UNAVAILABLE", { category: "attachment", endpoint: "invoice/create" });
+  console.warn("Mono initialization", { endpoint: safe.endpoint, category: safe.category, httpStatus: safe.httpStatus, ...(orderNumber ? { orderNumber } : {}) });
 }
 
 export function monoSiteOrigin(): string | null {
@@ -35,9 +54,10 @@ export function validHostedPage(value: unknown, invoiceId: string): value is str
   } catch { return false; }
 }
 
-async function api(path: string, body?: unknown): Promise<unknown> {
+async function api(path: string, body?: unknown, empty = false): Promise<unknown> {
+  const endpoint: MonoEndpoint = path.includes("invoice/create") ? "invoice/create" : path.includes("invoice/status") ? "invoice/status" : path.includes("invoice/remove") ? "invoice/remove" : "pubkey";
   const token = readServerEnv("MONO_ACQUIRING_TOKEN");
-  if (!token) throw new MonoError("MONO_NOT_CONFIGURED");
+  if (!token) throw new MonoError("MONO_NOT_CONFIGURED", { endpoint });
   try {
     const response = await fetch(`${API}${path}`, {
       method: body === undefined ? "GET" : "POST",
@@ -45,27 +65,41 @@ async function api(path: string, body?: unknown): Promise<unknown> {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       cache: "no-store", redirect: "error", signal: AbortSignal.timeout(MONO_TIMEOUT_MS),
     });
-    if (!response.ok) throw new MonoError("MONO_UNAVAILABLE");
-    return await response.json();
+    if (!response.ok) throw new MonoError([400, 403, 404, 405, 429].includes(response.status) ? "MONO_HTTP_REJECTED" : "MONO_UNAVAILABLE", {
+      endpoint, category: [400, 403, 404, 405, 429].includes(response.status) ? "http_rejection" : "provider_uncertain", httpStatus: response.status,
+    });
+    if (response.status !== 200) throw new MonoError("MONO_INVALID_RESPONSE", { endpoint, category: "invalid_response", httpStatus: response.status });
+    if (empty) return undefined; // remove returns an empty successful response.
+    try { return await response.json(); }
+    catch { throw new MonoError("MONO_INVALID_RESPONSE", { endpoint, category: "invalid_response", httpStatus: response.status }); }
   } catch (error) {
     if (error instanceof MonoError) throw error;
     // Never propagate upstream response bodies, headers or credential-bearing errors.
-    throw new MonoError("MONO_UNAVAILABLE");
+    throw new MonoError("MONO_UNAVAILABLE", { endpoint, category: error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name) ? "timeout" : "transport" });
   }
 }
 
 export async function createMonoInvoice(input: { number: string; amount: number; email: string; resultPath: string }) {
   const origin = monoSiteOrigin();
-  if (!origin || !Number.isSafeInteger(input.amount) || input.amount <= 0 || input.amount > 9999999999 ||
-      !/^[\w-]{1,100}$/.test(input.number) || !input.resultPath.startsWith("/checkout/success?")) throw new MonoError("MONO_NOT_CONFIGURED");
+  if (!origin) throw new MonoError("MONO_NOT_CONFIGURED", { endpoint: "invoice/create" });
+  if (!Number.isSafeInteger(input.amount) || input.amount <= 0 || input.amount > 9999999999 ||
+      !/^[\w-]{1,100}$/.test(input.number) || !input.resultPath.startsWith("/checkout/success?")) throw new MonoError("MONO_INVALID_INPUT", { category: "local_validation", endpoint: "invoice/create" });
   const value = await api("/api/merchant/invoice/create", {
     amount: input.amount, ccy: 980,
-    merchantPaymInfo: { reference: input.number, destination: `3D Kid — ${input.number}`, customerEmails: [input.email] },
+    merchantPaymInfo: { reference: input.number, destination: `3D Kid — ${formatOrderReference(input.number)}`, ...(input.email ? { customerEmails: [input.email] } : {}) },
     redirectUrl: `${origin}${input.resultPath}`, webHookUrl: `${origin}/api/payments/mono/webhook`,
     validity: MONO_VALIDITY_SECONDS, paymentType: "debit",
   }) as { invoiceId?: unknown; pageUrl?: unknown } | null;
-  if (!value || !validInvoiceId(value.invoiceId) || !validHostedPage(value.pageUrl, value.invoiceId)) throw new MonoError("MONO_INVALID_RESPONSE");
+  if (!value || !validInvoiceId(value.invoiceId) || !validHostedPage(value.pageUrl, value.invoiceId)) throw new MonoError("MONO_INVALID_RESPONSE", {
+    category: "invalid_response", endpoint: "invoice/create", httpStatus: 200,
+    ...(value && validInvoiceId(value.invoiceId) ? { invoiceId: value.invoiceId } : {}),
+  });
   return { invoiceId: value.invoiceId, pageUrl: value.pageUrl };
+}
+
+export async function invalidateUnpaidMonoInvoice(invoiceId: string) {
+  if (!validInvoiceId(invoiceId)) throw new MonoError("MONO_INVALID_INPUT", { category: "local_validation", endpoint: "invoice/remove" });
+  await api("/api/merchant/invoice/remove", { invoiceId }, true);
 }
 
 export function parseMonoSnapshot(value: unknown): MonoSnapshot {

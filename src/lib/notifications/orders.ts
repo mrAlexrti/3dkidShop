@@ -4,10 +4,12 @@ import { getNotificationSettings } from "./settings";
 import { notificationEvents, type NotificationChannel } from "./events";
 import { renderNotification, type OrderForNotification } from "./templates";
 import type { Locale } from "@/lib/i18n";
+import { isUnacceptedOnlineOrder } from "@/lib/payments/initialization-state";
 
 // Only the winner of a persisted transition calls this dispatcher.
 export async function emitOrderEvents(before: OrderForNotification | null, order: OrderForNotification, locale: Locale = "ua", onlyChannel?: NotificationChannel) {
   if (order.paymentMode === "sandbox") return false;
+  if (isUnacceptedOnlineOrder(order) || (before && isUnacceptedOnlineOrder(before))) return false;
   const events = notificationEvents(before, order);
   if (events.length === 0) return false;
   let emailSent = false;

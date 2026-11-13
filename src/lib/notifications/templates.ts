@@ -6,6 +6,7 @@ import { readServerEnv } from "@/lib/server-env";
 import type { NotificationEvent, NotificationChannel } from "./events";
 import { orderWorkCallback } from "./telegram-actions";
 import type { TelegramInlineKeyboard } from "./telegram";
+import { formatOrderReference } from "@/lib/order-reference";
 
 type Money = number | string | { toString(): string };
 export type OrderForNotification = StatusSnapshot & {
@@ -34,12 +35,12 @@ export function renderNotification(event: NotificationEvent, order: OrderForNoti
     return `${item.productName}${size ? ` (${size})` : ""} × ${item.quantity}`;
   });
   const context = [
-    `${t.order}: ${order.number}`, `${t.total}: ${total}`,
+    formatOrderReference(order.number, locale), `${t.total}: ${total}`,
     labels.order, labels.payment, labels.delivery,
     order.novaPoshtaTtn ? `${t.tracking}: ${order.novaPoshtaTtn}` : null,
   ].filter((line): line is string => Boolean(line));
   return {
-    subject: `${title} · ${order.number} · 3D Kid`,
+    subject: `${title} · ${formatOrderReference(order.number, locale)} · 3D Kid`,
     telegram: [title, ...context, order.customerName, order.customerPhone, order.city, order.shippingAddress, ...lines].join("\n").slice(0, 3600) + `\n${adminUrl}`,
     telegramKeyboard,
     // Result capabilities are generated only for customer email, never Telegram.

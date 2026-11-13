@@ -25,6 +25,7 @@ import * as status from "../src/lib/status";
 import * as orderStatus from "../src/lib/order-status";
 import * as fonts from "../src/lib/fonts";
 import * as events from "../src/lib/notifications/events";
+import * as reference from "../src/lib/order-reference";
 import { heroAssets } from "../src/lib/hero-assets";
 import { sourceModule } from "./source-module";
 
@@ -55,6 +56,7 @@ async function verify() {
     novaPoshtaCodStatus: "UNKNOWN_COD".repeat(20), novaPoshtaError: "ERROR_WITHOUT_SPACES".repeat(20) };
   let detailOrder = order;
   const common = {
+    "@/lib/order-reference": reference,
     react: React, "react/jsx-runtime": jsxRuntime, "lucide-react": icons, "@/lib/utils": utils,
     "next/link": { default: (props: object) => h("a", props), __esModule: true },
     "next/image": { default: ({ fill, ...props }: Record<string, unknown>) => { delete props.unoptimized;
@@ -104,7 +106,9 @@ async function verify() {
         if (file.endsWith("admin/orders/[id]/page.tsx")) {
           // Normalize only the deliberately added quick action, not page geometry.
           baseline = 'import { TakeOrderIntoWorkButton } from "@/components/admin/take-order-into-work-button";\n' + baseline.replace('<OrderStatusSelect orderId={order.id} status={order.status} />', '<div className="flex flex-wrap items-center gap-3"><TakeOrderIntoWorkButton orderId={order.id} status={order.status} /><OrderStatusSelect orderId={order.id} status={order.status} /></div>');
+          baseline = 'import { formatOrderReference } from "@/lib/order-reference";\n' + baseline.replace('Замовлення {order.number}', '{formatOrderReference(order.number, locale)}');
         }
+        if (file === "src/app/admin/page.tsx" || file === "src/app/admin/orders/page.tsx") baseline = 'import { formatOrderReference } from "@/lib/order-reference";\n' + baseline.replaceAll('{o.number}', '{formatOrderReference(o.number, locale)}');
         writeFileSync(source, baseline);
         acceptedSources.push(readFileSync(source, "utf8"));
       }

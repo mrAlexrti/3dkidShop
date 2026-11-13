@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { queryMonoInvoice } from "@/lib/payments/mono";
 import { monoEvidence } from "@/lib/payments/mono-state";
 import { applyPaymentEvidence, cancelPendingPayment } from "@/lib/payments/transitions";
+import { isUnacceptedOnlineOrder } from "@/lib/payments/initialization-state";
+import { markInitializationUncertain } from "@/lib/payments/initialization";
 
 // Called by an authorized scheduler, never from a browser return. No schedule is
 // created here. Claims expire after five minutes if this worker crashes.
@@ -22,7 +24,8 @@ export async function reconcilePendingPayments(now = new Date()) {
     try {
       if (!order.paymentInvoiceId) {
         if (order.paymentExpiresAt && order.paymentExpiresAt <= now) {
-          if (await cancelPendingPayment(order.number, "INITIALIZATION_EXPIRED")) updated++;
+          if (isUnacceptedOnlineOrder(order)) { await markInitializationUncertain(order.number); updated++; }
+          else if (await cancelPendingPayment(order.number, "INITIALIZATION_EXPIRED")) updated++;
         }
         continue;
       }
@@ -36,7 +39,7 @@ export async function reconcilePendingPayments(now = new Date()) {
       // Do not overwrite a newer financial transition/error/schedule.
       await prisma.order.updateMany({
         where: { id: order.id, paymentModifiedAt: order.paymentModifiedAt, paymentNextCheckAt: lease, paymentInvoiceId: order.paymentInvoiceId },
-        data: { paymentErrorCode: "RECONCILIATION_UNAVAILABLE", paymentNextCheckAt: new Date(now.getTime() + 600000) },
+        data: { paymentErrorCode: isUnacceptedOnlineOrder(order) ? order.paymentErrorCode : "RECONCILIATION_UNAVAILABLE", paymentNextCheckAt: new Date(now.getTime() + 600000) },
       });
     }
   }

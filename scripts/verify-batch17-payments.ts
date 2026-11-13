@@ -7,6 +7,8 @@ import { sourceModule } from "./source-module";
 import { PaymentMemory, type Row } from "./payment-memory";
 import * as money from "../src/lib/payments/money";
 import * as numbers from "../src/lib/order-number";
+import * as reference from "../src/lib/order-reference";
+import * as initializationState from "../src/lib/payments/initialization-state";
 import * as serverEnv from "../src/lib/server-env";
 import * as orderStatus from "../src/lib/order-status";
 import * as status from "../src/lib/status";
@@ -55,7 +57,7 @@ globalThis.fetch = async (input, init) => {
   if (afterCreate) await afterCreate();
   return Response.json({ invoiceId: "invoice_1", pageUrl: invalidPage ? "https://attacker.example.invalid/invoice_1" : "https://pay.mbnk.biz/invoice_1" });
 };
-const mono = sourceModule<typeof import("../src/lib/payments/mono")>("src/lib/payments/mono.ts", { "node:crypto": crypto, "@/lib/server-env": serverEnv });
+const mono = sourceModule<typeof import("../src/lib/payments/mono")>("src/lib/payments/mono.ts", { "node:crypto": crypto, "@/lib/server-env": serverEnv, "@/lib/order-reference": reference });
 const online = sourceModule<typeof import("../src/lib/payments/online-payment")>("src/lib/payments/online-payment.ts", { "@/lib/server-env": serverEnv, "@/lib/payments/mono": mono });
 const adapter = sourceModule<typeof import("../src/lib/payments/mono-state")>("src/lib/payments/mono-state.ts", {});
 const notifications = {
@@ -63,18 +65,25 @@ const notifications = {
   notifyOrderCreated: async (order: Order) => { db.events.push(...events.notificationEvents(null, order)); return false; },
 };
 const lifecycle = sourceModule<typeof import("../src/lib/payments/transitions")>("src/lib/payments/transitions.ts", {
+  "@/lib/payments/initialization-state": initializationState,
   "@/lib/prisma": { prisma: db }, "@/lib/payments/money": money, "@/lib/order-status": orderStatus, "@/lib/notifications/orders": notifications,
+});
+const initialization = sourceModule<typeof import("../src/lib/payments/initialization")>("src/lib/payments/initialization.ts", {
+  "@/lib/prisma": { prisma: db }, "@/lib/payments/transitions": lifecycle, "@/lib/payments/initialization-state": initializationState,
+  "@/lib/payments/mono": mono, "@/lib/payments/money": money,
 });
 const webhook = sourceModule<typeof import("../src/app/api/payments/mono/webhook/route")>("src/app/api/payments/mono/webhook/route.ts", {
   "next/server": { NextResponse }, "@/lib/payments/mono": mono, "@/lib/payments/mono-state": adapter, "@/lib/payments/transitions": lifecycle,
 });
 const reconcile = sourceModule<typeof import("../src/lib/payments/reconciliation")>("src/lib/payments/reconciliation.ts", {
+  "@/lib/payments/initialization-state": initializationState, "@/lib/payments/initialization": initialization,
   "@/lib/prisma": { prisma: db }, "@/lib/payments/mono": mono, "@/lib/payments/mono-state": adapter, "@/lib/payments/transitions": lifecycle,
 });
 const cron = sourceModule<typeof import("../src/app/api/cron/payments/route")>("src/app/api/cron/payments/route.ts", {
   "next/server": { NextResponse }, "node:crypto": crypto, "@/lib/server-env": serverEnv, "@/lib/payments/reconciliation": reconcile,
 });
 const loadAction = (numberModule = numbers) => sourceModule<typeof import("../src/lib/actions/create-order")>("src/lib/actions/create-order.ts", {
+  "@/lib/payments/initialization-state": initializationState, "@/lib/payments/initialization": initialization,
   "@/lib/prisma": { prisma: db }, "@/lib/i18n": { translations }, "@/lib/validations/checkout": validation,
   "@/lib/product-variants": variants, "@/lib/cart-items": cart, "@/lib/payments/online-payment": online,
   "@/lib/payments/order-result": result, "@/lib/payments/mono": mono, "@/lib/payments/transitions": lifecycle,
@@ -197,16 +206,15 @@ async function verify() {
   reset({ novaPoshtaTtn: "00000000000000" }); await adminAction.updateOrderStatus("o1", "CANCELLED");
   assert.equal(db.orders[0].status, "CANCELLED"); assert.equal(db.products[0].stock, 4);
   reset(); db.orders = []; db.collisions = 1;
-  let number = 0;
-  const numberSequence = { ...numbers, createOrderNumber: () => "3DK-20261113-" + String(++number).padStart(10, "0") };
-  const response = await loadAction(numberSequence)(checkout, items, "en");
+  const response = await loadAction()(checkout, items, "en");
   assert.ok(response.success && response.payment?.pageUrl === "https://pay.mbnk.biz/invoice_1");
-  assert.equal(db.products[0].stock, 4); assert.equal(db.orders.length, 1); assert.equal(db.orders[0].total, "199.00"); assert.equal(db.orders[0].number, "3DK-20261113-0000000002");
+  assert.equal(db.products[0].stock, 4); assert.equal(db.orders.length, 1); assert.equal(db.orders[0].total, "199.00"); assert.equal(db.orders[0].number, "0001");
   assert.equal(db.orders[0].status, "PENDING", "New online order remains operationally NEW");
   assert.ok(db.events.includes("PAYMENT_PENDING"));
   for (const failure of ["network", "page"] as const) {
     reset(); db.orders = []; invoiceFailure = failure === "network"; invalidPage = failure === "page";
-    assert.equal((await loadAction()(checkout, items, "ua")).success, false); assert.equal(db.products[0].stock, 4); assert.equal(db.orders[0].status, "PENDING"); assert.equal(db.orders[0].paymentStatus, "CANCELLED");
+    querySnapshot = snapshot({ reference: "0001", status: "processing" });
+    assert.equal((await loadAction()(checkout, items, "ua")).success, false); assert.equal(db.products[0].stock, 4); assert.equal(db.orders[0].status, "PENDING"); assert.equal(db.orders[0].paymentStatus, "UNKNOWN");
     const eventCount: number = db.events.length; await lifecycle.cancelPendingPayment(String(db.orders[0].number), "INVOICE_CREATE_UNCERTAIN"); assert.equal(db.events.length, eventCount);
   }
   reset(); db.orders = []; afterCreate = async () => {
@@ -221,8 +229,12 @@ async function verify() {
   reset(); db.orders = []; db.products[0].options = [{ name: "Size", values: [{ id: "s1", value: "Small", price: "0.29" }] }];
   assert.equal((await loadAction()({ ...checkout, paymentMethod: "cash_on_delivery" }, [{ ...items[0], quantity: 3, variant: { id: "s1", labelUa: "Forged", labelEn: null } }], "en")).success, true);
   assert.equal(db.orders[0].total, "0.87"); assert.equal(db.products[0].stock, 4);
-  const generated = await Promise.all(Array.from({ length: 2000 }, async () => numbers.createOrderNumber(new Date(timestamp))));
-  assert.equal(new Set(generated).size, generated.length); for (const value of generated) assert.match(value, /^3DK-\d{8}-[0-9A-HJKMNP-TV-Z]{10}$/);
+  db.orders = [];
+  const generated = await Promise.all(Array.from({ length: 30 }, () => db.$transaction(async (tx) => {
+    const number = await numbers.allocateOrderNumber(tx as unknown as Prisma.TransactionClient);
+    await tx.order.create({ data: { number, status: "PENDING", items: { create: [] } } }); return number;
+  })));
+  assert.equal(new Set(generated).size, generated.length); assert.equal(generated[0], "0001"); assert.equal(generated.at(-1), "0030");
   assert.equal(numbers.isOrderNumberCollision({ code: "P2002", meta: { target: ["id"] } }), false);
   assert.equal(numbers.isOrderNumberCollision({ code: "P2002", meta: { target: ["number"] } }), true);
   assert.equal(methods.isCashOnDelivery("Оплата при отриманні"), false); assert.equal(methods.isCashOnDelivery("not cod"), false);

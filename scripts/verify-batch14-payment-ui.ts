@@ -9,6 +9,7 @@ import * as validation from "../src/lib/validations/checkout";
 import * as paymentStates from "../src/lib/payments/payment-state";
 import { translations } from "../src/lib/i18n";
 import type { OrderResult as ResultComponent } from "../src/components/checkout/order-result";
+import * as reference from "../src/lib/order-reference";
 import type { CheckoutForm as FormComponent } from "../src/components/checkout/checkout-form";
 import type { PaymentResultState } from "../src/lib/payments/payment-state";
 import { sourceModule } from "./source-module";
@@ -37,6 +38,7 @@ async function verify() {
   for (const locale of ["ua", "en"] as const) {
     const t = translations[locale];
     const bindings = {
+      "@/lib/order-reference": reference,
       "react/jsx-runtime": jsxRuntime, "lucide-react": icons, "@/components/ui/button": { Button },
       "@/store/lang-store": { useLangStore: () => ({ t, locale }) }, "next/link": { default: Link, __esModule: true },
     };
@@ -85,6 +87,7 @@ async function verify() {
       return Response.json({ state: calls === 1 ? "pending" : outcome });
     };
     const { OrderResult } = sourceModule<{ OrderResult: typeof ResultComponent }>("src/components/checkout/order-result.tsx", {
+      "@/lib/order-reference": reference,
       react: { useState: (initial: unknown) => [initial, (value: unknown) => { observed = value; }], useEffect: (callback: typeof effect) => { effect = callback; } },
       "react/jsx-runtime": jsxRuntime, "lucide-react": icons, "@/components/ui/button": { Button },
       "@/store/lang-store": { useLangStore: () => ({ t: translations.en }) }, "next/link": { default: Link, __esModule: true },

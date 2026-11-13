@@ -16,6 +16,8 @@ import * as events from "../src/lib/notifications/events";
 import * as callbacks from "../src/lib/notifications/telegram-actions";
 import * as variants from "../src/lib/product-variants";
 import * as money from "../src/lib/payments/money";
+import * as reference from "../src/lib/order-reference";
+import * as initializationState from "../src/lib/payments/initialization-state";
 import { translations } from "../src/lib/i18n";
 
 const originalFetch = globalThis.fetch;
@@ -64,6 +66,7 @@ const post = (body: unknown = callback(), secret: string | null = "qa_webhook_se
   method: "POST", body: typeof body === "string" ? body : JSON.stringify(body), headers: secret == null ? {} : { "X-Telegram-Bot-Api-Secret-Token": secret },
 }));
 const templates = sourceModule<typeof import("../src/lib/notifications/templates")>("src/lib/notifications/templates.ts", {
+  "@/lib/order-reference": reference,
   "@/lib/product-variants": variants, "@/lib/payments/order-result": { getOrderResultPath: (number: string) => `/result/${number}` },
   "@/lib/i18n": { translations }, "@/lib/status": statuses, "@/lib/server-env": serverEnv, "./telegram-actions": callbacks,
 });
@@ -123,6 +126,7 @@ async function verify() {
   assert.throws(() => callbacks.orderWorkCallback("a".repeat(49)));
   let settings = events.defaultNotificationSettings();
   const dispatcher = sourceModule<typeof import("../src/lib/notifications/orders")>("src/lib/notifications/orders.ts", {
+    "@/lib/payments/initialization-state": initializationState,
     "./telegram": sender, "./email": { sendEmail: async () => ({ sent: true }) }, "./settings": { getNotificationSettings: async () => settings },
     "./events": events, "./templates": templates,
   });
@@ -176,6 +180,7 @@ async function verify() {
     return financialUpdate(args);
   };
   const payment = sourceModule<typeof import("../src/lib/payments/transitions")>("src/lib/payments/transitions.ts", {
+    "@/lib/payments/initialization-state": initializationState,
     "@/lib/prisma": { prisma: db }, "@/lib/payments/money": money, "@/lib/order-status": stages, "@/lib/notifications/orders": notifications,
   });
   for (const stage of ["PAID", "FAILED", "CANCELLED", "REFUNDED"] as const) {
