@@ -58,6 +58,15 @@ async function verify() {
   assert.equal(documented.valid, true); assert.deepEqual(await mono.createMonoInvoice(input), currentValue); assert.equal(logs.length, 0);
   currentValue = { invoiceId, pageUrl };
   assert.equal(mono.inspectMonoCreateInvoiceResponse(currentValue).valid, true); await mono.createMonoInvoice(input); assert.equal(logs.length, 0);
+  // Fixed hosted-payment allowlist: this is the sole intentional behavior delta
+  // from the diagnostic batch's prior Production oracle below.
+  for (const host of ["pay.mbnk.biz", "pay.monobank.ua"]) {
+    currentValue = { invoiceId, pageUrl: `https://${host}/${invoiceId}` };
+    const inspected = mono.inspectMonoCreateInvoiceResponse(currentValue);
+    assert.equal(inspected.valid, true); assert.equal(inspected.diagnostics.pageUrlHostnameMatchesExpected, true);
+    assert.equal(mono.validHostedPage((currentValue as { pageUrl: string }).pageUrl, invoiceId), true);
+    assert.deepEqual(await mono.createMonoInvoice(input), currentValue); assert.equal(logs.length, 0);
+  }
   const cases: { name: string; value: unknown; field: string; expected: unknown }[] = [
     { name: "missing ID", value: { pageUrl }, field: "invoiceIdPresent", expected: false },
     { name: "invalid ID", value: { invoiceId: `${invoiceId}/invalid`, pageUrl }, field: "invoiceIdValid", expected: false },
@@ -79,6 +88,24 @@ async function verify() {
     { name: "array response", value: [], field: "responseIsObject", expected: false },
     { name: "primitive response", value: "PRIVATE_RESPONSE_BODY", field: "responseIsObject", expected: false },
   ];
+  for (const host of ["evil.monobank.ua", "pay.monobank.ua.evil.example", "monobank.ua", "www.pay.monobank.ua", "pay-mono.bank.ua"]) {
+    cases.push({ name: `untrusted lookalike ${host}`, value: { invoiceId, pageUrl: `https://${host}/${invoiceId}` }, field: "pageUrlHostnameMatchesExpected", expected: false });
+  }
+  for (const host of ["pay.mbnk.biz", "pay.monobank.ua"]) {
+    for (const [url, field] of [
+      [`http://${host}/${invoiceId}`, "pageUrlProtocol"],
+      [`https://${host}/${pathMarker}`, "pageUrlPathMatchesInvoice"],
+      [`https://${host}/${invoiceId}/`, "pageUrlPathMatchesInvoice"],
+      [`https://${host}/${invoiceId}?private=${token}`, "pageUrlHasQuery"],
+      [`https://${host}/${invoiceId}#${token}`, "pageUrlHasHash"],
+      [`https://qa-user@${host}/${invoiceId}`, "pageUrlHasCredentials"],
+      [`https://:${token}@${host}/${invoiceId}`, "pageUrlHasCredentials"],
+      [`https://${host}:8443/${invoiceId}`, "pageUrlHasPort"],
+    ] as const) {
+      const expected = field === "pageUrlProtocol" ? "http:" : field === "pageUrlPathMatchesInvoice" ? false : true;
+      cases.push({ name: `${host} ${field}`, value: { invoiceId, pageUrl: url }, field, expected });
+    }
+  }
   for (const test of cases) {
     currentValue = test.value; rawJson = undefined;
     const inspected = mono.inspectMonoCreateInvoiceResponse(currentValue);
@@ -127,6 +154,6 @@ async function verify() {
     assert.deepEqual(await outcome(mono), await outcome(baseline), "URL acceptance/recovery behavior changed");
   }
   const before = calls; mono.inspectMonoCreateInvoiceResponse({ invoiceId, pageUrl }); assert.equal(calls, before, "Inspector must not request anything");
-  console.log(`PASS Mono response diagnostics: documented success/no logs; ${cases.length} invalid structures/URL conditions; malformed JSON; allowlisted metadata/privacy; raw identifiers/URLs/path/query/customer/header/token values absent; approved Production validator/recovery parity including URL normalization edges. Mocked HTTP only; no DB/orders/sends.`);
+  console.log(`PASS Mono response diagnostics: both exact trusted hosts accepted/no logs; ${cases.length} invalid structures/lookalikes/URL conditions; HTTPS/path/query/hash/credentials/port enforced on both hosts; malformed JSON; allowlisted metadata/privacy; prior validator/recovery parity outside the intended host addition. Mocked HTTP only; no DB/orders/sends.`);
 }
 verify().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => { globalThis.fetch = originalFetch; console.warn = originalWarn; });

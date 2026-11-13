@@ -3,6 +3,7 @@ import { readServerEnv } from "@/lib/server-env";
 import { formatOrderReference } from "@/lib/order-reference";
 
 const API = "https://api.monobank.ua";
+const MONO_HOSTED_HOSTNAMES = new Set(["pay.mbnk.biz", "pay.monobank.ua"]);
 export const MONO_VALIDITY_SECONDS = 3600;
 export const MONO_TIMEOUT_MS = 15000;
 export type HostedCheckout = { provider: "mono"; pageUrl: string };
@@ -74,7 +75,7 @@ function inspectHostedPage(value: unknown, invoiceId: unknown) {
   let url: URL | undefined;
   if (typeof value === "string") { try { url = new URL(value); } catch { /* Syntax failure is metadata only. */ } }
   const pathMatches = Boolean(url && typeof invoiceId === "string" && url.pathname === `/${invoiceId}`);
-  const hostnameMatches = url?.hostname === "pay.mbnk.biz";
+  const hostnameMatches = Boolean(url && MONO_HOSTED_HOSTNAMES.has(url.hostname));
   const valid = Boolean(url && url.protocol === "https:" && hostnameMatches && !url.port && !url.username && !url.password && pathMatches && !url.search && !url.hash);
   // Even an identifier embedded in a malformed hostname must not become a log value.
   const hostnameRedacted = Boolean(url && typeof invoiceId === "string" && invoiceId && url.hostname.toLowerCase().includes(invoiceId.toLowerCase()));
