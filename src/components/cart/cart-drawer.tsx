@@ -1,8 +1,9 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useIsPresent } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { X, Minus, Plus, Trash2 } from "lucide-react";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
@@ -12,40 +13,67 @@ import { useEffect, useRef } from "react";
 import { sizeLabel } from "@/lib/product-variants";
 
 export function CartDrawer() {
-  const { items, isOpen, closeCart, removeItem, updateQuantity, total } = useCartStore();
+  const { isOpen, closeCart } = useCartStore();
+  const pathname = usePathname();
+  const previousPathname = useRef(pathname);
+  const routeChanged = previousPathname.current !== pathname;
+
+  useEffect(() => {
+    if (previousPathname.current !== pathname) {
+      previousPathname.current = pathname;
+      closeCart();
+    }
+    // Also reset the store when navigation unmounts the storefront layout.
+    return closeCart;
+  }, [pathname, closeCart]);
+
+  // Navigation must discard even an in-flight exit animation from the old route.
+  return (
+    <AnimatePresence key={pathname}>
+      {isOpen && !routeChanged && <CartDrawerContents key="cart" />}
+    </AnimatePresence>
+  );
+}
+
+function focusSafely(element: HTMLElement | null | undefined) {
+  if (!element?.isConnected || element.closest("[inert]")) return;
+  try { element.focus({ preventScroll: true }); } catch { /* A removed/custom focus target must not break modal cleanup. */ }
+}
+
+function CartDrawerContents() {
+  const { items, closeCart, removeItem, updateQuantity, total } = useCartStore();
+  const isPresent = useIsPresent();
   const { t, locale } = useLangStore();
   const currency = "UAH";
   const panel = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isPresent) return;
     const previous = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const focusable = () => Array.from(panel.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), [tabindex="0"]') ?? []);
-    focusable()[0]?.focus();
+    focusSafely(focusable()[0]);
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") { event.preventDefault(); closeCart(); }
       if (event.key !== "Tab") return;
       const nodes = focusable();
       const first = nodes[0]; const last = nodes[nodes.length - 1];
       if (event.shiftKey && (document.activeElement === first || !panel.current?.contains(document.activeElement))) {
-        event.preventDefault(); last?.focus();
+        event.preventDefault(); focusSafely(last);
       } else if (!event.shiftKey && (document.activeElement === last || !panel.current?.contains(document.activeElement))) {
-        event.preventDefault(); first?.focus();
+        event.preventDefault(); focusSafely(first);
       }
     };
     document.addEventListener("keydown", handleKey);
     return () => {
       document.removeEventListener("keydown", handleKey);
       document.body.style.overflow = previousOverflow;
-      if (previous?.isConnected) previous.focus();
+      focusSafely(previous);
     };
-  }, [isOpen, closeCart]);
+  }, [isPresent, closeCart]);
 
   return (
-    <AnimatePresence>
-      {isOpen && (
         <>
           {/* Backdrop */}
           <motion.div
@@ -53,6 +81,8 @@ export function CartDrawer() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={closeCart}
+            aria-hidden="true"
+            style={{ pointerEvents: isPresent ? "auto" : "none" }}
             className="fixed inset-0 z-[60] bg-ink/30 backdrop-blur-sm"
           />
 
@@ -62,6 +92,9 @@ export function CartDrawer() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="cart-drawer-title"
+            aria-hidden={!isPresent || undefined}
+            inert={!isPresent}
+            style={{ pointerEvents: isPresent ? "auto" : "none" }}
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
@@ -171,7 +204,5 @@ export function CartDrawer() {
             )}
           </motion.aside>
         </>
-      )}
-    </AnimatePresence>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "sonner";
 import { Minus, Plus, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/utils";
@@ -15,7 +14,6 @@ export function ProductOptions({ productId, name, slug, basePrice, image, isOrde
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const addItem = useCartStore((state) => state.addItem);
-  const openCart = useCartStore((state) => state.openCart);
   const { t, locale } = useLangStore();
   const selected = variants.find((variant) => variant.id === selectedId);
   const validPrices = variants.flatMap((variant) => variant.price == null ? [] : [variant.price]);
@@ -25,8 +23,6 @@ export function ProductOptions({ productId, name, slug, basePrice, image, isOrde
     if (!ready || unitPrice == null) return;
     addItem({ id: productLineId(productId, selected?.id), productId, name, slug, price: unitPrice, image, quantity,
       ...(selected ? { variant: { id: selected.id, labelUa: selected.labelUa, labelEn: selected.labelEn } } : {}) });
-    toast.success(`${name} ${t.cart.addedToCart}`);
-    openCart();
   }
   const note = selected && (locale === "en" ? selected.noteEn || selected.noteUa : selected.noteUa);
   return <div className="sf-product-options mt-6 space-y-5">

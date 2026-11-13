@@ -74,7 +74,7 @@ async function verify() {
     "@/store/lang-store": language, "@/store/cart-store": { useCartStore: (selector?: (s: typeof cartState) => unknown) => {
       const state = { ...cartState, isOpen: cartOpen }; return selector ? selector(state) : state;
     } },
-    "framer-motion": { motion, AnimatePresence: ({ children }: { children: React.ReactNode }) => children },
+    "framer-motion": { motion, useIsPresent: () => true, AnimatePresence: ({ children }: { children: React.ReactNode }) => children },
     sonner: { toast: { error: blocked, success: blocked, message: blocked } },
   };
   // Component signatures vary; bindings are checked by the fail-closed loader.

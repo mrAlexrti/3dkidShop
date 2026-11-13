@@ -76,7 +76,6 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, ho
       return;
     }
     addItem({ id, productId: id, name: localizedName, slug, price, image, quantity: 1 });
-    toast.success(`${localizedName} ${t.cart.addedToCart}`);
   };
 
   return (

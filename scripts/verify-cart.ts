@@ -14,7 +14,7 @@ const { useCartStore } = sourceModule<{ useCartStore: typeof CartStore }>("src/s
 const cart = () => useCartStore.getState();
 const item = { id: "qa-product", productId: "qa-product", name: "QA", slug: "qa", price: 12.5, image: "/images/placeholder.svg", quantity: 1 };
 assert.equal(cart().items.length, 0);
-cart().addItem(item); cart().addItem(item);
+cart().addItem(item); assert.equal(cart().isOpen, true); cart().addItem(item);
 assert.equal(cart().items.length, 1); assert.equal(cart().count(), 2); assert.equal(cart().total(), 25);
 cart().addItem({ ...item, id: "qa-product-small", price: 20, variant: { id: "small", labelUa: "Маленький", labelEn: "Small" } });
 assert.equal(cart().items.length, 2); assert.equal(cart().total(), 45);
