@@ -43,7 +43,9 @@ export function normalizeOrderStage(status: string): OrderStage {
   switch (status) {
     case "CANCELLED": return "CANCELLED";
     case "COMPLETED": return "COMPLETED";
-    case "PROCESSING": case "PAID": case "SHIPPED": case "DELIVERED": return "PROCESSING";
+    case "PROCESSING": return "PROCESSING";
+    // Legacy financial/carrier enum values do not prove manual acceptance.
+    // Preserve their raw values for diagnostics; never manufacture an in-work fact.
     default: return "NEW";
   }
 }

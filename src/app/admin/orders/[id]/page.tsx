@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CreateTtnButton } from "@/components/admin/create-ttn-button";
 import { OrderStatusSelect } from "@/components/admin/order-status-select";
+import { TakeOrderIntoWorkButton } from "@/components/admin/take-order-into-work-button";
 import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/lib/utils";
 
@@ -53,7 +54,10 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
     <div>
       <div className="flex flex-col items-start justify-between gap-4 lg:flex-row lg:items-center">
         <h1 className="min-w-0 font-display text-3xl [overflow-wrap:anywhere]">Замовлення {order.number}</h1>
-        <OrderStatusSelect orderId={order.id} status={order.status} />
+        <div className="flex flex-wrap items-center gap-3">
+          <TakeOrderIntoWorkButton orderId={order.id} status={order.status} />
+          <OrderStatusSelect orderId={order.id} status={order.status} />
+        </div>
       </div>
 
       <div className="glass mt-6 rounded-xl2 p-4"><OrderStatusSummary order={order} locale={locale} /></div>

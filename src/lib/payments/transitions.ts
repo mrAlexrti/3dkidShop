@@ -58,19 +58,18 @@ export async function applyPaymentEvidence(evidence: PaymentEvidence, options: {
       if (evidence.status === "PAID") {
         data.paidAt = order.paidAt ?? evidence.modifiedAt;
         if (order.status === "CANCELLED" || order.paymentStatus === "REFUNDED") {
-          data.status = order.status;
           data.paymentErrorCode = "LATE_PAYMENT_REVIEW";
           if (order.paymentStatus === "REFUNDED") data.paymentStatus = "REFUNDED";
         } else {
-          data.status = getOrderStatusAfterPaymentReceived(order.status, Boolean(order.novaPoshtaDeliveredAt));
+          const nextStatus = getOrderStatusAfterPaymentReceived(order.status, Boolean(order.novaPoshtaDeliveredAt));
+          if (nextStatus !== order.status) data.status = nextStatus;
         }
       } else if (evidence.status === "FAILED" || evidence.status === "CANCELLED") {
         if (order.paidAt) {
           data.paymentStatus = order.paymentStatus;
           data.paymentErrorCode = "INCONSISTENT_PAYMENT_STATE";
           data.paymentNextCheckAt = new Date(Date.now() + 300000);
-        } else if (unfulfilled(order)) data.status = "CANCELLED";
-        else data.paymentErrorCode = "FULFILLMENT_REVIEW_REQUIRED";
+        } else if (!unfulfilled(order)) data.paymentErrorCode = "FULFILLMENT_REVIEW_REQUIRED";
       } else if (order.paidAt && evidence.status !== "REFUNDED") {
         // Pending/unknown evidence must not undo a known financial fact.
         data.paymentStatus = order.paymentStatus;
@@ -90,17 +89,19 @@ export async function applyPaymentEvidence(evidence: PaymentEvidence, options: {
   return "conflict";
 }
 
-// Invoice setup failures / Admin cancellation update financial/order state only.
+// Provider/setup failures change financial state only. Operational cancellation
+// requires the explicit Admin action; no payment result implicitly takes work.
 // Financial truth that already won is never overwritten by a local cancellation.
 export async function cancelPendingPayment(number: string, reason: "INVOICE_CREATE_FAILED" | "INVOICE_CREATE_UNCERTAIN" | "INITIALIZATION_EXPIRED" | "ADMIN_CANCELLED") {
   for (let attempt = 0; attempt < 4; attempt++) {
     const result = await prisma.$transaction(async (tx): Promise<{ retry?: boolean; transition?: Transition }> => {
       const order = await tx.order.findUnique({ where: { number }, include: { items: true } });
       if (!order || order.paymentProvider !== "mono" || order.paidAt || order.paymentStatus === "REFUNDED") return {};
+      if (order.status === "COMPLETED") return {};
       if (order.status === "CANCELLED" && order.paymentStatus === "CANCELLED") return {};
       if (reason === "INITIALIZATION_EXPIRED" && (order.paymentInvoiceId || !order.paymentExpiresAt || order.paymentExpiresAt.getTime() > Date.now())) return {};
       const changed = await tx.order.updateMany({ where: paymentSnapshotWhere(order), data: {
-        paymentStatus: "CANCELLED", ...(reason === "ADMIN_CANCELLED" || unfulfilled(order) ? { status: "CANCELLED" } : {}),
+        paymentStatus: "CANCELLED", ...(reason === "ADMIN_CANCELLED" ? { status: "CANCELLED" } : {}),
         paymentErrorCode: unfulfilled(order) ? reason : "FULFILLMENT_REVIEW_REQUIRED", paymentNextCheckAt: null,
       } });
       if (changed.count !== 1) return { retry: true };

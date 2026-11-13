@@ -79,6 +79,9 @@ for (const locale of ["ua", "en"] as const) {
     for (const id of ["customerName", "customerSurname", "customerPhone", "customerEmail", "np-city"]) assert.ok(html.includes(`for="${id}"`) && html.includes(`id="${id}"`));
     assert.ok(html.includes('type="tel"'));
     assert.equal(html.includes(t.payment.card), enabled);
+    assert.ok(html.includes(t.payment.cash));
+    assert.ok(!html.includes(t.payment.onPickup), "Pickup must not be selectable in new checkout");
+    assert.ok(!html.includes("pay_on_pickup"));
     assert.ok(html.includes(enabled ? t.payment.note : t.payment.unavailable));
     assert.doesNotMatch(html, /coming soon|незабаром|WayForPay|Monobank|Runtime|РЎ|Р /);
     if (locale === "en") assert.doesNotMatch(html, /[А-Яа-яІіЇїЄєҐґ]/);

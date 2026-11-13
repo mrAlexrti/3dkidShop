@@ -21,13 +21,13 @@ function isFinalStatus(status: OrderStatus) {
   return status === OrderStatus.CANCELLED || status === OrderStatus.COMPLETED;
 }
 
-export function getInitialOrderStatus(paymentMethod: string) {
-  return paymentMethod === "card_online" ? OrderStatus.AWAITING_PAYMENT : OrderStatus.PROCESSING;
+export function getInitialOrderStatus() {
+  return OrderStatus.PENDING;
 }
 
 export function getOrderStatusAfterPaymentReceived(currentStatus: OrderStatus, isDelivered: boolean) {
   if (isFinalStatus(currentStatus)) return currentStatus;
-  return isDelivered || currentStatus === OrderStatus.DELIVERED ? OrderStatus.COMPLETED : OrderStatus.PAID;
+  return isDelivered || currentStatus === OrderStatus.DELIVERED ? OrderStatus.COMPLETED : currentStatus;
 }
 
 export function getOrderStatusAfterTtnCreated(currentStatus: OrderStatus) {
@@ -46,7 +46,5 @@ export function getOrderStatusAfterNovaPoshtaSync({
 }) {
   if (isFinalStatus(currentStatus)) return currentStatus;
   if (isDelivered && isPaid) return OrderStatus.COMPLETED;
-  if (isDelivered) return OrderStatus.DELIVERED;
-  if (isPaid) return OrderStatus.PAID;
   return currentStatus;
 }

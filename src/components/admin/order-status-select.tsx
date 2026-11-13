@@ -14,7 +14,7 @@ export function OrderStatusSelect({ orderId, status }: { orderId: string; status
   return (
     <select
       value={status}
-      disabled={isPending}
+      disabled={isPending || status === "COMPLETED" || status === "CANCELLED"}
       onChange={(e) => {
         const value = e.target.value as OrderStatus;
         startTransition(async () => {

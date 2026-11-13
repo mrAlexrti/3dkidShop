@@ -75,7 +75,7 @@ async function verify() {
   const pending = await status.GET(new Request(statusUrl));
   assert.deepEqual(await pending.json(), { state: "pending" }); assert.match(pending.headers.get("cache-control")!, /no-store/);
   assert.equal((await status.GET(new Request(statusUrl.replace(token, "invalid")))).status, 404);
-  await Promise.all([post(), post()]); assert.equal(writes, 1); assert.equal(order.status, "PAID"); assert.ok(order.paidAt);
+  await Promise.all([post(), post()]); assert.equal(writes, 1); assert.equal(order.status, "AWAITING_PAYMENT"); assert.ok(order.paidAt);
   assert.deepEqual(await (await status.GET(new Request(statusUrl))).json(), { state: "paid" });
   await post(); assert.equal(writes, 1, "Duplicate paid callback must be a no-op.");
   await post({ status: "failure" }); assert.equal(writes, 1, "Stale failure cannot undo a confirmed payment.");

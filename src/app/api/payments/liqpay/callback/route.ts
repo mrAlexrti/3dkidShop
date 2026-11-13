@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   const paidAt = paid ? new Date() : order.paidAt;
   const updated = await prisma.order.updateMany({
     where: { id: order.id, status: order.status, paymentProvider: config.provider, paymentMode: config.mode, paymentStatus: order.paymentStatus, paidAt: order.paidAt },
-    data: { paymentStatus: nextPaymentStatus, ...(paid ? { paidAt, status: nextStatus } : {}) },
+    data: { paymentStatus: nextPaymentStatus, ...(paid ? { paidAt, ...(nextStatus !== order.status ? { status: nextStatus } : {}) } : {}) },
   });
   if (updated.count !== 1) {
     const current = await prisma.order.findUnique({ where: { id: order.id } });

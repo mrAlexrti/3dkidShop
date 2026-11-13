@@ -102,7 +102,7 @@ export async function GET(request: Request) {
       isPaid: Boolean(paidAt) && !["REFUNDED", "FAILED", "CANCELLED"].includes(order.paymentStatus ?? ""),
     });
     const data = {
-      status: nextOrderStatus,
+      ...(nextOrderStatus !== order.status ? { status: nextOrderStatus } : {}),
       paidAt,
       novaPoshtaStatus: status.status || null,
       novaPoshtaStatusCode: status.statusCode || null,

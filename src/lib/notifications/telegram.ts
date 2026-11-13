@@ -1,54 +1,44 @@
+import { readServerEnv } from "@/lib/server-env";
+
 type SendTelegramResult =
   | { sent: true }
   | { sent: false; reason: "not_configured" | "request_failed" };
-
-function readEnv(name: string) {
-  const value = process.env[name]?.trim() ?? "";
-  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-    return value.slice(1, -1).trim();
-  }
-
-  return value;
-}
+export type TelegramInlineKeyboard = {
+  inline_keyboard: ({ text: string; callback_data: string; url?: never } | { text: string; url: string; callback_data?: never })[][];
+};
 
 function getTelegramConfig() {
-  const botToken = readEnv("TELEGRAM_BOT_TOKEN");
-  const chatId = readEnv("TELEGRAM_ADMIN_CHAT_ID");
-
-  if (!botToken || !chatId) return null;
-  return { botToken, chatId };
+  const botToken = readServerEnv("TELEGRAM_BOT_TOKEN");
+  const chatId = readServerEnv("TELEGRAM_ADMIN_CHAT_ID");
+  return botToken && chatId ? { botToken, chatId } : null;
 }
+export function isTelegramConfigured() { return Boolean(getTelegramConfig()); }
 
-export function isTelegramConfigured() {
-  return Boolean(getTelegramConfig());
-}
-
-export async function sendTelegramMessage(text: string): Promise<SendTelegramResult> {
+async function telegramRequest(method: "sendMessage" | "answerCallbackQuery", body: object): Promise<SendTelegramResult> {
   const config = getTelegramConfig();
-  if (!config) {
-    console.warn("Telegram notification skipped: Telegram env is not configured.");
-    return { sent: false, reason: "not_configured" };
-  }
-
+  if (!config) return { sent: false, reason: "not_configured" };
   try {
-    const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: config.chatId,
-        text,
-        disable_web_page_preview: true,
-      }),
+    const response = await fetch(`https://api.telegram.org/bot${config.botToken}/${method}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body), signal: AbortSignal.timeout(5000),
     });
-
-    if (!response.ok) {
-      console.warn("Telegram notification failed:", response.status);
+    const result: unknown = response.ok ? await response.json() : null;
+    if (!result || typeof result !== "object" || !("ok" in result) || result.ok !== true) {
+      console.warn("Telegram request failed.");
       return { sent: false, reason: "request_failed" };
     }
-
     return { sent: true };
   } catch {
-    console.warn("Telegram notification failed: network error.");
+    // Never log the exception/URL: the Bot API embeds the token in its URL.
+    console.warn("Telegram request unavailable.");
     return { sent: false, reason: "request_failed" };
   }
+}
+export async function sendTelegramMessage(text: string, keyboard?: TelegramInlineKeyboard): Promise<SendTelegramResult> {
+  const config = getTelegramConfig();
+  if (!config) return { sent: false, reason: "not_configured" };
+  return telegramRequest("sendMessage", { chat_id: config.chatId, text, disable_web_page_preview: true, ...(keyboard ? { reply_markup: keyboard } : {}) });
+}
+export async function answerTelegramCallback(queryId: string, text: string): Promise<SendTelegramResult> {
+  return telegramRequest("answerCallbackQuery", { callback_query_id: queryId, text, cache_time: 0 });
 }

@@ -368,10 +368,9 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
         <h2 className="mb-5 font-display text-xl flex items-center gap-2">
           <span className={NUM_STYLES}>3</span> {c.payment.title}
         </h2>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           {onlineCardEnabled && <PaymentBtn id="card_online"      label={c.payment.card} icon="💳" control={control} setValue={(_, v) => setValue("paymentMethod", v)} />}
           <PaymentBtn id="cash_on_delivery" label={c.payment.cash}    icon="💵" control={control} setValue={(_, v) => setValue("paymentMethod", v)} />
-          <PaymentBtn id="pay_on_pickup"    label={c.payment.onPickup} icon="🤝" control={control} setValue={(_, v) => setValue("paymentMethod", v)} />
         </div>
         <input type="hidden" {...register("paymentMethod")} />
         <p className="mt-4 text-xs text-ink/40">

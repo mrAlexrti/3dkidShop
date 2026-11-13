@@ -168,7 +168,7 @@ export async function createOrder(
               paymentExpiresAt: new Date(Date.now() + (MONO_VALIDITY_SECONDS + 120) * 1000),
               paymentNextCheckAt: new Date(Date.now() + 300000),
             } : {}),
-            status: getInitialOrderStatus(d.paymentMethod),
+            status: getInitialOrderStatus(),
             subtotal,
             shippingCost: "0.00",
             total: subtotal,

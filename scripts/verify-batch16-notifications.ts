@@ -32,7 +32,7 @@ async function verify() {
   assert.deepEqual(status.normalizedStatuses(base), { order: "PROCESSING", payment: "PENDING", delivery: "NOT_CREATED" });
   for (const legacy of ["SHIPPED", "DELIVERED", "PAID"]) {
     const snapshot = { ...base, status: legacy };
-    assert.equal(status.normalizeOrderStage(legacy), "PROCESSING");
+    assert.equal(status.normalizeOrderStage(legacy), "NEW", "Legacy payment/shipping enum does not prove manual work.");
     assert.equal(status.normalizeDeliveryStage(snapshot), "NOT_CREATED", "Legacy enum alone is not a delivery fact.");
     assert.equal(status.normalizePaymentStage(snapshot), "PENDING", "Legacy enum alone is not a payment fact.");
   }
@@ -75,6 +75,7 @@ async function verify() {
       "next/navigation": { notFound: () => { throw new Error("UNEXPECTED_NOT_FOUND"); } },
       "@/components/admin/create-ttn-button": { CreateTtnButton: () => null },
       "@/components/admin/order-status-select": { OrderStatusSelect: () => null },
+      "@/components/admin/take-order-into-work-button": { TakeOrderIntoWorkButton: () => null },
       "@/components/admin/order-status-summary": summary,
       "@/lib/prisma": { prisma: { order: { findUnique: async () => raw } } },
       "@/lib/utils": { formatPrice: (value: number) => String(value) },
@@ -172,21 +173,27 @@ async function verify() {
   // Admin same-status saves and racing saves notify once, payment/delivery facts
   // are never written through the order-stage selector.
   let order = { ...base, status: "PENDING" }; let changes = 0; let writes = 0;
+  const orderDb = { order: {
+    findUnique: async () => ({ ...order }),
+    updateMany: async ({ where, data }: Prisma.OrderUpdateManyArgs) => {
+      if (where?.status !== order.status) return { count: 0 };
+      assert.deepEqual(Object.keys(data), ["status"]); order = { ...order, status: data.status as string }; writes++; return { count: 1 };
+    },
+  } };
+  const work = sourceModule<typeof import("../src/lib/orders/take-into-work")>("src/lib/orders/take-into-work.ts", {
+    "@/lib/prisma": { prisma: orderDb }, "@/lib/status": status,
+    "@/lib/notifications/orders": { emitOrderEvents: async () => { changes++; } },
+  });
   const orderAction = sourceModule<typeof import("../src/lib/actions/orders")>("src/lib/actions/orders.ts", {
+    "@/lib/orders/take-into-work": work, "@/lib/status": status,
     "@/lib/payments/transitions": { cancelPendingPayment: () => { throw new Error("UNEXPECTED_MONO_CALL"); }, paymentSnapshotWhere: () => { throw new Error("UNEXPECTED_MONO_CALL"); } },
     "next/cache": { revalidatePath: () => {} }, "@/lib/actions/require-admin": { requireAdmin: async () => {} },
     "@/lib/order-status": orderStatus, "@/lib/notifications/orders": { emitOrderEvents: async () => { changes++; } },
-    "@/lib/prisma": { prisma: { order: {
-      findUnique: async () => ({ ...order }),
-      updateMany: async ({ where, data }: Prisma.OrderUpdateManyArgs) => {
-        if (where?.status !== order.status) return { count: 0 };
-        assert.deepEqual(Object.keys(data), ["status"]); order = { ...order, status: data.status as string }; writes++; return { count: 1 };
-      },
-    } } },
+    "@/lib/prisma": { prisma: orderDb },
   });
   await orderAction.updateOrderStatus(base.id, "PENDING"); assert.equal(writes, 0);
   const raced = await Promise.allSettled([orderAction.updateOrderStatus(base.id, "PROCESSING"), orderAction.updateOrderStatus(base.id, "PROCESSING")]);
-  assert.equal(raced.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(raced.filter((result) => result.status === "fulfilled").length, 2);
   assert.equal(writes, 1); assert.equal(changes, 1);
   await assert.rejects(orderAction.updateOrderStatus(base.id, "PAID"));
 
@@ -215,7 +222,7 @@ async function verify() {
 
   // TTN creation emits delivery only, retains order/payment stages, and a
   // repeated request for an existing TTN neither creates nor notifies again.
-  const shipmentOrder = { ...base, novaPoshtaTtn: null } as unknown as Order;
+  const shipmentOrder = { ...base, status: "PENDING", novaPoshtaTtn: null } as unknown as Order;
   let shipmentCreates = 0; let shipmentNotifications = 0; let admin = false;
   const ttnRoute = sourceModule<{ POST(req: Request, context: { params: Promise<{ id: string }> }): Promise<Response> }>("src/app/api/admin/orders/[id]/create-ttn/route.ts", {
     "next/server": { NextResponse }, "@/lib/auth": { auth: async () => ({ user: { role: admin ? "ADMIN" : "MANAGER" } }) },
@@ -235,7 +242,7 @@ async function verify() {
   const createShipment = () => ttnRoute.POST(new Request("http://localhost/ttn", { method: "POST" }), { params: Promise.resolve({ id: base.id }) });
   assert.equal((await createShipment()).status, 401); assert.equal(shipmentCreates, 0);
   admin = true;
-  assert.equal((await createShipment()).status, 200); assert.equal(shipmentOrder.status, "PROCESSING");
+  assert.equal((await createShipment()).status, 200); assert.equal(shipmentOrder.status, "PENDING");
   assert.equal((await createShipment()).status, 200); assert.equal(shipmentCreates, 1); assert.equal(shipmentNotifications, 1);
   shipmentOrder.novaPoshtaTtn = null;
   const racedShipments = await Promise.all([createShipment(), createShipment()]);

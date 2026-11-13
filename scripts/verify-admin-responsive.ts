@@ -69,7 +69,7 @@ async function verify() {
     "@/lib/notifications/events": events, "@/lib/notifications/settings": { getNotificationSettings: async () => events.defaultNotificationSettings() },
     "@/lib/actions/categories": { createCategory: blocked, updateCategory: blocked, deleteCategory: blocked, updateSiteContent: blocked },
     "@/lib/actions/products": { createProduct: blocked, updateProduct: blocked, deleteProduct: blocked },
-    "@/lib/actions/orders": { updateOrderStatus: blocked }, "@/lib/actions/notification-settings": { updateNotificationSettings: blocked },
+    "@/lib/actions/orders": { updateOrderStatus: blocked, takeOrderIntoWorkAction: blocked }, "@/lib/actions/notification-settings": { updateNotificationSettings: blocked },
     "@/lib/prisma": { prisma: {
       product: { count: async () => 1, findMany: async () => [product], findUnique: async () => product },
       category: { count: async () => 1, findMany: async () => [category], findUnique: async () => category },
@@ -101,6 +101,10 @@ async function verify() {
         }
         if (file.endsWith("admin/products/page.tsx")) baseline = baseline.replace("{tl.thStock}", "{t.admin.product.isOrderable}").replace("{p.stock}", "{p.isOrderable ? tl.orderable : tl.unavailable}");
         if (file.endsWith("admin/products/[id]/edit/page.tsx")) baseline = baseline.replace("stock: product.stock,", "isOrderable: product.isOrderable,");
+        if (file.endsWith("admin/orders/[id]/page.tsx")) {
+          // Normalize only the deliberately added quick action, not page geometry.
+          baseline = 'import { TakeOrderIntoWorkButton } from "@/components/admin/take-order-into-work-button";\n' + baseline.replace('<OrderStatusSelect orderId={order.id} status={order.status} />', '<div className="flex flex-wrap items-center gap-3"><TakeOrderIntoWorkButton orderId={order.id} status={order.status} /><OrderStatusSelect orderId={order.id} status={order.status} /></div>');
+        }
         writeFileSync(source, baseline);
         acceptedSources.push(readFileSync(source, "utf8"));
       }
@@ -110,6 +114,8 @@ async function verify() {
       "admin/category-form", "admin/delete-button", "admin/order-status-summary", "admin/order-status-select", "admin/create-ttn-button", "admin/admin-sidebar"]) {
       bindings[`@/components/${name}`] = load(`src/components/${name}.tsx`);
     }
+    // New component has no historical source; share it across both render sets.
+    bindings["@/components/admin/take-order-into-work-button"] = sourceModule("src/components/admin/take-order-into-work-button.tsx", bindings);
     const Sidebar = (bindings["@/components/admin/admin-sidebar"] as Components).AdminSidebar;
     bindings["@/components/admin/admin-sidebar"] = { AdminSidebar: () => h("div", { id: "qa-sidebar", className: "contents" }, h(Sidebar)) };
     const Layout = load("src/app/admin/layout.tsx").default as (props: object) => Promise<React.ReactElement>;
@@ -117,9 +123,9 @@ async function verify() {
       for (const [key, file] of Object.entries(pageFiles)) {
         pathname = key === "dashboard" ? "/admin" : `/admin/${key.startsWith("product-") ? "products" : key === "category-edit" ? "categories" : key === "detail" ? "orders/o1" : key}`;
         const Page = load(`src/app/admin/${file}`).default as (props: object) => Promise<React.ReactElement>;
-        const cases = key === "detail" ? [key, "detail-long", "detail-create-ttn"] : [key];
+        const cases = key === "detail" ? [key, "detail-long", "detail-create-ttn", "detail-new"] : [key];
         for (const name of cases) {
-          detailOrder = name === "detail-long" ? stressOrder : name === "detail-create-ttn" ? { ...order, novaPoshtaTtn: null } as unknown as typeof order : order;
+          detailOrder = name === "detail-long" ? stressOrder : name === "detail-new" ? { ...order, status: "PENDING" } : name === "detail-create-ttn" ? { ...order, novaPoshtaTtn: null } as unknown as typeof order : order;
           const body = await Page({ params: Promise.resolve({ id: "fixture" }) });
           pages.set(`/${version}/${locale}/${name}`, renderToStaticMarkup(h(language.LangStoreContext.Provider,
             { value: language.createLangStore(locale) }, await Layout({ children: body }))));

@@ -97,7 +97,7 @@ async function verifyProviderNormalization() {
     assert.equal(redeliveryNumber.codStatus, "Очікується післяплата");
     assert.equal(cardDescription.codStatus, "paid");
     assert.equal(cardDescription.codStatusReliable, false, "Card description is diagnostic only");
-    for (const [status, expected] of [[delivered, "COMPLETED"], [negative, "SHIPPED"], [redelivery, "DELIVERED"], [redeliveryNumber, "SHIPPED"], [cardDescription, "SHIPPED"]] as const) {
+    for (const [status, expected] of [[delivered, "COMPLETED"], [negative, "SHIPPED"], [redelivery, "SHIPPED"], [redeliveryNumber, "SHIPPED"], [cardDescription, "SHIPPED"]] as const) {
       order = fixture(); providerStatus = status;
       // Missing Number fallback is empty for extra synthetic response rows.
       providerStatus = { ...providerStatus, ttn: order.novaPoshtaTtn! };
@@ -160,15 +160,20 @@ async function verify() {
   for (const text of ["undelivered", "not received", "не отримано", "неотримано", "не доставлено", "недоставлено", "не получено", "неполучено", "will be delivered", "delivered pending confirmation"]) {
     cases.push([`negative/unknown delivery ${text}`, { status: text }, "SHIPPED"]);
   }
-  for (const [name, status, expected, initial] of cases) {
+  // Retain all 69 positive/negative classification expectations, but assert their
+  // financial/delivery facts separately from the now-independent operational state.
+  for (const [name, status, classification, initial] of cases) {
     order = { ...fixture(), ...initial }; providerStatus = { ...statusFixture(), ...status };
     const originalStatus = order.status;
+    const expected = classification === "COMPLETED" ? "COMPLETED" : originalStatus;
     const expectedNotificationCount = originalStatus === expected ? 0 : 1;
     telegramMessages = 0; writes = 0;
     const result = await sync();
     try {
       assert.equal(order.status, expected);
-      assert.equal(Boolean(order.paidAt), expected === "PAID" || expected === "COMPLETED");
+      assert.equal(Boolean(order.paidAt), classification === "PAID" || classification === "COMPLETED");
+      if (classification === "DELIVERED") assert.equal(statuses.normalizeDeliveryStage(order), "DELIVERED");
+      if (classification === "PAID") assert.equal(statuses.normalizePaymentStage(order), "PAID");
       assert.equal(result.orderStatusChanged, expectedNotificationCount);
       assert.equal(writes, 1);
       assert.equal(order.novaPoshtaStatus, status.status || null);
