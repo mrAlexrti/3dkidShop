@@ -5,6 +5,8 @@ import { emitOrderEvents } from "@/lib/notifications/orders";
 import { isNovaPoshtaDelivered, isNovaPoshtaCodPaid } from "@/lib/status";
 import { getOrderStatusAfterNovaPoshtaSync } from "@/lib/order-status";
 import { readServerEnv } from "@/lib/server-env";
+import { isCashOnDelivery } from "@/lib/payments/payment-method";
+import { moneyMinorUnits } from "@/lib/payments/money";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -90,7 +92,8 @@ export async function GET(request: Request) {
     }
 
     const deliveredNow = isNovaPoshtaDelivered(status);
-    const codPaidNow = !order.paymentProvider && isNovaPoshtaCodPaid(status);
+    const codAmountMatches = status.codAmount === null || moneyMinorUnits(String(status.codAmount)) === moneyMinorUnits(order.total.toString());
+    const codPaidNow = !order.paymentProvider && isCashOnDelivery(order.paymentMethod) && status.codStatusReliable && codAmountMatches && isNovaPoshtaCodPaid(status);
     const deliveredAt = status.deliveredAt ?? order.novaPoshtaDeliveredAt;
     const paidAt = order.paidAt ?? (codPaidNow ? new Date() : null);
     const nextOrderStatus = getOrderStatusAfterNovaPoshtaSync({

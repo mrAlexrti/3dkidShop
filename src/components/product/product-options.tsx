@@ -9,8 +9,8 @@ import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { productLineId, sizeLabel, type SizeVariant } from "@/lib/product-variants";
 
-export function ProductOptions({ productId, name, slug, basePrice, image, stock, variants }: {
-  productId: string; name: string; slug: string; basePrice: number; image: string; stock: number; variants: SizeVariant[];
+export function ProductOptions({ productId, name, slug, basePrice, image, isOrderable, variants }: {
+  productId: string; name: string; slug: string; basePrice: number; image: string; isOrderable: boolean; variants: SizeVariant[];
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -20,7 +20,7 @@ export function ProductOptions({ productId, name, slug, basePrice, image, stock,
   const selected = variants.find((variant) => variant.id === selectedId);
   const validPrices = variants.flatMap((variant) => variant.price == null ? [] : [variant.price]);
   const unitPrice = variants.length ? selected?.price ?? (validPrices.length ? Math.min(...validPrices) : null) : basePrice;
-  const ready = stock > 0 && (!variants.length || (selected != null && selected.price != null));
+  const ready = isOrderable && (!variants.length || (selected != null && selected.price != null));
   function add() {
     if (!ready || unitPrice == null) return;
     addItem({ id: productLineId(productId, selected?.id), productId, name, slug, price: unitPrice, image, quantity,
@@ -44,7 +44,7 @@ export function ProductOptions({ productId, name, slug, basePrice, image, stock,
       <div className="sf-quantity-control flex items-center gap-3 rounded-full border border-ink/15 px-4 py-2">
         <button type="button" aria-label={t.cart.decrease} disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}><Minus size={16} /></button>
         <span className="w-6 text-center tabular-nums">{quantity}</span>
-        <button type="button" aria-label={t.cart.increase} disabled={quantity >= stock} onClick={() => setQuantity((value) => Math.min(stock, value + 1))}><Plus size={16} /></button>
+        <button type="button" aria-label={t.cart.increase} disabled={!Number.isSafeInteger(quantity + 1)} onClick={() => setQuantity((value) => value + 1)}><Plus size={16} /></button>
       </div>
       <p className="text-2xl text-pink-600" aria-live="polite" aria-atomic="true">
         {variants.length > 0 && !selected && unitPrice != null && <span className="mr-2 text-sm">{t.product.from}</span>}
@@ -52,7 +52,7 @@ export function ProductOptions({ productId, name, slug, basePrice, image, stock,
       </p>
     </div>
     <Button type="button" size="lg" className="w-full text-base" onClick={add} disabled={!ready}>
-      <ShoppingBag size={18} />{stock <= 0 ? t.product.outOfStock : variants.length && !selected ? t.product.chooseSize : t.product.addToCart}
+      <ShoppingBag size={18} />{!isOrderable ? t.product.unavailable : variants.length && !selected ? t.product.chooseSize : t.product.addToCart}
     </Button>
   </div>;
 }

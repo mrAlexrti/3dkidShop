@@ -39,7 +39,7 @@ async function verify() {
   const category = { id: "c1", name: "Декор та аксесуари", nameEn: "Decor and accessories", slug: "decor", parentId: null,
     imageUrl: null, description: "Category description", order: 0, children: [], parent: null, _count: { products: 1 } };
   const product = { id: "p1", name: "Дракон з рухливими крилами", nameEn: "Dragon with moving wings", slug: "dragon", description: "Description", descriptionEn: "English description",
-    price: 1234, oldPrice: 1500, stock: 5, categoryId: category.id, category, isActive: true, isNew: true, isFeatured: true,
+    price: 1234, oldPrice: 1500, isOrderable: true, categoryId: category.id, category, isActive: true, isNew: true, isFeatured: true,
     images: [{ id: "i1", url: "/images/placeholder.svg", order: 0 }], hoverGifUrl: null,
     options: [{ name: "Size", values: [{ id: "s1", value: "Компактний розмір з довгою назвою", valueEn: "Compact size with a long name", price: 1234, note: "Примітка", noteEn: "Note" }] }] };
   const order = { id: "o1", number: "3DK-12345678", status: "PROCESSING", paymentStatus: "PENDING", paymentProvider: null, paidAt: null,
@@ -90,7 +90,18 @@ async function verify() {
       if (version === "accepted") {
         source = resolve(output, "accepted", file);
         mkdirSync(resolve(source, ".."), { recursive: true });
-        writeFileSync(source, execFileSync("git", ["show", `${accepted}:${file}`]));
+        let baseline = execFileSync("git", ["show", `${accepted}:${file}`], { encoding: "utf8" });
+        // Apply only the approved availability control/data replacement to old
+        // markup. Keep all other historical geometry/CSS comparisons strict.
+        if (file.endsWith("admin/product-form.tsx")) {
+          const control = readFileSync(file, "utf8").match(/<label className="flex min-h-11[\s\S]*?<\/label>/)?.[0];
+          assert.ok(control);
+          baseline = baseline.replace("stock?: number;", "isOrderable?: boolean;").replace(/<label[^>]*>\{tp.stock\}<\/label>\s*<input name="stock"[^\n]*\/>/, control);
+          assert.ok(!baseline.includes('name="stock"'));
+        }
+        if (file.endsWith("admin/products/page.tsx")) baseline = baseline.replace("{tl.thStock}", "{t.admin.product.isOrderable}").replace("{p.stock}", "{p.isOrderable ? tl.orderable : tl.unavailable}");
+        if (file.endsWith("admin/products/[id]/edit/page.tsx")) baseline = baseline.replace("stock: product.stock,", "isOrderable: product.isOrderable,");
+        writeFileSync(source, baseline);
         acceptedSources.push(readFileSync(source, "utf8"));
       }
       return sourceModule(source, bindings);

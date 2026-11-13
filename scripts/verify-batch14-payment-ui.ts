@@ -16,7 +16,7 @@ import { sourceModule } from "./source-module";
 const Link = (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => React.createElement("a", props);
 const Button = (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => React.createElement("button", props);
 type Element = React.ReactElement<Record<string, unknown>>;
-const savedGlobals = { fetch, setTimeout, clearTimeout, document: globalThis.document };
+const savedGlobals = { fetch, setTimeout, clearTimeout, window: globalThis.window };
 async function verify() {
   let orderReads = 0;
   const { default: resultPage } = sourceModule<{ default: (args: { searchParams: Promise<Record<string, string>> }) => Promise<React.ReactElement<{ initialState: PaymentResultState }>> }>("src/app/(shop)/checkout/success/page.tsx", {
@@ -41,7 +41,7 @@ async function verify() {
       "@/store/lang-store": { useLangStore: () => ({ t, locale }) }, "next/link": { default: Link, __esModule: true },
     };
     const { OrderResult } = sourceModule<{ OrderResult: typeof ResultComponent }>("src/components/checkout/order-result.tsx", { ...bindings, react: React });
-    for (const state of ["confirmed", "pending", "paid", "failed", "unavailable"] as PaymentResultState[]) {
+    for (const state of ["confirmed", "pending", "paid", "failed", "cancelled", "expired", "unknown", "review", "unavailable"] as PaymentResultState[]) {
       const html = renderToStaticMarkup(React.createElement(OrderResult, { initialState: state, number: "3DK-isolated", token: "isolated" }));
       const title = state === "confirmed" ? t.success.title : state === "paid" ? t.statuses.payment.PAID : state === "pending" ? t.statuses.payment.PENDING : t.success[`${state}Title`];
       assert.ok(html.includes(title)); assert.ok(html.includes('role="status"'));
@@ -51,7 +51,7 @@ async function verify() {
     }
     for (const outcome of ["online", "offline", "failed", "redirect-error"] as const) {
       const log: string[] = [];
-      const payment = { provider: "liqpay", action: "https://example.invalid/checkout", data: "isolated", signature: "isolated" };
+      const payment = { provider: "mono", pageUrl: "https://pay.mbnk.biz/isolated" };
       const { CheckoutForm } = sourceModule<{ CheckoutForm: typeof FormComponent }>("src/components/checkout/checkout-form.tsx", {
         ...bindings,
         react: { useState: (initial: unknown) => [initial, () => {}], useMemo: (fn: () => unknown) => fn() },
@@ -63,10 +63,7 @@ async function verify() {
         "@/lib/actions/create-order": { createOrder: async () => outcome === "failed" ? { success: false, error: "isolated-error" } : { success: true, emailSent: false, orderNumber: "3DK-isolated", resultUrl: "/checkout/success?isolated-token", ...(outcome === "offline" ? {} : { payment }) } },
         sonner: { toast: { message: () => log.push("message"), success: () => log.push("success"), error: () => log.push("error") } },
       });
-      globalThis.document = {
-        createElement: () => ({ appendChild: () => {}, submit: () => { log.push("gateway-submit"); if (outcome === "redirect-error") throw new Error("isolated-redirect-error"); } }),
-        body: { appendChild: () => {} },
-      } as unknown as Document;
+      globalThis.window = { location: { assign: (url: string) => { assert.equal(url, payment.pageUrl); log.push("gateway-submit"); if (outcome === "redirect-error") throw new Error("isolated-redirect-error"); } } } as unknown as Window & typeof globalThis;
       const form = CheckoutForm({ onlineCardEnabled: true }) as Element;
       await (form.props.onSubmit as (data: unknown) => Promise<void>)({});
       if (outcome === "online") assert.deepEqual(log, ["message", "gateway-submit", "clear"]);
@@ -99,8 +96,8 @@ async function verify() {
     assert.equal(calls, outcome === "network-error" ? 10 : 2);
     cleanup?.();
   }
-  console.log("PASS payment UI UA/EN: five distinct states, no pending success icon/copy; online handoff without success navigation; offline confirmation retained; failed handoff retains cart; bounded pending polling, paid/failed updates, network errors stay pending. Isolated browser boundaries only.");
+  console.log("PASS payment UI UA/EN: nine distinct states, no pending success icon/copy; online handoff without success navigation; offline confirmation retained; failed handoff retains cart; bounded pending polling, paid/failed updates, network errors stay pending. Isolated browser boundaries only.");
 }
 verify().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => {
-  globalThis.fetch = savedGlobals.fetch; globalThis.setTimeout = savedGlobals.setTimeout; globalThis.clearTimeout = savedGlobals.clearTimeout; globalThis.document = savedGlobals.document;
+  globalThis.fetch = savedGlobals.fetch; globalThis.setTimeout = savedGlobals.setTimeout; globalThis.clearTimeout = savedGlobals.clearTimeout; globalThis.window = savedGlobals.window;
 });

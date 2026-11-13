@@ -7,6 +7,8 @@ import * as orderStatus from "../src/lib/order-status";
 import * as statuses from "../src/lib/status";
 import { notificationEvents } from "../src/lib/notifications/events";
 import { sourceModule } from "./source-module";
+import * as methods from "../src/lib/payments/payment-method";
+import * as money from "../src/lib/payments/money";
 
 const originalFetch = globalThis.fetch;
 let externalCalls = 0;
@@ -16,12 +18,12 @@ let telegramMessages = 0;
 const notifications = { emitOrderEvents: async (before: Order, after: Order) => { telegramMessages += notificationEvents(before, after).length; } };
 
 const fixture = () => ({
-  id: "isolated-np", number: "3DK-isolated-np", status: "SHIPPED", paidAt: null,
+  id: "isolated-np", number: "3DK-isolated-np", status: "SHIPPED", paidAt: null, paymentMethod: "cash_on_delivery",
   novaPoshtaTtn: "00000000000000", novaPoshtaDeliveredAt: null, total: 199, items: [],
 } as unknown as Order);
 const statusFixture = (): NovaPoshtaDocumentStatus => ({
   ttn: "00000000000000", status: "", statusCode: "", deliveredAt: null,
-  codStatus: "", codStatusCode: "", codAmount: null,
+  codStatus: "", codStatusCode: "", codAmount: null, codStatusReliable: true,
 });
 let order = fixture();
 let providerStatus = statusFixture();
@@ -44,6 +46,7 @@ const cron = sourceModule<{ GET(request: Request): Promise<Response> }>("src/app
   "@/lib/notifications/orders": notifications,
   "@/lib/order-status": orderStatus,
   "@/lib/status": statuses,
+  "@/lib/payments/payment-method": methods, "@/lib/payments/money": money,
   "@/lib/server-env": { readServerEnv: (name: string) => name === "CRON_SECRET" ? "isolated-cron-secret" : "" },
 });
 
@@ -77,7 +80,7 @@ async function verifyProviderNormalization() {
         { RedeliveryPaymentCardDescription: "paid" },
       ] });
     };
-    const provider = sourceModule<typeof import("../src/lib/novaposhta")>("src/lib/novaposhta.ts", {});
+    const provider = sourceModule<typeof import("../src/lib/novaposhta")>("src/lib/novaposhta.ts", { "@/lib/payments/payment-method": methods });
     const result = await provider.getNovaPoshtaDocumentStatuses(["00000000000000"]);
     assert.ok(result.success);
     const [delivered, negative, redelivery, redeliveryNumber, cardDescription] = result.statuses;
@@ -93,7 +96,8 @@ async function verifyProviderNormalization() {
     assert.equal(redelivery.codStatus, "Очікується післяплата");
     assert.equal(redeliveryNumber.codStatus, "Очікується післяплата");
     assert.equal(cardDescription.codStatus, "paid");
-    for (const [status, expected] of [[delivered, "COMPLETED"], [negative, "SHIPPED"], [redelivery, "DELIVERED"], [redeliveryNumber, "SHIPPED"], [cardDescription, "PAID"]] as const) {
+    assert.equal(cardDescription.codStatusReliable, false, "Card description is diagnostic only");
+    for (const [status, expected] of [[delivered, "COMPLETED"], [negative, "SHIPPED"], [redelivery, "DELIVERED"], [redeliveryNumber, "SHIPPED"], [cardDescription, "SHIPPED"]] as const) {
       order = fixture(); providerStatus = status;
       // Missing Number fallback is empty for extra synthetic response rows.
       providerStatus = { ...providerStatus, ttn: order.novaPoshtaTtn! };
@@ -101,7 +105,7 @@ async function verifyProviderNormalization() {
       assert.equal(order.status, expected);
     }
     assert.equal(mockRequests, 1);
-    console.log("PASS provider normalization: code 9/DateScan; ActualDeliveryDate; raw COD code/amount; pending redelivery flags; card-description fallback (mock fetch only).");
+    console.log("PASS provider normalization: code 9/DateScan; ActualDeliveryDate; raw COD code/amount; pending redelivery flags; diagnostic-only card description (mock fetch only).");
   } finally {
     globalThis.fetch = blocked;
     for (const [key, value] of saved) {

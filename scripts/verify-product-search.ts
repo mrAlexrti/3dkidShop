@@ -17,7 +17,7 @@ async function verify() {
     for (let index = 0; index < 8; index++) {
       await tx.product.create({ data: {
         name: `Підказка QA ${prefix} ${index}`, nameEn: `Suggestion QA ${prefix} ${index}`,
-        slug: `${prefix}-${index}`, description: "Rollback-only fixture", price: 1, stock: 1, categoryId: category.id, isActive: index !== 0,
+        slug: `${prefix}-${index}`, description: "Rollback-only fixture", price: 1, isOrderable: true, categoryId: category.id, isActive: index !== 0,
         images: { create: [{ url: "https://example.invalid/second.webp", order: 2 }, { url: "https://example.invalid/first.webp", order: 1 }] },
       } });
     }

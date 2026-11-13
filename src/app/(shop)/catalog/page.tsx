@@ -119,7 +119,7 @@ export default async function CatalogPage({
           image:    p.images[0]?.url ?? "/images/placeholder.svg",
           isNew:    p.isNew,
           hasOptions: hasConfiguredSizes(p.options),
-          stock: p.stock,
+          isOrderable: p.isOrderable,
         }))}
       />
 

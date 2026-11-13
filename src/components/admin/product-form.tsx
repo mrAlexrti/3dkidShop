@@ -20,7 +20,7 @@ type ProductDefaults = {
   descriptionEn?: string | null;
   price?: number;
   oldPrice?: number | null;
-  stock?: number;
+  isOrderable?: boolean;
   categoryId?: string;
   imageUrl?: string;
   hoverGifUrl?: string | null;
@@ -100,8 +100,10 @@ export function ProductForm({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium">{tp.stock}</label>
-          <input name="stock" type="number" defaultValue={defaults?.stock ?? 0} required className={inputClass} />
+          <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
+            <input name="isOrderable" type="checkbox" defaultChecked={defaults?.isOrderable ?? false} />
+            {tp.isOrderable}
+          </label>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">{tp.category}</label>

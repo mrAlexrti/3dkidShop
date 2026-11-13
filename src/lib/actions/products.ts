@@ -16,7 +16,7 @@ const productSchema = z.object({
   descriptionEn: z.string().trim().min(5),
   price: z.coerce.number().positive(),
   oldPrice: z.coerce.number().optional().nullable(),
-  stock: z.coerce.number().int().nonnegative(),
+  isOrderable: z.boolean(),
   categoryId: z.string().min(1),
   imageUrl: z.string().url(),
   hoverGifUrl: optionalHoverGifUrl,
@@ -35,6 +35,7 @@ export async function createProduct(formData: FormData) {
     isFeatured: raw.isFeatured === "on",
     isNew: raw.isNew === "on",
     isActive: raw.isActive === "on",
+    isOrderable: raw.isOrderable === "on",
   });
 
   await prisma.$transaction(async (tx) => {
@@ -47,7 +48,7 @@ export async function createProduct(formData: FormData) {
       descriptionEn: parsed.descriptionEn,
       price: parsed.price,
       oldPrice: parsed.oldPrice || null,
-      stock: parsed.stock,
+      isOrderable: parsed.isOrderable,
       categoryId: parsed.categoryId,
       isFeatured: !!parsed.isFeatured,
       isNew: !!parsed.isNew,
@@ -73,6 +74,7 @@ export async function updateProduct(id: string, formData: FormData) {
     isFeatured: raw.isFeatured === "on",
     isNew: raw.isNew === "on",
     isActive: raw.isActive === "on",
+    isOrderable: raw.isOrderable === "on",
   });
 
   await prisma.$transaction(async (tx) => {
@@ -86,7 +88,7 @@ export async function updateProduct(id: string, formData: FormData) {
         descriptionEn: parsed.descriptionEn,
         price: parsed.price,
         oldPrice: parsed.oldPrice || null,
-        stock: parsed.stock,
+        isOrderable: parsed.isOrderable,
         categoryId: parsed.categoryId,
         isFeatured: !!parsed.isFeatured,
         isNew: !!parsed.isNew,

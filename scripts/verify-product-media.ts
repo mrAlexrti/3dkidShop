@@ -35,7 +35,7 @@ async function verify() {
   await assert.rejects(db.$transaction(async (tx) => {
     const product = await tx.product.create({ data: {
       name: "Перевірка медіа", nameEn: "Media verification", slug: `media-verification-${Date.now()}`,
-      description: "Тимчасова перевірка", price: 1, stock: 0, isActive: false, categoryId: category.id,
+      description: "Тимчасова перевірка", price: 1, isOrderable: false, isActive: false, categoryId: category.id,
       hoverGifUrl: optionalHoverGifUrl.parse(""),
       images: { create: [{ url: "https://example.com/main.webp", order: 0 }, { url: "https://example.com/gallery.webp", order: 1 }] },
     } });

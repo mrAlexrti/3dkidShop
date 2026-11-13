@@ -84,10 +84,11 @@ model Product {
   price         Decimal            @db.Decimal(10, 2)
   oldPrice      Decimal?           @db.Decimal(10, 2)
   sku           String?            @unique
-  stock         Int                @default(0)
+  stock         Int                @default(0) // Deprecated: compatibility/migration only; remove after verified rollout.
   isFeatured    Boolean            @default(false)
   isNew         Boolean            @default(false)
   isActive      Boolean            @default(true)
+  isOrderable   Boolean            @default(false)
   categoryId    String
   category      Category           @relation(fields: [categoryId], references: [id])
   images        ProductImage[]
@@ -186,6 +187,12 @@ model Order {
   paymentMode             String?
   paymentStatus           String?
   paidAt                  DateTime?
+  paymentInvoiceId        String?
+  paymentProviderStatus   String?
+  paymentModifiedAt       DateTime?
+  paymentExpiresAt        DateTime?
+  paymentNextCheckAt      DateTime?
+  paymentErrorCode        String?
   subtotal                Decimal     @db.Decimal(10, 2)
   shippingCost            Decimal     @default(0) @db.Decimal(10, 2)
   total                   Decimal     @db.Decimal(10, 2)
@@ -202,6 +209,9 @@ model Order {
   novaPoshtaError         String?
   items                   OrderItem[]
   createdAt               DateTime    @default(now())
+
+  @@unique([paymentProvider, paymentInvoiceId])
+  @@index([paymentProvider, paymentNextCheckAt])
 }
 
 model OrderItem {

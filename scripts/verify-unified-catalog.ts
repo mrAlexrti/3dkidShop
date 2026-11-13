@@ -45,7 +45,7 @@ for (const locale of ["ua", "en"] as const) {
     "@/store/cart-store": { useCartStore: (selector: (store: unknown) => unknown) => selector({ addItem: (item: unknown) => cart.push(item) }) },
     sonner: { toast: { error: (text: string) => errors.push(text), message: () => {}, success: () => {} } },
   });
-  const base = { id: "fixture", slug: "fixture", name: "Тест", nameEn: "Test", price: 123, image: "/images/placeholder.svg", stock: 3, hoverGifUrl: "https://example.invalid/hover.gif" };
+  const base = { id: "fixture", slug: "fixture", name: "Тест", nameEn: "Test", price: 123, image: "/images/placeholder.svg", isOrderable: true, hoverGifUrl: "https://example.invalid/hover.gif" };
   const render = (overrides = {}) => { cursor = 0; return ProductCard({ ...base, ...overrides }); };
   const nodes = (overrides = {}) => elements(render(overrides));
   const button = (overrides = {}) => nodes(overrides).find((node) => node.type === "button")!;
@@ -61,10 +61,11 @@ for (const locale of ["ua", "en"] as const) {
   assert.deepEqual(pushes, ["/product/fixture"]);
   assert.equal(cart.length, 1, "A configured size must never be silently selected.");
   assert.equal(button({ hasOptions: true }).props["aria-label"], `${t.product.chooseSize}: ${locale === "ua" ? base.name : base.nameEn}`);
-  click({ stock: 0 }); click({ stock: 0, hasOptions: true });
+  click({ isOrderable: false }); click({ isOrderable: false, hasOptions: true });
   assert.equal(cart.length, 1); assert.equal(pushes.length, 1);
-  assert.deepEqual(errors, [t.product.outOfStock, t.product.outOfStock]);
-  assert.equal(button({ stock: 0 }).props["aria-disabled"], true);
+  assert.deepEqual(errors, [t.product.unavailable, t.product.unavailable]);
+  assert.equal(button({ isOrderable: false }).props["aria-disabled"], true);
+  assert.ok(nodes({ isOrderable: false }).some((node) => node.type === "p" && node.props.children === t.product.unavailable));
   assert.ok(nodes({ hasOptions: true }).some((node) => node.type === "span" && (node.props.children as unknown[])?.includes(`${t.product.from} `)));
   const pointer = (type: string) => (render().props.onPointerEnter as (event: unknown) => void)({ pointerType: type });
   pointer("touch"); assert.equal(nodes().some((node) => node.props.src === base.hoverGifUrl), false);
@@ -114,5 +115,5 @@ for (const locale of ["ua", "en"] as const) {
   assert.equal(pages.length, 3); assert.equal(pages[1].props["aria-current"], "page");
   next = new URL(pages[2].props.href as string, "http://localhost").searchParams;
   assert.equal(next.get("page"), "3"); assert.equal(next.get("category"), "child"); assert.equal(next.get("sort"), "name");
-  console.log(`PASS ${locale}: shared semantic card, links, quick add, size routing/from price, stock guard, mouse/focus GIF and reduced motion/error fallback; parent/child filters, query preservation/page reset, pagination.`);
+  console.log(`PASS ${locale}: shared semantic card, links, quick add, size routing/from price, orderability guard, mouse/focus GIF and reduced motion/error fallback; parent/child filters, query preservation/page reset, pagination.`);
 }

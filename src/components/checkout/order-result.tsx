@@ -12,7 +12,7 @@ export function OrderResult({ initialState, number, token }: { initialState: Pay
   const [state, setState] = useState(initialState);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    if (state !== "pending") return;
+    if (state !== "pending" && state !== "unknown") return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     let attempts = 0;
@@ -22,7 +22,8 @@ export function OrderResult({ initialState, number, token }: { initialState: Pay
         const response = await fetch(`/api/payments/status?${new URLSearchParams({ order: number, token })}`, { cache: "no-store", signal: controller.signal });
         const result = await response.json();
         if (controller.signal.aborted) return;
-        if (["confirmed", "paid", "failed", "unavailable"].includes(result.state)) { setState(result.state); return; }
+        if (["confirmed", "paid", "failed", "cancelled", "expired", "review", "unavailable"].includes(result.state)) { setState(result.state); return; }
+        if (result.state === "unknown") setState("unknown");
       } catch { /* Network failure is not payment failure. Keep the pending state. */ }
       if (!controller.signal.aborted && attempts < 10) timer = setTimeout(check, 3000);
     }
@@ -33,6 +34,10 @@ export function OrderResult({ initialState, number, token }: { initialState: Pay
   const copy = state === "paid" ? [t.statuses.payment.PAID, t.success.paidDescription]
     : state === "pending" ? [t.statuses.payment.PENDING, t.success.pendingDescription]
     : state === "failed" ? [t.success.failedTitle, t.success.failedDescription]
+    : state === "cancelled" ? [t.success.cancelledTitle, t.success.cancelledDescription]
+    : state === "expired" ? [t.success.expiredTitle, t.success.expiredDescription]
+    : state === "unknown" ? [t.statuses.payment.UNKNOWN, t.success.unknownDescription]
+    : state === "review" ? [t.success.reviewTitle, t.success.reviewDescription]
     : state === "unavailable" ? [t.success.unavailableTitle, t.success.unavailableDescription]
     : [t.success.title, t.success.pending];
   const Icon = state === "paid" || state === "confirmed" ? CheckCircle2 : state === "pending" ? Clock3 : CircleAlert;
@@ -43,7 +48,7 @@ export function OrderResult({ initialState, number, token }: { initialState: Pay
       {number && <p className="mt-3 text-sm text-ink/60">{t.success.order} <span className="text-ink">{number}</span></p>}
       <p className="mt-3 max-w-md text-ink/70">{copy[1]}</p>
     </div>
-    {state === "pending" && <Button className="mt-6" variant="outline" onClick={() => setRetry((value) => value + 1)}>{t.success.checkAgain}</Button>}
+    {(state === "pending" || state === "unknown") && <Button className="mt-6" variant="outline" onClick={() => setRetry((value) => value + 1)}>{t.success.checkAgain}</Button>}
     <Link href="/catalog" className="mt-8 inline-block rounded-full bg-pink-500 px-7 py-3.5 text-base text-white hover:bg-pink-600">{t.success.continue}</Link>
   </div>;
 }

@@ -44,16 +44,16 @@ for (const locale of ["ua", "en"] as const) {
     { id: "large", labelUa: "Великий", labelEn: "Large", price: 25, noteUa: "Збільшений", noteEn: "Larger" },
   ];
   const original = JSON.stringify(sizes);
-  const renderPurchase = (configuredSizes: variants.SizeVariant[], selectedId: string | null = null, stock = 5) => renderToStaticMarkup(
+  const renderPurchase = (configuredSizes: variants.SizeVariant[], selectedId: string | null = null, isOrderable = true) => renderToStaticMarkup(
     React.createElement(language.LangStoreContext.Provider, { value: store }, React.createElement(purchaseComponent(selectedId), {
-      productId: "qa", name: "QA", slug: "qa", basePrice: 10, image: "/images/placeholder.svg", stock, variants: configuredSizes,
+      productId: "qa", name: "QA", slug: "qa", basePrice: 10, image: "/images/placeholder.svg", isOrderable, variants: configuredSizes,
     })));
   const addButton = (html: string) => html.match(/<button\b[^>]*>[\s\S]*?<\/button>/g)?.at(-1) ?? "";
   const simpleHtml = renderPurchase([]);
   assert.ok(!simpleHtml.includes("<fieldset"), "Simple products must have no size selector.");
   assert.ok(simpleHtml.includes(utils.formatPrice(10, "UAH")), "Simple products display their base price.");
   assert.ok(addButton(simpleHtml).includes(store.getState().t.product.addToCart));
-  assert.ok(!addButton(simpleHtml).includes("disabled="), "Stocked simple products can be added immediately.");
+  assert.ok(!addButton(simpleHtml).includes("disabled="), "Orderable simple products can be added immediately.");
   const unselectedHtml = renderPurchase(sizes);
   assert.ok(unselectedHtml.includes("<fieldset") && unselectedHtml.includes(store.getState().t.product.chooseSize));
   assert.equal((unselectedHtml.match(/aria-pressed="false"/g) ?? []).length, sizes.length, "No size may be selected automatically.");
@@ -68,7 +68,7 @@ for (const locale of ["ua", "en"] as const) {
     if (locale === "en") assert.doesNotMatch(html, /[А-Яа-яІіЇїЄєҐґ]/);
   }
   assert.ok(addButton(renderPurchase(sizes, "missing-size")).includes("disabled="));
-  assert.ok(addButton(renderPurchase(sizes, "small", 0)).includes("disabled="));
+  assert.ok(addButton(renderPurchase(sizes, "small", false)).includes("disabled="));
   assert.ok(addButton(renderPurchase([{ ...sizes[0], price: null }], "small")).includes("disabled="));
   assert.equal(JSON.stringify(sizes), original, "Rendering must not mutate variant IDs, labels, notes or prices.");
   assert.equal(variants.productLineId("qa"), "qa");
@@ -84,4 +84,4 @@ for (const locale of ["ua", "en"] as const) {
     if (locale === "en") assert.doesNotMatch(html, /[А-Яа-яІіЇїЄєҐґ]/);
   }
 }
-console.log("PASS optional-size purchase and checkout renders: UA/EN; simple products use base price with immediate Add; configured sizes require selection and show explicit prices/notes; invalid/unpriced/out-of-stock selections blocked; canonical data unchanged; checkout labels/payment states localized. Browser interaction remains a manual check.");
+console.log("PASS optional-size purchase and checkout renders: UA/EN; simple products use base price with immediate Add; configured sizes require selection and show explicit prices/notes; invalid/unpriced/not-orderable selections blocked; canonical data unchanged; checkout labels/payment states localized. Browser interaction remains a manual check.");

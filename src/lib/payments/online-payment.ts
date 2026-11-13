@@ -1,11 +1,10 @@
-import { getLiqPayConfigStatus } from "@/lib/payments/liqpay";
 import { readServerEnv } from "@/lib/server-env";
+import { monoSiteOrigin } from "@/lib/payments/mono";
 
-// Live acquiring is deliberately unavailable in Batch 1.4. No key-presence bypass.
-export function getOnlinePaymentConfig(): { provider: "liqpay"; mode: "sandbox" } | null {
-  const config = getLiqPayConfigStatus();
-  return readServerEnv("ONLINE_PAYMENT_MODE") === "sandbox" && config.hasPublicKey && config.hasPrivateKey &&
-    config.publicKeyLooksSandbox && config.privateKeyLooksSandbox && config.sandbox
-    ? { provider: "liqpay", mode: "sandbox" } : null;
+// New orders are Mono-only. Legacy LiqPay settings cannot select new checkout.
+export function getOnlinePaymentConfig(): { provider: "mono"; mode: "sandbox" | "live" } | null {
+  const mode = readServerEnv("ONLINE_PAYMENT_MODE");
+  return (mode === "sandbox" || mode === "live") && readServerEnv("MONO_ACQUIRING_TOKEN") && monoSiteOrigin()
+    ? { provider: "mono", mode } : null;
 }
 export function isOnlinePaymentAvailable() { return getOnlinePaymentConfig() !== null; }

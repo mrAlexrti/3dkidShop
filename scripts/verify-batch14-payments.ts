@@ -3,15 +3,10 @@ import assert from "node:assert/strict";
 import { NextResponse } from "next/server";
 import type { Order, Prisma } from "@prisma/client";
 import * as liqpay from "../src/lib/payments/liqpay";
-import * as online from "../src/lib/payments/online-payment";
+import * as legacy from "../src/lib/payments/legacy-liqpay";
 import * as result from "../src/lib/payments/order-result";
 import * as states from "../src/lib/payments/payment-state";
 import * as orderStatus from "../src/lib/order-status";
-import * as validation from "../src/lib/validations/checkout";
-import * as variants from "../src/lib/product-variants";
-import * as cartItems from "../src/lib/cart-items";
-import { translations } from "../src/lib/i18n";
-import type { createOrder as Action } from "../src/lib/actions/create-order";
 import { sourceModule } from "./source-module";
 
 const saved = { ...process.env };
@@ -37,7 +32,7 @@ const memory = { order: {
 const callback = sourceModule<Callback>("src/app/api/payments/liqpay/callback/route.ts", {
   "next/server": { NextResponse }, "@/lib/prisma": { prisma: memory },
   "@/lib/notifications/orders": { emitOrderEvents: blocked },
-  "@/lib/order-status": orderStatus, "@/lib/payments/online-payment": online, "@/lib/payments/liqpay": liqpay,
+  "@/lib/order-status": orderStatus, "@/lib/payments/legacy-liqpay": legacy, "@/lib/payments/liqpay": liqpay,
 });
 const status = sourceModule<{ GET(req: Request): Promise<Response> }>("src/app/api/payments/status/route.ts", {
   "next/server": { NextResponse }, "@/lib/prisma": { prisma: memory }, "@/lib/payments/order-result": result, "@/lib/payments/payment-state": states,
@@ -48,10 +43,10 @@ const post = (changes: Record<string, unknown> = {}) => callback.POST(request(Bu
 function reset() { order = fixture(); writes = 0; }
 
 async function verify() {
-  assert.equal(online.isOnlinePaymentAvailable(), true);
-  for (const [key, value] of [["ONLINE_PAYMENT_MODE", "disabled"], ["ONLINE_PAYMENT_MODE", "live"], ["LIQPAY_SANDBOX", "0"], ["LIQPAY_PUBLIC_KEY", "live_public"], ["LIQPAY_PRIVATE_KEY", "live_private"]]) {
+  assert.ok(legacy.getLegacyLiqPayConfig());
+  for (const [key, value] of [["LIQPAY_SANDBOX", "0"], ["LIQPAY_PUBLIC_KEY", "live_public"], ["LIQPAY_PRIVATE_KEY", "live_private"]]) {
     const original = process.env[key]; process.env[key] = value;
-    assert.equal(online.isOnlinePaymentAvailable(), false);
+    assert.equal(legacy.getLegacyLiqPayConfig(), null);
     assert.equal((await post()).status, 503); assert.equal(writes, 0);
     process.env[key] = original;
   }
@@ -87,7 +82,7 @@ async function verify() {
   await post({ status: "reversed" }); assert.equal(states.paymentResultState(order), "failed"); assert.ok(order.paidAt, "Reversal preserves historical paid timestamp.");
   assert.equal((await post()).status, 409);
   for (const failed of ["failure", "error", "cancelled", "canceled"]) {
-    reset(); await post({ status: failed }); assert.equal(states.paymentResultState(order), "failed"); assert.equal(order.paidAt, null);
+    reset(); await post({ status: failed }); assert.equal(states.paymentResultState(order), ["cancelled", "canceled"].includes(failed) ? "cancelled" : "failed"); assert.equal(order.paidAt, null);
     await post({ status: failed }); assert.equal(writes, 1);
   }
   reset(); order.status = "CANCELLED"; assert.equal((await post()).status, 409); assert.equal(writes, 0);
@@ -97,36 +92,8 @@ async function verify() {
     assert.equal(states.paymentResultState({ ...order, paymentMethod, status: "PAID", paidAt: new Date() }), "pending", "Legacy paid flags need reconciliation; the old callback did not validate amount/currency.");
   }
 
-  let prepared: Prisma.OrderCreateArgs | undefined; let notifications = 0; let transactionCalls = 0;
-  const { createOrder } = sourceModule<{ createOrder: typeof Action }>("src/lib/actions/create-order.ts", {
-    "@/lib/i18n": { translations }, "@/lib/validations/checkout": validation, "@/lib/order-status": orderStatus,
-    "@/lib/product-variants": variants, "@/lib/cart-items": cartItems, "@/lib/payments/online-payment": online,
-    "@/lib/payments/order-result": result, "@/lib/payments/liqpay": liqpay,
-    "@/lib/notifications/orders": { notifyOrderCreated: async () => { notifications++; return false; } },
-    "@/lib/prisma": { prisma: {
-      product: { findMany: async () => [{ id: "simple", name: "Server name", price: 123, stock: 3, options: [] }] },
-      order: { findUnique: async () => ({ ...prepared?.data, items: [] }) },
-      $transaction: async (callback: (tx: unknown) => Promise<unknown>) => {
-        transactionCalls++; return callback({ product: { updateMany: async () => ({ count: 1 }) }, order: { create: async (args: Prisma.OrderCreateArgs) => { prepared = args; } } });
-      },
-    } },
-  });
-  const checkout = { customerName: "Isolated", customerSurname: "QA", customerEmail: "isolated@example.invalid", customerPhone: "+380000000000", deliveryType: "np_warehouse", npCityName: "QA city", npWarehouseRef: "manual", npWarehouseAddress: "QA address", paymentMethod: "card_online" };
-  const items = [{ id: "simple", productId: "simple", name: "Forged", slug: "simple", image: "/images/placeholder.svg", price: 0.01, quantity: 1 }];
-  process.env.ONLINE_PAYMENT_MODE = "disabled";
-  assert.equal((await createOrder(checkout, items, "en")).success, false); assert.equal(transactionCalls, 0);
-  process.env.ONLINE_PAYMENT_MODE = "sandbox";
-  const onlineOrder = await createOrder(checkout, items, "en");
-  assert.ok(onlineOrder.success && onlineOrder.payment);
-  if (onlineOrder.success && onlineOrder.payment) {
-    const signed = liqpay.parseLiqPayCallback(onlineOrder.payment.data) as liqpay.LiqPayCallbackPayload & { result_url: string; sandbox: number };
-    assert.equal(signed.amount, 123); assert.equal(signed.sandbox, 1); assert.ok(signed.result_url.endsWith(onlineOrder.resultUrl));
-    assert.ok(liqpay.isValidLiqPaySignature(onlineOrder.payment.data, onlineOrder.payment.signature));
-  }
-  assert.equal(prepared!.data.paymentStatus, "PENDING"); assert.equal(prepared!.data.status, "AWAITING_PAYMENT"); assert.equal(notifications, 0);
-  const offlineOrder = await createOrder({ ...checkout, paymentMethod: "cash_on_delivery" }, items, "en");
-  assert.ok(offlineOrder.success && !offlineOrder.payment); assert.equal(prepared!.data.status, "PROCESSING"); assert.equal(prepared!.data.paymentProvider, undefined); assert.equal(notifications, 1);
+  // New checkout/action behavior is covered by verify-batch17-payments.ts.
   assert.equal(externalCalls, 0);
-  console.log("PASS isolated payments: disabled/live guards; signature/data/merchant/reference/amount/currency; pending/paid/failed/reversed; duplicate/concurrent callbacks; sandbox isolation; expiring status-only capability; authoritative online/offline order handoff. Zero real DB/provider/notification calls.");
+  console.log("PASS isolated payments: legacy sandbox guards; signature/data/merchant/reference/amount/currency; pending/paid/failed/reversed; duplicate/concurrent callbacks; sandbox isolation; expiring status-only capability; historical order compatibility. Zero real DB/provider/notification calls.");
 }
 verify().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => { process.env = saved; });

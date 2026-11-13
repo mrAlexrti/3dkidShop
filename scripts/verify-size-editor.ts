@@ -106,7 +106,7 @@ async function verify() {
     });
     const form = (sizes?: unknown) => {
       const data = new FormData();
-      for (const [key, value] of Object.entries({ name: "Тимчасовий товар", nameEn: "Temporary product", slug, description: "Тимчасовий опис", descriptionEn: "Temporary description", price: "123", stock: "7", categoryId: category.id, imageUrl: "https://example.invalid/main.webp", hoverGifUrl: "", isActive: "on" })) data.set(key, value);
+      for (const [key, value] of Object.entries({ name: "Тимчасовий товар", nameEn: "Temporary product", slug, description: "Тимчасовий опис", descriptionEn: "Temporary description", price: "123", isOrderable: "on", categoryId: category.id, imageUrl: "https://example.invalid/main.webp", hoverGifUrl: "", isActive: "on" })) data.set(key, value);
       if (sizes !== undefined) data.set("variants", JSON.stringify(sizes));
       return data;
     };
@@ -177,7 +177,7 @@ async function verify() {
     assert.equal(variants.hasConfiguredSizes(await groups()), false);
     assert.equal(variants.startingPrice(123, await groups()), 123);
     await checkAuthoritativePrice(undefined, 123);
-    assert.equal((await tx.product.findUniqueOrThrow({ where: { id: product.id } })).stock, 7);
+    assert.equal((await tx.product.findUniqueOrThrow({ where: { id: product.id } })).isOrderable, true);
     throw rollback;
   }, { timeout: 60000 }), (error) => error === rollback);
   assert.deepEqual(await inventory(), before, "All pre-existing catalog/order/category/image/option data must remain unchanged after rollback.");

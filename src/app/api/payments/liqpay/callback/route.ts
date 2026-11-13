@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { emitOrderEvents } from "@/lib/notifications/orders";
 import { getOrderStatusAfterPaymentReceived } from "@/lib/order-status";
-import { getOnlinePaymentConfig } from "@/lib/payments/online-payment";
+import { getLegacyLiqPayConfig } from "@/lib/payments/legacy-liqpay";
 import { isPaidLiqPayStatus, isFailedLiqPayStatus, isValidLiqPaySignature, parseLiqPayCallback, matchesLiqPayPayment } from "@/lib/payments/liqpay";
 
 const response = (status: number, error: string) => NextResponse.json({ success: false, error }, { status });
 export async function POST(req: Request) {
-  const config = getOnlinePaymentConfig();
+  const config = getLegacyLiqPayConfig();
   if (!config) return response(503, "Online payment is unavailable.");
   if (Number(req.headers.get("content-length")) > 100000) return response(413, "Callback too large.");
   let payload;

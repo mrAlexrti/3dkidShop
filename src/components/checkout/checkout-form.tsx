@@ -79,24 +79,6 @@ const inp =
 
 const NUM_STYLES = "flex h-7 w-7 items-center justify-center rounded-full bg-pink-500 text-xs font-bold text-white";
 
-function submitLiqPayForm(payment: { action: string; data: string; signature: string }) {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = payment.action;
-  form.acceptCharset = "utf-8";
-
-  for (const [name, value] of Object.entries({ data: payment.data, signature: payment.signature })) {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = name;
-    input.value = value;
-    form.appendChild(input);
-  }
-
-  document.body.appendChild(form);
-  form.submit();
-}
-
 export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean }) {
   const { t, locale } = useLangStore();
   const c = t.checkout;
@@ -170,7 +152,7 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
       if (result.success) {
         if (result.payment) {
           toast.message(c.feedback.redirect);
-          submitLiqPayForm(result.payment);
+          window.location.assign(result.payment.pageUrl);
           clear();
           return;
         }

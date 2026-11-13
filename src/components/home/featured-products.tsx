@@ -13,7 +13,7 @@ type Product = {
   hoverGifUrl?: string | null;
   isNew?: boolean;
   hasOptions?: boolean;
-  stock?: number;
+  isOrderable: boolean;
 };
 
 export async function FeaturedProducts({ products }: {

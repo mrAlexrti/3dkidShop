@@ -36,7 +36,7 @@ export default async function AdminProductsPage() {
               <th className="px-4 py-3">{tl.thProduct}</th>
               <th className="px-4 py-3">{tl.thCategory}</th>
               <th className="px-4 py-3">{tl.thPrice}</th>
-              <th className="px-4 py-3">{tl.thStock}</th>
+              <th className="px-4 py-3">{t.admin.product.isOrderable}</th>
               <th className="px-4 py-3">{tl.thStatus}</th>
               <th className="px-4 py-3" />
             </tr>
@@ -55,7 +55,7 @@ export default async function AdminProductsPage() {
                 </td>
                 <td className="px-4 py-3">{p.category.name}</td>
                 <td className="px-4 py-3">{formatPrice(Number(p.price))}</td>
-                <td className="px-4 py-3">{p.stock}</td>
+                <td className="px-4 py-3">{p.isOrderable ? tl.orderable : tl.unavailable}</td>
                 <td className="px-4 py-3">
                   <span className={p.isActive ? "text-green-600" : "text-ink/40"}>
                     {p.isActive ? tl.active : tl.hidden}

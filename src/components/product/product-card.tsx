@@ -32,10 +32,10 @@ type Props = {
   hoverGifUrl?: string | null;
   isNew?: boolean;
   hasOptions?: boolean;
-  stock?: number;
+  isOrderable: boolean;
 };
 
-export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, hoverGifUrl, isNew, hasOptions = false, stock }: Props) {
+export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, hoverGifUrl, isNew, hasOptions = false, isOrderable }: Props) {
   const router = useRouter();
   const addItem  = useCartStore((s) => s.addItem);
   const { locale, t } = useLangStore();
@@ -66,8 +66,8 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, ho
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (stock !== undefined && stock <= 0) {
-      toast.error(t.product.outOfStock);
+    if (!isOrderable) {
+      toast.error(t.product.unavailable);
       return;
     }
     if (hasOptions) {
@@ -88,12 +88,13 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, ho
       </Link>
       <div className="sf-product-body">
         <h3><Link href={`/product/${slug}`}>{localizedName}</Link></h3>
+        {!isOrderable && <p className="mt-2 text-xs text-ink/60">{t.product.unavailable}</p>}
         <div className="sf-product-bottom">
           <div className="sf-product-price">
             <span>{hasOptions && `${t.product.from} `}{formatPrice(price, currency)}</span>
             {oldPrice && <del>{formatPrice(oldPrice, currency)}</del>}
           </div>
-          <button type="button" className="sf-product-add" onClick={handleQuickAdd} aria-label={`${stock !== undefined && stock <= 0 ? t.product.outOfStock : hasOptions ? t.product.chooseSize : t.product.addToCart}: ${localizedName}`} aria-disabled={stock !== undefined && stock <= 0}>
+          <button type="button" className="sf-product-add disabled:opacity-50" disabled={!isOrderable} onClick={handleQuickAdd} aria-label={`${!isOrderable ? t.product.unavailable : hasOptions ? t.product.chooseSize : t.product.addToCart}: ${localizedName}`} aria-disabled={!isOrderable}>
             <ShoppingBag size={20} aria-hidden="true" />
           </button>
         </div>

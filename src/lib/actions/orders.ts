@@ -6,6 +6,7 @@ import type { OrderStatus } from "@prisma/client";
 import { requireAdmin } from "@/lib/actions/require-admin";
 import { emitOrderEvents } from "@/lib/notifications/orders";
 import { EDITABLE_ORDER_STATUSES } from "@/lib/order-status";
+import { cancelPendingPayment, paymentSnapshotWhere } from "@/lib/payments/transitions";
 
 export async function updateOrderStatus(id: string, status: OrderStatus) {
   await requireAdmin();
@@ -14,7 +15,14 @@ export async function updateOrderStatus(id: string, status: OrderStatus) {
   const order = await prisma.order.findUnique({ where: { id }, include: { items: true } });
   if (!order || order.status === status) return;
 
-  const updated = await prisma.order.updateMany({ where: { id, status: order.status }, data: { status } });
+  if (status === "CANCELLED" && order.paymentProvider === "mono" && !order.paidAt) {
+    if (!await cancelPendingPayment(order.number, "ADMIN_CANCELLED")) throw new Error("ORDER_CHANGED_RELOAD");
+    revalidatePath("/admin/orders");
+    revalidatePath(`/admin/orders/${id}`);
+    return;
+  }
+
+  const updated = await prisma.order.updateMany({ where: order.paymentProvider === "mono" ? paymentSnapshotWhere(order) : { id, status: order.status }, data: { status } });
   if (updated.count !== 1) throw new Error("ORDER_CHANGED_RELOAD");
   await emitOrderEvents(order, { ...order, status });
 

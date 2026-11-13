@@ -8,6 +8,8 @@ import * as templates from "../src/lib/notifications/templates";
 import * as orderStatus from "../src/lib/order-status";
 import { translations } from "../src/lib/i18n";
 import { sourceModule } from "./source-module";
+import * as paymentMethods from "../src/lib/payments/payment-method";
+import * as paymentMoney from "../src/lib/payments/money";
 import * as React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -171,6 +173,7 @@ async function verify() {
   // are never written through the order-stage selector.
   let order = { ...base, status: "PENDING" }; let changes = 0; let writes = 0;
   const orderAction = sourceModule<typeof import("../src/lib/actions/orders")>("src/lib/actions/orders.ts", {
+    "@/lib/payments/transitions": { cancelPendingPayment: () => { throw new Error("UNEXPECTED_MONO_CALL"); }, paymentSnapshotWhere: () => { throw new Error("UNEXPECTED_MONO_CALL"); } },
     "next/cache": { revalidatePath: () => {} }, "@/lib/actions/require-admin": { requireAdmin: async () => {} },
     "@/lib/order-status": orderStatus, "@/lib/notifications/orders": { emitOrderEvents: async () => { changes++; } },
     "@/lib/prisma": { prisma: { order: {
@@ -191,6 +194,7 @@ async function verify() {
   const cronOrder = { ...base, novaPoshtaTtn: ttn.novaPoshtaTtn, novaPoshtaSyncedAt: null } as unknown as Order;
   let cronEvents = 0; let cronWrites = 0;
   const cron = sourceModule<{ GET(req: Request): Promise<Response> }>("src/app/api/cron/novaposhta/route.ts", {
+    "@/lib/payments/payment-method": paymentMethods, "@/lib/payments/money": paymentMoney,
     "next/server": { NextResponse }, "@/lib/status": status, "@/lib/order-status": orderStatus,
     "@/lib/server-env": { readServerEnv: (key: string) => key === "CRON_SECRET" ? "isolated" : "" },
     "@/lib/notifications/orders": { emitOrderEvents: async (before: Order, after: Order) => { cronEvents += events.notificationEvents(before, after).length; } },

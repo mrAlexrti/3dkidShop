@@ -1,4 +1,5 @@
 const NOVA_POSHTA_API_URL = "https://api.novaposhta.ua/v2.0/json/";
+import { isCashOnDelivery } from "@/lib/payments/payment-method";
 
 type MoneyLike = number | string | { toString(): string };
 
@@ -10,6 +11,9 @@ export type NovaPoshtaOrderInput = {
   customerLastName?: string | null;
   customerPhone: string;
   paymentMethod: string;
+  paymentProvider?: string | null;
+  paymentStatus?: string | null;
+  paidAt?: Date | null;
   total: MoneyLike;
   deliveryMethod?: string | null;
   novaPoshtaCity?: string | null;
@@ -58,6 +62,8 @@ export type NovaPoshtaDocumentStatus = {
   codStatus: string;
   codStatusCode: string;
   codAmount: number | null;
+  // Presentation/card-description/amount fields are not payment evidence.
+  codStatusReliable: boolean;
 };
 
 function readEnv(name: string) {
@@ -82,11 +88,6 @@ function normalizePhone(value: string) {
   if (digits.length === 9) return `380${digits}`;
   if (digits.length === 10 && digits.startsWith("0")) return `38${digits}`;
   return digits;
-}
-
-function isCashOnDelivery(paymentMethod: string) {
-  const normalized = paymentMethod.toLowerCase();
-  return normalized.includes("наклад") || normalized.includes("cash_on_delivery") || normalized.includes("cod");
 }
 
 function parseNovaPoshtaMoney(value: string | number | undefined) {
@@ -182,7 +183,7 @@ async function callNovaPoshta<T>(apiKey: string, modelName: string, calledMethod
 }
 
 function buildBackwardDeliveryData(order: NovaPoshtaOrderInput) {
-  if (!isCashOnDelivery(order.paymentMethod)) return undefined;
+  if (!isCashOnDelivery(order.paymentMethod) || order.paymentProvider || order.paidAt || ["PAID", "REFUNDED"].includes(order.paymentStatus ?? "")) return undefined;
 
   return [
     {
@@ -202,6 +203,7 @@ function normalizeDocumentStatus(data: StatusData, fallbackTtn: string): NovaPos
     codStatus: normalizeRedeliveryStatus(data),
     codStatusCode: data.RedeliveryStatusCode || "",
     codAmount: parseNovaPoshtaMoney(data.RedeliverySum || data.AfterpaymentOnGoodsCost),
+    codStatusReliable: Boolean(data.RedeliveryStatus?.trim()),
   };
 }
 

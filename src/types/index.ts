@@ -17,7 +17,7 @@ export type ProductWithRelations = {
   description: string;
   price: number;
   oldPrice?: number | null;
-  stock: number;
+  isOrderable: boolean;
   isFeatured: boolean;
   isNew: boolean;
   category: { id: string; name: string; slug: string };

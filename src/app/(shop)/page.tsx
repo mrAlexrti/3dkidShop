@@ -29,7 +29,7 @@ export default async function HomePage() {
     image: product.images[0]?.url ?? "/images/placeholder.svg",
     isNew: product.isNew,
     hasOptions: hasConfiguredSizes(product.options),
-    stock: product.stock,
+    isOrderable: product.isOrderable,
   });
 
   return (

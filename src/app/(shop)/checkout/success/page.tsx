@@ -13,7 +13,7 @@ export default async function CheckoutSuccessPage({ searchParams }: { searchPara
   const number = typeof query.order === "string" ? query.order : "";
   const token = typeof query.token === "string" ? query.token : "";
   const order = validOrderResultToken(number, token) ? await prisma.order.findUnique({
-    where: { number }, select: { paymentProvider: true, paymentStatus: true, paymentMethod: true, status: true, paidAt: true },
+    where: { number }, select: { paymentProvider: true, paymentStatus: true, paymentMethod: true, status: true, paidAt: true, paymentProviderStatus: true, paymentErrorCode: true },
   }) : null;
   return <OrderResult key={order ? `${number}:${token}` : "unavailable"} initialState={order ? paymentResultState(order) : "unavailable"} number={order ? number : ""} token={order ? token : ""} />;
 }

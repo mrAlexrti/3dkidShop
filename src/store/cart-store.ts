@@ -29,7 +29,7 @@ export const useCartStore = create<CartState>()(
       updateQuantity: (id, quantity) =>
         set((state) => ({
           items: state.items.map((i) =>
-            i.id === id ? { ...i, quantity: Math.max(1, quantity) } : i
+            i.id === id && Number.isSafeInteger(quantity) ? { ...i, quantity: Math.max(1, quantity) } : i
           ),
         })),
       clear: () => set({ items: [] }),

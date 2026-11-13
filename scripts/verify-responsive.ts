@@ -30,7 +30,7 @@ import { sourceModule } from "./source-module";
 
 async function verify() {
   const h = React.createElement;
-  const output = resolve(".next/responsive-qa");
+  const output = resolve(".next/cache/responsive-qa");
   mkdirSync(output, { recursive: true });
   const blocked = () => { throw new Error("NO_SIDE_EFFECTS_IN_RESPONSIVE_QA"); };
   const motion = new Proxy({}, { get: (_, tag: string) => ({ children, ...props }: Record<string, unknown>) => {
@@ -52,7 +52,7 @@ async function verify() {
   const products = Array.from({ length: 4 }, (_, i) => ({ id: `p${i}`, productId: `p${i}`, slug: `product-${i}`,
     name: i === 0 ? "Супердовганазвабезпробілівдляперевіркиперенесення" : "Дракон з рухливими крилами",
     nameEn: i === 0 ? "Extraordinarilylongunbrokenproductnameforwrapping" : "Dragon with moving wings",
-    price: 1234, oldPrice: 1450, quantity: 2, stock: 5, isNew: true, hasOptions: i === 1,
+    price: 1234, oldPrice: 1450, quantity: 2, isOrderable: i !== 0, isNew: true, hasOptions: i === 1,
     image: "/hero/dragon-v1.webp", variant: sizes[0],
   }));
 

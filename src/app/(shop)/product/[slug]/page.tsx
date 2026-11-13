@@ -119,7 +119,7 @@ export default async function ProductPage({
             slug={product.slug}
             basePrice={Number(product.price)}
             image={product.images[0]?.url ?? "/images/placeholder.svg"}
-            stock={product.stock}
+            isOrderable={product.isOrderable}
             variants={getSizeVariants(product.options)}
           />
 
@@ -154,7 +154,7 @@ export default async function ProductPage({
           image: p.images[0]?.url ?? "/images/placeholder.svg",
           isNew: p.isNew,
           hasOptions: hasConfiguredSizes(p.options),
-          stock: p.stock,
+          isOrderable: p.isOrderable,
         }))}
       />
     </div>

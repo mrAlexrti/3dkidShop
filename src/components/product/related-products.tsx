@@ -11,7 +11,7 @@ type Product = {
   hoverGifUrl?: string | null;
   isNew?: boolean;
   hasOptions?: boolean;
-  stock?: number;
+  isOrderable: boolean;
 };
 
 export function RelatedProducts({ products, title }: { products: Product[]; title: string }) {

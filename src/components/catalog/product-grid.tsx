@@ -14,7 +14,7 @@ type GridProduct = {
   hoverGifUrl?: string | null;
   isNew?: boolean;
   hasOptions?: boolean;
-  stock?: number;
+  isOrderable: boolean;
 };
 
 export function ProductGrid({ products }: { products: GridProduct[] }) {

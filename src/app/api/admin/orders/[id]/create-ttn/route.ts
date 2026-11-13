@@ -32,6 +32,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     });
   }
 
+  if (order.status === "CANCELLED" ||
+      (order.paymentProvider && (order.paymentStatus !== "PAID" || !order.paidAt))) {
+    return NextResponse.json({ success: false, error: "Order is cancelled or online payment is not confirmed." }, { status: 409 });
+  }
+
   try {
     const result = await createNovaPoshtaWaybill(order);
 
