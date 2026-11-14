@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
-import { LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, Package, FolderTree, ShoppingCart, CreditCard, FileText, LogOut, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLangStore } from "@/store/lang-store";
 import { LangSwitcher } from "@/components/layout/lang-switcher";
@@ -62,6 +62,7 @@ export function AdminSidebar() {
     { href: "/admin/products", label: t.admin.nav.products, icon: Package },
     { href: "/admin/categories", label: t.admin.nav.categories, icon: FolderTree },
     { href: "/admin/orders", label: t.admin.nav.orders, icon: ShoppingCart },
+    { href: "/admin/payment-attempts", label: t.admin.nav.paymentAttempts, icon: CreditCard },
     { href: "/admin/content", label: t.admin.nav.content, icon: FileText },
   ];
 

@@ -142,7 +142,7 @@ export async function createMonoInvoice(input: { number: string; amount: number;
       !/^[\w-]{1,100}$/.test(input.number) || !input.resultPath.startsWith("/checkout/success?")) throw new MonoError("MONO_INVALID_INPUT", { category: "local_validation", endpoint: "invoice/create" });
   const value = await api("/api/merchant/invoice/create", {
     amount: input.amount, ccy: 980,
-    merchantPaymInfo: { reference: input.number, destination: `3D Kid — ${formatOrderReference(input.number)}`, ...(input.email ? { customerEmails: [input.email] } : {}) },
+    merchantPaymInfo: { reference: input.number, destination: input.number.startsWith("pay_") ? "3D Kid — Онлайн-оплата" : `3D Kid — ${formatOrderReference(input.number)}`, ...(input.email ? { customerEmails: [input.email] } : {}) },
     redirectUrl: `${origin}${input.resultPath}`, webHookUrl: `${origin}/api/payments/mono/webhook`,
     validity: MONO_VALIDITY_SECONDS, paymentType: "debit",
   });

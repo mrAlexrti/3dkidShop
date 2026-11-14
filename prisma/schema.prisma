@@ -164,9 +164,24 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum CheckoutAcceptance {
+  LEGACY
+  PROVISIONAL
+  ACCEPTED
+  REVIEW
+}
+
 model Order {
   id                      String      @id @default(cuid())
-  number                  String      @unique
+  number                  String?     @unique
+  checkoutAcceptance      CheckoutAcceptance @default(LEGACY)
+  acceptedAt              DateTime?
+  paymentReference        String?     @unique
+  checkoutKeyHash         String?     @unique
+  checkoutPayloadHash     String?
+  checkoutLocale          String?
+  paymentPageUrl          String?     @db.Text
+  notifications           OrderNotification[]
   status                  OrderStatus @default(PENDING)
   customerName            String
   customerFirstName       String?
@@ -212,6 +227,28 @@ model Order {
 
   @@unique([paymentProvider, paymentInvoiceId])
   @@index([paymentProvider, paymentNextCheckAt])
+  @@index([checkoutAcceptance, createdAt])
+}
+
+model OrderNotification {
+  id                String   @id @default(cuid())
+  orderId           String
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  event             String
+  channel           String
+  state             String   @default("PENDING")
+  payload           Json
+  attemptCount      Int      @default(0)
+  nextAttemptAt     DateTime? @default(now())
+  dispatchId        String?
+  leaseUntil        DateTime?
+  providerMessageId String?
+  lastErrorCode     String?
+  createdAt         DateTime @default(now())
+  sentAt            DateTime?
+
+  @@unique([orderId, event, channel])
+  @@index([state, nextAttemptAt])
 }
 
 model OrderItem {

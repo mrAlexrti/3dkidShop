@@ -29,6 +29,7 @@ function purchaseComponent(selectedSize: string | null = null) {
   }).ProductOptions;
 }
 const { CheckoutForm } = sourceModule<{ CheckoutForm: typeof Form }>("src/components/checkout/checkout-form.tsx", {
+  "@/lib/payments/checkout-session": { onlineCheckoutKey: blocked, rememberCheckoutResult: blocked },
   react: React, "react/jsx-runtime": jsxRuntime, "react-hook-form": hookForm,
   "@hookform/resolvers/zod": resolvers, "lucide-react": icons,
   "@/lib/validations/checkout": validation, "@/components/ui/button": button,

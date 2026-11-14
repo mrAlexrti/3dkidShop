@@ -245,7 +245,21 @@ export const translations = {
         products:   "Товари",
         categories: "Категорії",
         orders:     "Замовлення",
+        paymentAttempts: "Спроби оплат",
         content:    "Контент сайту",
+      },
+      paymentAttempts: {
+        description: "Технічні спроби онлайн-оплати, які не прийняті як замовлення. Лише перегляд; жодних змін оплати чи відправлення.",
+        timezone: "Дати й час у UTC. Фільтр дат застосовується до дати створення.",
+        status: "Стан", all: "Усі стани", from: "Від дати", to: "До дати", search: "ID спроби або платіжний ідентифікатор", apply: "Застосувати", reset: "Скинути", invalid: "Перевірте стан, ідентифікатор і діапазон дат.",
+        created: "Створено", attempt: "ID спроби", customer: "Клієнт", amount: "Сума", provider: "Провайдер", reference: "Платіжний ідентифікатор", invoice: "ID рахунку", expires: "Дійсний до", modified: "Оновлення провайдера", nextCheck: "Наступна перевірка", reason: "Причина / діагностика",
+        empty: "Спроб оплат за цими фільтрами немає.", total: "Знайдено", page: "Сторінка", of: "з", previous: "Попередня", next: "Наступна", pagination: "Сторінки спроб оплат", table: "Діагностика спроб оплат", noCheck: "Не заплановано", notAvailable: "—", noCheckHelp: "Відсутність наступної перевірки не доводить невдалу оплату. Записи з невизначеністю чи підтвердженою оплатою потребують перевірки адміністратором.", paidWarning: "Оплату підтверджено, але замовлення не прийняте. Потрібне розслідування; не створюйте повторну оплату або замовлення вручну.",
+        states: { awaiting: "Очікуємо оплату", processing: "Оплата обробляється", failed: "Оплата не вдалася", cancelled: "Оплату скасовано", expired: "Рахунок прострочено", unknown: "Статус невідомий / очікує звірки", review: "Потрібна ручна перевірка", paid_unaccepted: "Оплату підтверджено — замовлення не прийняте", refunded: "Кошти повернено", unscheduled: "Без запланованої перевірки" },
+        providers: { mono: "Mono", liqpay: "LiqPay", other: "Інший провайдер" },
+        reasons: {
+          none: "Причину не зазначено", other: "Невідома діагностична причина", provider_failure: "Помилка оплати від провайдера",
+          INVOICE_INITIALIZING: "Створення рахунку ще не завершено", INVOICE_CREATE_UNCERTAIN: "Невідомий результат створення рахунку", INVOICE_INITIALIZATION_INVALIDATED: "Неоплачений рахунок анульовано під час відновлення", INVOICE_CREATE_FAILED: "Провайдер відхилив створення рахунку", INVOICE_EXPIRED: "Провайдер підтвердив завершення строку рахунку", INITIALIZATION_EXPIRED: "Ініціалізація завершилась без прив'язаного рахунку", UNEXPECTED_HOLD: "Неочікуване утримання коштів; потрібна перевірка", UNKNOWN_PROVIDER_STATUS: "Невідомий стан провайдера", REFUND_RECONCILIATION_REQUIRED: "Неповні або суперечливі дані повернення коштів", REFUND_BEFORE_ACCEPTANCE: "Повернення коштів до прийняття замовлення", LATE_PAYMENT_REVIEW: "Пізня або суперечлива успішна оплата", FULFILLMENT_REVIEW_REQUIRED: "Суперечність між оплатою та відправленням", INCONSISTENT_PAYMENT_STATE: "Суперечливі фінансові стани", RECONCILIATION_UNAVAILABLE: "Звірка тимчасово недоступна", PAYMENT_FAILED: "Провайдер підтвердив невдалу оплату", ADMIN_CANCELLED: "Скасовано адміністратором",
+        },
       },
       logout: "Вийти",
       testMode: {
@@ -589,7 +603,21 @@ export const translations = {
         products:   "Products",
         categories: "Categories",
         orders:     "Orders",
+        paymentAttempts: "Payment Attempts",
         content:    "Site content",
+      },
+      paymentAttempts: {
+        description: "Technical online payment attempts that have not been accepted as orders. Read-only; no payment or shipment operations.",
+        timezone: "Dates and times are UTC. Date filters use creation time.",
+        status: "State", all: "All states", from: "From date", to: "Through date", search: "Attempt ID or payment reference", apply: "Apply", reset: "Reset", invalid: "Check the state, identifier and date range.",
+        created: "Created", attempt: "Attempt ID", customer: "Customer", amount: "Amount", provider: "Provider", reference: "Payment reference", invoice: "Invoice ID", expires: "Expires", modified: "Provider updated", nextCheck: "Next reconciliation", reason: "Reason / diagnostics",
+        empty: "No payment attempts match these filters.", total: "Found", page: "Page", of: "of", previous: "Previous", next: "Next", pagination: "Payment attempt pages", table: "Payment attempt diagnostics", noCheck: "Not scheduled", notAvailable: "—", noCheckHelp: "No scheduled check does not prove payment failure. Uncertain or confirmed-paid records need administrator investigation.", paidWarning: "Payment is confirmed but order acceptance is incomplete. Investigate; do not create another payment or manually accept an order.",
+        states: { awaiting: "Awaiting payment", processing: "Payment processing", failed: "Payment failed", cancelled: "Payment cancelled", expired: "Invoice expired", unknown: "Unknown / reconciliation pending", review: "Requires manual review", paid_unaccepted: "Payment confirmed — order not accepted", refunded: "Refunded", unscheduled: "No scheduled check" },
+        providers: { mono: "Mono", liqpay: "LiqPay", other: "Other provider" },
+        reasons: {
+          none: "No reason recorded", other: "Unrecognized diagnostic reason", provider_failure: "Provider payment error",
+          INVOICE_INITIALIZING: "Invoice initialization has not completed", INVOICE_CREATE_UNCERTAIN: "Invoice creation outcome is uncertain", INVOICE_INITIALIZATION_INVALIDATED: "Unpaid invoice invalidated during recovery", INVOICE_CREATE_FAILED: "Provider rejected invoice creation", INVOICE_EXPIRED: "Provider confirmed invoice expiry", INITIALIZATION_EXPIRED: "Initialization ended without a bound invoice", UNEXPECTED_HOLD: "Unexpected funds hold; investigation required", UNKNOWN_PROVIDER_STATUS: "Unrecognized provider state", REFUND_RECONCILIATION_REQUIRED: "Partial or inconsistent refund evidence", REFUND_BEFORE_ACCEPTANCE: "Refund before order acceptance", LATE_PAYMENT_REVIEW: "Delayed or conflicting successful payment", FULFILLMENT_REVIEW_REQUIRED: "Payment and shipment inconsistency", INCONSISTENT_PAYMENT_STATE: "Inconsistent financial states", RECONCILIATION_UNAVAILABLE: "Reconciliation temporarily unavailable", PAYMENT_FAILED: "Provider confirmed payment failure", ADMIN_CANCELLED: "Cancelled by administrator",
+        },
       },
       logout: "Log out",
       testMode: {

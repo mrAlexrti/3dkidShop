@@ -1,0 +1,37 @@
+# INACTIVE TEMPLATE: this directory is not .github/workflows.
+# Review/configure target, runtime budget and authentication before activation.
+# GitHub Actions scheduling runs from the default branch; main is NOT production.
+name: Payment and notification recovery (template)
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: payment-recovery
+  cancel-in-progress: false
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Recover payments and notification outbox
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          RECOVERY_URL: ${{ vars.PAYMENT_RECOVERY_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CRON_SECRET"
+          # Exact reviewed target supplied separately; no default production URL.
+          case "$RECOVERY_URL" in
+            https://*/api/cron/payments) ;;
+            *) echo 'Missing or invalid recovery target'; exit 1 ;;
+          esac
+          # No redirects/retries: avoid forwarding credentials or replaying sends.
+          # Print only HTTP status, never authorization, URL, body or payloads.
+          status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --connect-timeout 10 --max-time 75 --request GET \
+            --header "Authorization: Bearer $CRON_SECRET" "$RECOVERY_URL")"
+          echo "Recovery HTTP status: $status"
+          test "$status" = '200'

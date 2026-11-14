@@ -26,6 +26,8 @@ import * as orderStatus from "../src/lib/order-status";
 import * as fonts from "../src/lib/fonts";
 import * as events from "../src/lib/notifications/events";
 import * as reference from "../src/lib/order-reference";
+import * as acceptance from "../src/lib/payments/acceptance";
+import * as attemptDiagnostics from "../src/lib/payments/attempt-diagnostics";
 import { heroAssets } from "../src/lib/hero-assets";
 import { sourceModule } from "./source-module";
 
@@ -56,6 +58,12 @@ async function verify() {
     novaPoshtaCodStatus: "UNKNOWN_COD".repeat(20), novaPoshtaError: "ERROR_WITHOUT_SPACES".repeat(20) };
   let detailOrder = order;
   const common = {
+    "@/lib/payments/attempt-diagnostics": attemptDiagnostics,
+    "@/lib/admin/payment-attempts": { listPaymentAttempts: async () => ({ filters: attemptDiagnostics.parseAttemptFilters({}), page: 1, pages: 3, total: 61, attempts: [
+      { id: "qa-attempt-".repeat(4), createdAt: new Date("2026-11-14T12:00:00Z"), customerName: order.customerName, amount: "1234.00", currency: "UAH", provider: "mono", state: "unknown", review: true, reference: "pay_" + "a".repeat(96), invoiceId: "invoice_".repeat(15), expiresAt: null, modifiedAt: new Date("2026-11-14"), nextCheckAt: null, reason: "INVOICE_CREATE_UNCERTAIN" },
+      { id: "qa-paid-review", createdAt: new Date("2026-11-14"), customerName: "QA", amount: "199.00", currency: "UAH", provider: "mono", state: "paid_unaccepted", review: true, reference: "pay_qa", invoiceId: "invoice_qa", expiresAt: null, modifiedAt: null, nextCheckAt: null, reason: "LATE_PAYMENT_REVIEW" },
+    ] }) },
+    "@/lib/payments/acceptance": acceptance,
     "@/lib/order-reference": reference,
     react: React, "react/jsx-runtime": jsxRuntime, "lucide-react": icons, "@/lib/utils": utils,
     "next/link": { default: (props: object) => h("a", props), __esModule: true },
@@ -82,7 +90,7 @@ async function verify() {
   type Components = Record<string, React.ElementType>;
   const pages = new Map<string, string>();
   const acceptedSources: string[] = [];
-  const pageFiles = { dashboard: "page.tsx", products: "products/page.tsx", categories: "categories/page.tsx", orders: "orders/page.tsx",
+  const pageFiles = { dashboard: "page.tsx", products: "products/page.tsx", categories: "categories/page.tsx", orders: "orders/page.tsx", "payment-attempts": "payment-attempts/page.tsx",
     detail: "orders/[id]/page.tsx", "product-new": "products/new/page.tsx", "product-edit": "products/[id]/edit/page.tsx",
     "category-edit": "categories/[id]/edit/page.tsx", content: "content/page.tsx" };
   for (const version of ["current", "accepted"] as const) {
@@ -93,6 +101,12 @@ async function verify() {
         source = resolve(output, "accepted", file);
         mkdirSync(resolve(source, ".."), { recursive: true });
         let baseline = execFileSync("git", ["show", `${accepted}:${file}`], { encoding: "utf8" });
+        if (file.endsWith("admin/admin-sidebar.tsx")) {
+          // Normalize only the intentionally added diagnostics navigation entry.
+          baseline = 'import { CreditCard } from "lucide-react";\n' + baseline.replace(
+            '{ href: "/admin/orders", label: t.admin.nav.orders, icon: ShoppingCart },',
+            '{ href: "/admin/orders", label: t.admin.nav.orders, icon: ShoppingCart },\n    { href: "/admin/payment-attempts", label: t.admin.nav.paymentAttempts, icon: CreditCard },');
+        }
         // Apply only the approved availability control/data replacement to old
         // markup. Keep all other historical geometry/CSS comparisons strict.
         if (file.endsWith("admin/product-form.tsx")) {
@@ -125,12 +139,13 @@ async function verify() {
     const Layout = load("src/app/admin/layout.tsx").default as (props: object) => Promise<React.ReactElement>;
     for (locale of ["ua", "en"] as const) {
       for (const [key, file] of Object.entries(pageFiles)) {
+        if (version === "accepted" && key === "payment-attempts") continue; // New page has no historical screenshot oracle.
         pathname = key === "dashboard" ? "/admin" : `/admin/${key.startsWith("product-") ? "products" : key === "category-edit" ? "categories" : key === "detail" ? "orders/o1" : key}`;
         const Page = load(`src/app/admin/${file}`).default as (props: object) => Promise<React.ReactElement>;
         const cases = key === "detail" ? [key, "detail-long", "detail-create-ttn", "detail-new"] : [key];
         for (const name of cases) {
           detailOrder = name === "detail-long" ? stressOrder : name === "detail-new" ? { ...order, status: "PENDING" } : name === "detail-create-ttn" ? { ...order, novaPoshtaTtn: null } as unknown as typeof order : order;
-          const body = await Page({ params: Promise.resolve({ id: "fixture" }) });
+          const body = await Page({ params: Promise.resolve({ id: "fixture" }), searchParams: Promise.resolve({}) });
           pages.set(`/${version}/${locale}/${name}`, renderToStaticMarkup(h(language.LangStoreContext.Provider,
             { value: language.createLangStore(locale) }, await Layout({ children: body }))));
         }
@@ -283,7 +298,7 @@ async function verify() {
     for (const width of [1280, 1440]) {
       await send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: false });
       for (const key of pages.keys()) {
-        if (!key.startsWith("/current/") || key.includes("detail-long")) continue;
+        if (!key.startsWith("/current/") || key.includes("detail-long") || key.includes("payment-attempts")) continue;
         const layoutMetrics = () => evaluate("[...document.querySelectorAll('aside,h1,h2,table,form,input:not([type=hidden]),select,textarea')].map(el=>{const r=el.getBoundingClientRect();return [el.tagName,r.x,r.y,r.width,r.height]})");
         await navigate(key); const currentMetrics = await layoutMetrics();
         const current = await screenshot(`desktop-${width}-${key.slice(1).replaceAll("/", "-")}`);

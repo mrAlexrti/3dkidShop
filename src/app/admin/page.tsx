@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import { operationalOrderWhere } from "@/lib/payments/acceptance";
 import { OrderStatusSummary } from "@/components/admin/order-status-summary";
 import { formatPrice } from "@/lib/utils";
 import { getT, getLocale } from "@/lib/i18n-server";
@@ -13,11 +14,11 @@ export default async function AdminDashboard() {
   const [productsCount, categoriesCount, ordersCount, orders] = await Promise.all([
     prisma.product.count(),
     prisma.category.count(),
-    prisma.order.count(),
-    prisma.order.findMany({ orderBy: { createdAt: "desc" }, take: 5 }),
+    prisma.order.count({ where: operationalOrderWhere }),
+    prisma.order.findMany({ where: operationalOrderWhere, orderBy: { createdAt: "desc" }, take: 5 }),
   ]);
 
-  const revenue = await prisma.order.aggregate({ _sum: { total: true } });
+  const revenue = await prisma.order.aggregate({ where: operationalOrderWhere, _sum: { total: true } });
 
   const stats = [
     { label: t.admin.dashboard.products, value: productsCount, icon: Package },

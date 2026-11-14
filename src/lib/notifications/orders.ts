@@ -9,6 +9,8 @@ import { isUnacceptedOnlineOrder } from "@/lib/payments/initialization-state";
 // Only the winner of a persisted transition calls this dispatcher.
 export async function emitOrderEvents(before: OrderForNotification | null, order: OrderForNotification, locale: Locale = "ua", onlyChannel?: NotificationChannel) {
   if (order.paymentMode === "sandbox") return false;
+  // Initial new Mono acceptance is exclusively dispatched from its durable row.
+  if (!before && order.checkoutAcceptance === "ACCEPTED" && order.paymentProvider === "mono") return false;
   if (isUnacceptedOnlineOrder(order) || (before && isUnacceptedOnlineOrder(before))) return false;
   const events = notificationEvents(before, order);
   if (events.length === 0) return false;

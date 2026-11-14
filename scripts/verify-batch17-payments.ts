@@ -1,6 +1,8 @@
 // Actual provider/action/webhook/transition/reconciliation sources; isolated DB,
 // provider HTTP, email and Telegram boundaries. Never load .env or PrismaClient.
 import assert from "node:assert/strict";
+import * as acceptance from "../src/lib/payments/acceptance";
+import * as identity from "../src/lib/payments/checkout-identity";
 import * as crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { sourceModule } from "./source-module";
@@ -65,35 +67,42 @@ const notifications = {
   notifyOrderCreated: async (order: Order) => { db.events.push(...events.notificationEvents(null, order)); return false; },
 };
 const lifecycle = sourceModule<typeof import("../src/lib/payments/transitions")>("src/lib/payments/transitions.ts", {
+  "./acceptance": acceptance, "@/lib/payments/acceptance": acceptance, "node:crypto": crypto, "@/lib/payments/checkout-identity": identity, "@prisma/client": { Prisma }, "@/lib/order-number": numbers, "@/lib/notifications/outbox": { enqueueAcceptanceNotifications: async () => {}, recoverNotificationOutbox: async () => ({}) },
   "@/lib/payments/initialization-state": initializationState,
   "@/lib/prisma": { prisma: db }, "@/lib/payments/money": money, "@/lib/order-status": orderStatus, "@/lib/notifications/orders": notifications,
 });
 const initialization = sourceModule<typeof import("../src/lib/payments/initialization")>("src/lib/payments/initialization.ts", {
-  "@/lib/prisma": { prisma: db }, "@/lib/payments/transitions": lifecycle, "@/lib/payments/initialization-state": initializationState,
+  "@/lib/prisma": { prisma: db }, "@/lib/payments/transitions": lifecycle, "./acceptance": acceptance, "@/lib/payments/acceptance": acceptance, "node:crypto": crypto, "@/lib/payments/checkout-identity": identity, "@prisma/client": { Prisma }, "@/lib/order-number": numbers, "@/lib/notifications/outbox": { enqueueAcceptanceNotifications: async () => {}, recoverNotificationOutbox: async () => ({}) },
+  "@/lib/payments/initialization-state": initializationState,
   "@/lib/payments/mono": mono, "@/lib/payments/money": money,
 });
 const webhook = sourceModule<typeof import("../src/app/api/payments/mono/webhook/route")>("src/app/api/payments/mono/webhook/route.ts", {
   "next/server": { NextResponse }, "@/lib/payments/mono": mono, "@/lib/payments/mono-state": adapter, "@/lib/payments/transitions": lifecycle,
 });
 const reconcile = sourceModule<typeof import("../src/lib/payments/reconciliation")>("src/lib/payments/reconciliation.ts", {
+  "./acceptance": acceptance, "@/lib/payments/acceptance": acceptance, "node:crypto": crypto, "@/lib/payments/checkout-identity": identity, "@prisma/client": { Prisma }, "@/lib/order-number": numbers, "@/lib/notifications/outbox": { enqueueAcceptanceNotifications: async () => {}, recoverNotificationOutbox: async () => ({}) },
   "@/lib/payments/initialization-state": initializationState, "@/lib/payments/initialization": initialization,
   "@/lib/prisma": { prisma: db }, "@/lib/payments/mono": mono, "@/lib/payments/mono-state": adapter, "@/lib/payments/transitions": lifecycle,
 });
 const cron = sourceModule<typeof import("../src/app/api/cron/payments/route")>("src/app/api/cron/payments/route.ts", {
+  "@/lib/notifications/outbox": { recoverNotificationOutbox: async () => ({}) },
   "next/server": { NextResponse }, "node:crypto": crypto, "@/lib/server-env": serverEnv, "@/lib/payments/reconciliation": reconcile,
 });
-const loadAction = (numberModule = numbers) => sourceModule<typeof import("../src/lib/actions/create-order")>("src/lib/actions/create-order.ts", {
+const loadAction = (numberModule = numbers) => {
+  const create = sourceModule<typeof import("../src/lib/actions/create-order")>("src/lib/actions/create-order.ts", {
+  "./acceptance": acceptance, "@/lib/payments/acceptance": acceptance, "node:crypto": crypto, "@/lib/payments/checkout-identity": identity, "@prisma/client": { Prisma }, "@/lib/order-number": numberModule, "@/lib/notifications/outbox": { enqueueAcceptanceNotifications: async () => {}, recoverNotificationOutbox: async () => ({}) },
   "@/lib/payments/initialization-state": initializationState, "@/lib/payments/initialization": initialization,
   "@/lib/prisma": { prisma: db }, "@/lib/i18n": { translations }, "@/lib/validations/checkout": validation,
   "@/lib/product-variants": variants, "@/lib/cart-items": cart, "@/lib/payments/online-payment": online,
   "@/lib/payments/order-result": result, "@/lib/payments/mono": mono, "@/lib/payments/transitions": lifecycle,
-  "@/lib/payments/money": money, "@/lib/order-number": numberModule, "@/lib/notifications/orders": notifications, "@/lib/order-status": orderStatus,
-  "@prisma/client": { Prisma },
+  "@/lib/payments/money": money, "@/lib/notifications/orders": notifications, "@/lib/order-status": orderStatus,
 }).createOrder;
+  return (...args: Parameters<typeof create>) => create(args[0], args[1], args[2], args[3] ?? crypto.randomUUID());
+};
 function reset(changes: Row = {}) {
   db.events = []; db.collisions = 0;
   db.products = [{ id: "p1", stock: 4, price: "199.00", name: "Server product", options: [], isActive: true, isOrderable: true }];
-  db.orders = [{ id: "o1", number: "3DK-isolated", status: "PENDING", paymentMethod: "card_online", paymentProvider: "mono", paymentMode: "sandbox",
+  db.orders = [{ id: "o1", number: "3DK-isolated", paymentReference: null, checkoutAcceptance: "LEGACY", status: "PENDING", paymentMethod: "card_online", paymentProvider: "mono", paymentMode: "sandbox",
     paymentStatus: "PENDING", paidAt: null, total: "199.00", paymentInvoiceId: "invoice_1",
     paymentProviderStatus: null, paymentModifiedAt: null, paymentErrorCode: null, paymentExpiresAt: new Date(timestamp + 3600000),
     paymentNextCheckAt: new Date(timestamp), novaPoshtaTtn: null, novaPoshtaDeliveredAt: null, items: [{ productId: "p1", quantity: 1 }], ...changes }];
@@ -199,6 +208,7 @@ async function verify() {
   assert.equal((await loadAction()(checkout, items, "en")).success, false, "Configured size cannot be silently chosen");
   assert.equal((await loadAction()(checkout, [{ ...items[0], variant: { id: "another-product-size", labelUa: "Forged", labelEn: null } }], "en")).success, false);
   const adminAction = sourceModule<typeof import("../src/lib/actions/orders")>("src/lib/actions/orders.ts", {
+    "@/lib/payments/acceptance": acceptance,
     "@/lib/status": status, "@/lib/orders/take-into-work": { takeOrderIntoWork: () => { throw new Error("UNEXPECTED_WORK_ACTION"); } },
     "@/lib/prisma": { prisma: db }, "next/cache": { revalidatePath: () => {} }, "@/lib/actions/require-admin": { requireAdmin: async () => {} },
     "@/lib/order-status": orderStatus, "@/lib/payments/transitions": lifecycle, "@/lib/notifications/orders": notifications,
@@ -208,17 +218,17 @@ async function verify() {
   reset(); db.orders = []; db.collisions = 1;
   const response = await loadAction()(checkout, items, "en");
   assert.ok(response.success && response.payment?.pageUrl === "https://pay.mbnk.biz/invoice_1");
-  assert.equal(db.products[0].stock, 4); assert.equal(db.orders.length, 1); assert.equal(db.orders[0].total, "199.00"); assert.equal(db.orders[0].number, "0001");
+  assert.equal(db.products[0].stock, 4); assert.equal(db.orders.length, 1); assert.equal(db.orders[0].total, "199.00"); assert.equal(db.orders[0].number, null);
   assert.equal(db.orders[0].status, "PENDING", "New online order remains operationally NEW");
-  assert.ok(db.events.includes("PAYMENT_PENDING"));
+  assert.equal(db.events.length, 0, "Invoice handoff is not business acceptance");
   for (const failure of ["network", "page"] as const) {
     reset(); db.orders = []; invoiceFailure = failure === "network"; invalidPage = failure === "page";
     querySnapshot = snapshot({ reference: "0001", status: "processing" });
     assert.equal((await loadAction()(checkout, items, "ua")).success, false); assert.equal(db.products[0].stock, 4); assert.equal(db.orders[0].status, "PENDING"); assert.equal(db.orders[0].paymentStatus, "UNKNOWN");
-    const eventCount: number = db.events.length; await lifecycle.cancelPendingPayment(String(db.orders[0].number), "INVOICE_CREATE_UNCERTAIN"); assert.equal(db.events.length, eventCount);
+    const eventCount: number = db.events.length; await lifecycle.cancelPendingPayment(String(db.orders[0].paymentReference), "INVOICE_CREATE_UNCERTAIN"); assert.equal(db.events.length, eventCount);
   }
   reset(); db.orders = []; afterCreate = async () => {
-    querySnapshot = snapshot({ reference: db.orders[0].number, status: "success" });
+    querySnapshot = snapshot({ reference: db.orders[0].paymentReference, status: "success" });
     assert.equal((await post(querySnapshot as ReturnType<typeof snapshot>)).status, 200);
   };
   assert.equal((await loadAction()(checkout, items, "en")).success, true); assert.equal(db.orders[0].paymentStatus, "PAID"); assert.equal(db.products[0].stock, 4);

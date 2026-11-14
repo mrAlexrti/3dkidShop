@@ -1,6 +1,5 @@
-type SendEmailResult =
-  | { sent: true }
-  | { sent: false; reason: "not_configured" | "missing_recipient" | "request_failed" };
+import type { DeliveryResult } from "./delivery";
+type SendEmailResult = DeliveryResult;
 
 function readEnv(name: string) {
   const value = process.env[name]?.trim() ?? "";
@@ -32,17 +31,18 @@ export async function sendEmail({
   subject: string;
   html: string;
 }): Promise<SendEmailResult> {
-  if (!to || (Array.isArray(to) && to.length === 0)) return { sent: false, reason: "missing_recipient" };
+  if (!to || (Array.isArray(to) && to.length === 0)) return { sent: false, reason: "missing_recipient", outcome: "permanent" };
 
   const config = getEmailConfig();
   if (!config) {
     console.warn("Email notification skipped: Resend env is not configured.");
-    return { sent: false, reason: "not_configured" };
+    return { sent: false, reason: "not_configured", outcome: "retry" };
   }
 
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
+      signal: AbortSignal.timeout(5000),
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
         "Content-Type": "application/json",
@@ -57,12 +57,13 @@ export async function sendEmail({
 
     if (!response.ok) {
       console.warn("Email notification failed:", response.status);
-      return { sent: false, reason: "request_failed" };
+      return { sent: false, reason: "request_failed", outcome: response.status === 429 ? "retry" : response.status >= 400 && response.status < 500 && response.status !== 408 ? "permanent" : "unknown" };
     }
 
-    return { sent: true };
+    const receipt = await response.json().catch(() => null);
+    return { sent: true, ...(typeof receipt?.id === "string" ? { providerMessageId: receipt.id } : {}) };
   } catch {
     console.warn("Email notification failed: network error.");
-    return { sent: false, reason: "request_failed" };
+    return { sent: false, reason: "request_failed", outcome: "unknown" };
   }
 }

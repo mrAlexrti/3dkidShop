@@ -23,6 +23,7 @@ cart().updateQuantity(item.id, 0); assert.equal(cart().items[0].quantity, 1);
 cart().removeItem(item.id); assert.equal(cart().total(), 20);
 cart().closeCart(); assert.equal(cart().isOpen, false); cart().openCart(); assert.equal(cart().isOpen, true);
 cart().clear(); assert.equal(cart().count(), 0); assert.equal(cart().total(), 0);
+assert.ok(cart().checkoutRevision > 0, "Cart mutations retire checkout retry identity even when contents later match");
 cart().addItem(item); cart().addItem({ ...item, id: `${item.productId}-` });
 assert.equal(cart().items.length, 1); assert.equal(cart().count(), 2);
 const size = { ...item, id: "ignored-client-id", price: 20, variant: { id: "small", labelUa: "Маленький", labelEn: "Small" } };

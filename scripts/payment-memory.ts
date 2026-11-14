@@ -15,6 +15,7 @@ export function matches(row: Row, where: Row = {}): boolean {
       if ("lte" in filter && (actual == null || !(Number(actual) <= Number(filter.lte)))) return false;
       if ("not" in filter && actual === filter.not) return false;
       if ("in" in filter && !(filter.in as unknown[]).includes(actual)) return false;
+      if ("notIn" in filter && (filter.notIn as unknown[]).includes(actual)) return false;
       return true;
     }
     return actual === value;
@@ -28,6 +29,7 @@ function assign(row: Row, data: Row) {
 
 export class PaymentMemory {
   orders: Row[] = [];
+  notifications: Row[] = [];
   products: Row[] = [];
   events: string[] = [];
   collisions = 0;
@@ -38,6 +40,8 @@ export class PaymentMemory {
   private allocating = false;
   private queue: Promise<unknown> = Promise.resolve();
   order = {
+    count: async ({ where }: { where: Row }) => this.orders.filter((row) => matches(row, where)).length,
+    findFirst: async ({ where }: { where: Row }) => structuredClone(this.orders.find((row) => matches(row, where)) ?? null),
     findUnique: async ({ where }: { where: Row }) => structuredClone(this.orders.find((row) => matches(row, where)) ?? null),
     findUniqueOrThrow: async ({ where }: { where: Row }) => {
       const found = this.orders.find((row) => matches(row, where)); if (!found) throw new Error("NOT_FOUND"); return structuredClone(found);
@@ -53,15 +57,33 @@ export class PaymentMemory {
       return { count: before - this.orders.length }; // Embedded items model FK cascade.
     },
     create: async ({ data }: { data: Row }) => {
-      if (this.collisions-- > 0 || this.orders.some((row) => row.number === data.number)) throw { code: "P2002", meta: { target: ["number"] } };
+      if (this.collisions-- > 0 || (data.number != null && this.orders.some((row) => row.number === data.number))) throw { code: "P2002", meta: { target: ["number"] } };
+      if (data.checkoutKeyHash && this.orders.some((row) => row.checkoutKeyHash === data.checkoutKeyHash)) {
+        const { Prisma } = await import("@prisma/client");
+        throw new Prisma.PrismaClientKnownRequestError("Fixture checkout collision", { code: "P2002", clientVersion: "fixture", meta: { target: ["checkoutKeyHash"] } });
+      }
       const items = (data.items as { create: Row[] }).create.map((item, index) => ({ id: `item-${index}`, ...item }));
       const row = {
-        id: `order-${this.orders.length}`, createdAt: new Date(), paymentProvider: null, paymentMode: null, paymentStatus: null, paidAt: null,
+        id: `order-${this.orders.length}`, createdAt: new Date(), number: null, paymentReference: null, checkoutAcceptance: "LEGACY", acceptedAt: null, checkoutKeyHash: null, checkoutPayloadHash: null, paymentPageUrl: null, checkoutLocale: null, paymentProvider: null, paymentMode: null, paymentStatus: null, paidAt: null,
         paymentInvoiceId: null, paymentProviderStatus: null, paymentModifiedAt: null, paymentExpiresAt: null, paymentNextCheckAt: null,
         paymentErrorCode: null, novaPoshtaTtn: null, novaPoshtaDeliveredAt: null, novaPoshtaCreatedAt: null, novaPoshtaSyncedAt: null,
         ...data, items,
       };
       this.orders.push(row); return structuredClone(row);
+    },
+  };
+  orderNotification = {
+    count: async ({ where }: { where: Row }) => this.notifications.filter((row) => matches(row, where)).length,
+    create: async ({ data }: { data: Row }) => {
+      if (this.notifications.some((row) => row.orderId === data.orderId && row.event === data.event && row.channel === data.channel)) throw new Error("DUPLICATE_OUTBOX_KEY");
+      const row = { id: `notification-${this.notifications.length}`, state: "PENDING", attemptCount: 0, nextAttemptAt: new Date(), dispatchId: null, leaseUntil: null, providerMessageId: null, sentAt: null, createdAt: new Date(), ...structuredClone(data) };
+      this.notifications.push(row); return structuredClone(row);
+    },
+    findMany: async ({ where, take }: { where: Row; take?: number }) => structuredClone(this.notifications.filter((row) => matches(row, where)).slice(0, take)),
+    updateMany: async ({ where, data }: { where: Row; data: Row }) => {
+      const found = this.notifications.filter((row) => matches(row, where));
+      for (const row of found) assign(row, data);
+      return { count: found.length };
     },
   };
   product = {
@@ -71,12 +93,12 @@ export class PaymentMemory {
     updateMany: async () => { this.productWrites++; throw new Error("PRODUCT_WRITE_FORBIDDEN"); },
     update: async () => { this.productWrites++; throw new Error("PRODUCT_WRITE_FORBIDDEN"); },
   };
-  $transaction = async <T>(callback: (tx: { order: PaymentMemory["order"]; product: PaymentMemory["product"]; $queryRaw: PaymentMemory["$queryRaw"] }) => Promise<T>): Promise<T> => {
+  $transaction = async <T>(callback: (tx: { order: PaymentMemory["order"]; orderNotification: PaymentMemory["orderNotification"]; product: PaymentMemory["product"]; $queryRaw: PaymentMemory["$queryRaw"] }) => Promise<T>): Promise<T> => {
     const run = this.queue.then(async () => {
       this.allocating = false;
-      const beforeOrders = structuredClone(this.orders); const beforeProducts = structuredClone(this.products);
-      try { return await callback({ order: this.order, product: this.product, $queryRaw: this.$queryRaw }); }
-      catch (error) { this.orders = beforeOrders; this.products = beforeProducts; throw error; }
+      const beforeOrders = structuredClone(this.orders); const beforeProducts = structuredClone(this.products); const beforeNotifications = structuredClone(this.notifications);
+      try { return await callback({ order: this.order, orderNotification: this.orderNotification, product: this.product, $queryRaw: this.$queryRaw }); }
+      catch (error) { this.orders = beforeOrders; this.products = beforeProducts; this.notifications = beforeNotifications; throw error; }
     });
     this.queue = run.catch(() => {}); return run;
   };

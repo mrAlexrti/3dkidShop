@@ -20,7 +20,7 @@ process.env.LIQPAY_DEBUG = "0";
 let externalCalls = 0;
 const blocked = () => { externalCalls++; throw new Error("EXTERNAL_EFFECT_BLOCKED"); };
 type Callback = { POST(req: Request): Promise<Response> };
-const fixture = (): Order => ({ id: "isolated", number: "3DK-isolated", status: "AWAITING_PAYMENT", total: { toString: () => "199.00" }, paidAt: null, paymentProvider: "liqpay", paymentMode: "sandbox", paymentStatus: "PENDING", novaPoshtaDeliveredAt: null, items: [] } as unknown as Order);
+const fixture = (): Order & { number: string } => ({ id: "isolated", number: "3DK-isolated", status: "AWAITING_PAYMENT", total: { toString: () => "199.00" }, paidAt: null, paymentProvider: "liqpay", paymentMode: "sandbox", paymentStatus: "PENDING", novaPoshtaDeliveredAt: null, items: [] } as unknown as Order & { number: string });
 let order = fixture(); let writes = 0;
 const memory = { order: {
   findUnique: async ({ where }: Prisma.OrderFindUniqueArgs) => where.number === order.number || where.id === order.id ? { ...order } : null,

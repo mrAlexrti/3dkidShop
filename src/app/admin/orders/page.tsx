@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { operationalOrderWhere } from "@/lib/payments/acceptance";
 import { OrderStatusSummary } from "@/components/admin/order-status-summary";
 import { formatPrice } from "@/lib/utils";
 import { getT, getLocale } from "@/lib/i18n-server";
@@ -11,7 +12,7 @@ export default async function AdminOrdersPage() {
   const t = await getT();
   const locale = await getLocale();
   const td = t.admin.dashboard;
-  const orders = await prisma.order.findMany({ orderBy: { createdAt: "desc" } });
+  const orders = await prisma.order.findMany({ where: operationalOrderWhere, orderBy: { createdAt: "desc" } });
 
   return (
     <div>

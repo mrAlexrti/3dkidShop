@@ -38,7 +38,7 @@ async function verify() {
   for (const locale of ["ua", "en"] as const) {
     const t = translations[locale];
     const bindings = {
-      "@/lib/order-reference": reference,
+      "@/lib/payments/checkout-session": { onlineCheckoutKey: async () => "qa-key", rememberCheckoutResult: () => {}, completeCheckoutCart: () => {} }, "@/store/cart-store": { useCartStore: { getState: () => ({ items: [], clear: () => {} }) } }, "@/lib/order-reference": reference,
       "react/jsx-runtime": jsxRuntime, "lucide-react": icons, "@/components/ui/button": { Button },
       "@/store/lang-store": { useLangStore: () => ({ t, locale }) }, "next/link": { default: Link, __esModule: true },
     };
@@ -68,7 +68,7 @@ async function verify() {
       globalThis.window = { location: { assign: (url: string) => { assert.equal(url, payment.pageUrl); log.push("gateway-submit"); if (outcome === "redirect-error") throw new Error("isolated-redirect-error"); } } } as unknown as Window & typeof globalThis;
       const form = CheckoutForm({ onlineCardEnabled: true }) as Element;
       await (form.props.onSubmit as (data: unknown) => Promise<void>)({});
-      if (outcome === "online") assert.deepEqual(log, ["message", "gateway-submit", "clear"]);
+      if (outcome === "online") assert.deepEqual(log, ["message", "gateway-submit"]);
       if (outcome === "offline") assert.deepEqual(log, ["clear", "success", "route:/checkout/success?isolated-token"]);
       if (outcome === "failed") assert.deepEqual(log, ["error"]);
       if (outcome === "redirect-error") assert.deepEqual(log, ["message", "gateway-submit", "error"], "Failed handoff must retain the cart.");
@@ -87,7 +87,7 @@ async function verify() {
       return Response.json({ state: calls === 1 ? "pending" : outcome });
     };
     const { OrderResult } = sourceModule<{ OrderResult: typeof ResultComponent }>("src/components/checkout/order-result.tsx", {
-      "@/lib/order-reference": reference,
+      "@/lib/payments/checkout-session": { onlineCheckoutKey: async () => "qa-key", rememberCheckoutResult: () => {}, completeCheckoutCart: () => {} }, "@/store/cart-store": { useCartStore: { getState: () => ({ items: [], clear: () => {} }) } }, "@/lib/order-reference": reference,
       react: { useState: (initial: unknown) => [initial, (value: unknown) => { observed = value; }], useEffect: (callback: typeof effect) => { effect = callback; } },
       "react/jsx-runtime": jsxRuntime, "lucide-react": icons, "@/components/ui/button": { Button },
       "@/store/lang-store": { useLangStore: () => ({ t: translations.en }) }, "next/link": { default: Link, __esModule: true },

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isOperationalOrder } from "@/lib/payments/acceptance";
 import { auth } from "@/lib/auth";
 import { createNovaPoshtaWaybill } from "@/lib/novaposhta";
 import { emitOrderEvents } from "@/lib/notifications/orders";
@@ -22,6 +23,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (!order) {
     return NextResponse.json({ success: false, error: "Order not found." }, { status: 404 });
   }
+  if (!isOperationalOrder(order)) return NextResponse.json({ success: false, error: "Order is not accepted." }, { status: 409 });
 
   if (order.novaPoshtaTtn) {
     return NextResponse.json({

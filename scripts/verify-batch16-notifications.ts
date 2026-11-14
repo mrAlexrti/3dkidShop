@@ -1,5 +1,6 @@
 // All external boundaries fail closed. Never load .env or a real Prisma client.
 import assert from "node:assert/strict";
+import * as acceptance from "../src/lib/payments/acceptance";
 import { NextResponse } from "next/server";
 import type { Order, Prisma } from "@prisma/client";
 import * as status from "../src/lib/status";
@@ -80,7 +81,7 @@ async function verify() {
       "@/components/admin/order-status-select": { OrderStatusSelect: () => null },
       "@/components/admin/take-order-into-work-button": { TakeOrderIntoWorkButton: () => null },
       "@/components/admin/order-status-summary": summary,
-      "@/lib/prisma": { prisma: { order: { findUnique: async () => raw } } },
+      "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: { order: { findUnique: async () => raw } } },
       "@/lib/utils": { formatPrice: (value: number) => String(value) },
       "@/lib/product-variants": { orderSizeLabel: () => "" },
       "@/lib/i18n-server": { getLocale: async () => locale },
@@ -163,7 +164,7 @@ async function verify() {
   const action = sourceModule<typeof import("../src/lib/actions/notification-settings")>("src/lib/actions/notification-settings.ts", {
     "next/cache": { revalidatePath: () => {} }, "./require-admin": { requireAdmin: async () => { if (!authorized) throw new Error("UNAUTHORIZED"); } },
     "@/lib/notifications/events": events,
-    "@/lib/prisma": { prisma: { siteContent: { upsert: async ({ where, update }: Prisma.SiteContentUpsertArgs) => {
+    "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: { siteContent: { upsert: async ({ where, update }: Prisma.SiteContentUpsertArgs) => {
       assert.equal(where.key, events.NOTIFICATION_SETTINGS_KEY); savedValue = String(update.value); settingWrites++;
     } } } },
   });
@@ -185,7 +186,7 @@ async function verify() {
     },
   } };
   const work = sourceModule<typeof import("../src/lib/orders/take-into-work")>("src/lib/orders/take-into-work.ts", {
-    "@/lib/prisma": { prisma: orderDb }, "@/lib/status": status,
+    "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: orderDb }, "@/lib/status": status,
     "@/lib/notifications/orders": { emitOrderEvents: async () => { changes++; } },
   });
   const orderAction = sourceModule<typeof import("../src/lib/actions/orders")>("src/lib/actions/orders.ts", {
@@ -193,7 +194,7 @@ async function verify() {
     "@/lib/payments/transitions": { cancelPendingPayment: () => { throw new Error("UNEXPECTED_MONO_CALL"); }, paymentSnapshotWhere: () => { throw new Error("UNEXPECTED_MONO_CALL"); } },
     "next/cache": { revalidatePath: () => {} }, "@/lib/actions/require-admin": { requireAdmin: async () => {} },
     "@/lib/order-status": orderStatus, "@/lib/notifications/orders": { emitOrderEvents: async () => { changes++; } },
-    "@/lib/prisma": { prisma: orderDb },
+    "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: orderDb },
   });
   await orderAction.updateOrderStatus(base.id, "PENDING"); assert.equal(writes, 0);
   const raced = await Promise.allSettled([orderAction.updateOrderStatus(base.id, "PROCESSING"), orderAction.updateOrderStatus(base.id, "PROCESSING")]);
@@ -210,7 +211,7 @@ async function verify() {
     "@/lib/server-env": { readServerEnv: (key: string) => key === "CRON_SECRET" ? "isolated" : "" },
     "@/lib/notifications/orders": { emitOrderEvents: async (before: Order, after: Order) => { cronEvents += events.notificationEvents(before, after).length; } },
     "@/lib/novaposhta": { getNovaPoshtaDocumentStatuses: async () => ({ success: true, statuses: [{ ttn: ttn.novaPoshtaTtn, status: "ready for pickup", statusCode: "", codStatus: "not paid", codStatusCode: "", codAmount: null, deliveredAt: null }] }) },
-    "@/lib/prisma": { prisma: { order: {
+    "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: { order: {
       findMany: async () => [{ ...cronOrder }],
       updateMany: async ({ where, data }: Prisma.OrderUpdateManyArgs) => {
         if (!Object.entries(where ?? {}).every(([key, value]) => JSON.stringify(cronOrder[key as keyof Order]) === JSON.stringify(value))) return { count: 0 };
@@ -234,7 +235,7 @@ async function verify() {
       assert.deepEqual(events.notificationEvents(before, after), ["DELIVERY_TTN_CREATED"]); shipmentNotifications++;
     } },
     "@/lib/novaposhta": { createNovaPoshtaWaybill: async () => { shipmentCreates++; return { success: true, ttn: ttn.novaPoshtaTtn, ref: "isolated-ref" }; } },
-    "@/lib/prisma": { prisma: { order: {
+    "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: { order: {
       findUnique: async () => ({ ...shipmentOrder }),
       updateMany: async ({ where, data }: Prisma.OrderUpdateManyArgs) => {
         if (shipmentOrder.novaPoshtaTtn !== where?.novaPoshtaTtn) return { count: 0 };

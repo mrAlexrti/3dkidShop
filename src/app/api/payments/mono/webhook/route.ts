@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       // the authenticated API before conditional first-invoice binding.
       const current = await queryMonoInvoice(evidence.invoiceId);
       if (current.invoiceId !== evidence.invoiceId || current.reference !== evidence.reference || current.amount !== evidence.amount || current.ccy !== evidence.currency) return reply(400);
-      outcome = await applyPaymentEvidence(monoEvidence(current), { authenticatedInvoiceBinding: true });
+      outcome = await applyPaymentEvidence(monoEvidence(current), { authenticatedInvoiceBinding: true, authoritativeSnapshot: true });
     }
     if (outcome === "not_found") return reply(404);
     if (outcome === "mismatch") return reply(400);

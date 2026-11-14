@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import * as acceptance from "../src/lib/payments/acceptance";
 import { NextResponse } from "next/server";
 import { sourceModule } from "./source-module";
 import * as methods from "../src/lib/payments/payment-method";
@@ -26,7 +27,7 @@ let order = fixture();
 const route = sourceModule<typeof import("../src/app/api/admin/orders/[id]/create-ttn/route")>("src/app/api/admin/orders/[id]/create-ttn/route.ts", {
   "next/server": { NextResponse }, "@/lib/auth": { auth: async () => ({ user: { role: admin ? "ADMIN" : "MANAGER" } }) },
   "@/lib/novaposhta": provider, "@/lib/notifications/orders": { emitOrderEvents: async () => false },
-  "@/lib/prisma": { prisma: { order: {
+  "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: { order: {
     findUnique: async () => ({ ...order }), update: async () => {},
     updateMany: async ({ data }: Prisma.OrderUpdateManyArgs) => { Object.assign(order, data); return { count: 1 }; },
   } } },
@@ -49,7 +50,7 @@ async function verify() {
     "@/lib/server-env": { readServerEnv: (key: string) => key === "CRON_SECRET" ? "isolated" : "" },
     "@/lib/notifications/orders": { emitOrderEvents: async () => false },
     "@/lib/novaposhta": { getNovaPoshtaDocumentStatuses: async () => ({ success: true, statuses: [{ ttn: "00000000000000", status: "not delivered", statusCode: "unknown", deliveredAt: null, codStatus: "paid", codStatusCode: "unknown", codAmount, codStatusReliable: reliable }] }) },
-    "@/lib/prisma": { prisma: { order: {
+    "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: { order: {
       findMany: async () => [{ ...order, novaPoshtaTtn: "00000000000000" }],
       updateMany: async ({ data }: Prisma.OrderUpdateManyArgs) => { Object.assign(order, data); return { count: 1 }; },
     } } },

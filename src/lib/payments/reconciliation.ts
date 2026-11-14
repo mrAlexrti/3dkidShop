@@ -4,13 +4,14 @@ import { monoEvidence } from "@/lib/payments/mono-state";
 import { applyPaymentEvidence, cancelPendingPayment } from "@/lib/payments/transitions";
 import { isUnacceptedOnlineOrder } from "@/lib/payments/initialization-state";
 import { markInitializationUncertain } from "@/lib/payments/initialization";
+import { paymentReference } from "./acceptance";
 
 // Called by an authorized scheduler, never from a browser return. No schedule is
 // created here. Claims expire after five minutes if this worker crashes.
 export async function reconcilePendingPayments(now = new Date()) {
   const orders = await prisma.order.findMany({
     where: { paymentProvider: "mono", paymentNextCheckAt: { lte: now } },
-    orderBy: [{ paymentNextCheckAt: "asc" }, { createdAt: "asc" }], take: 25,
+    orderBy: [{ paymentNextCheckAt: "asc" }, { createdAt: "asc" }], take: 3,
   });
   let checked = 0; let updated = 0; let errors = 0;
   for (const order of orders) {
@@ -24,16 +25,19 @@ export async function reconcilePendingPayments(now = new Date()) {
     try {
       if (!order.paymentInvoiceId) {
         if (order.paymentExpiresAt && order.paymentExpiresAt <= now) {
-          if (isUnacceptedOnlineOrder(order)) { await markInitializationUncertain(order.number); updated++; }
-          else if (await cancelPendingPayment(order.number, "INITIALIZATION_EXPIRED")) updated++;
+          if (isUnacceptedOnlineOrder(order)) { await markInitializationUncertain(paymentReference(order)); updated++; }
+          else if (await cancelPendingPayment(paymentReference(order), "INITIALIZATION_EXPIRED")) updated++;
         }
         continue;
       }
       const snapshot = await queryMonoInvoice(order.paymentInvoiceId);
-      if (snapshot.invoiceId !== order.paymentInvoiceId || snapshot.reference !== order.number) throw new Error("PAYMENT_MISMATCH");
-      const outcome = await applyPaymentEvidence(monoEvidence(snapshot));
+      if (snapshot.invoiceId !== order.paymentInvoiceId || snapshot.reference !== paymentReference(order)) throw new Error("PAYMENT_MISMATCH");
+      const outcome = await applyPaymentEvidence(monoEvidence(snapshot), { authoritativeSnapshot: true });
       if (outcome === "applied") updated++;
       if (["conflict", "mismatch", "not_found"].includes(outcome)) throw new Error("PAYMENT_RECONCILIATION_REQUIRED");
+      if (outcome === "duplicate" && ["FAILED", "CANCELLED"].includes(order.paymentStatus ?? "") && order.checkoutAcceptance === "PROVISIONAL") {
+        await prisma.order.updateMany({ where: { id: order.id, checkoutAcceptance: "PROVISIONAL", paymentModifiedAt: order.paymentModifiedAt, paymentNextCheckAt: lease }, data: { paymentNextCheckAt: new Date(now.getTime() + 3600000) } });
+      }
     } catch {
       errors++;
       // Do not overwrite a newer financial transition/error/schedule.
@@ -43,5 +47,6 @@ export async function reconcilePendingPayments(now = new Date()) {
       });
     }
   }
-  return { checked, updated, errors };
+  const reviewRequired = await prisma.order.count({ where: { checkoutAcceptance: "REVIEW" } });
+  return { checked, updated, errors, reviewRequired };
 }

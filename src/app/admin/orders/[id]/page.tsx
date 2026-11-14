@@ -6,6 +6,7 @@ import { CreateTtnButton } from "@/components/admin/create-ttn-button";
 import { OrderStatusSelect } from "@/components/admin/order-status-select";
 import { TakeOrderIntoWorkButton } from "@/components/admin/take-order-into-work-button";
 import { prisma } from "@/lib/prisma";
+import { isOperationalOrder } from "@/lib/payments/acceptance";
 import { formatPrice } from "@/lib/utils";
 
 import { orderSizeLabel } from "@/lib/product-variants";
@@ -43,7 +44,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
     where: { id },
     include: { items: true },
   });
-  if (!order) notFound();
+  if (!order || !isOperationalOrder(order)) notFound();
 
   const hasNovaPoshtaDelivery = order.deliveryMethod?.startsWith("np_") ?? false;
   const canCreateTtn = hasNovaPoshtaDelivery && !order.novaPoshtaTtn;

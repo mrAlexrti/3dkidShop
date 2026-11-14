@@ -19,8 +19,8 @@ export async function POST(req: Request) {
   } catch { return response(400, "Invalid callback."); }
   if (typeof payload.order_id !== "string" || !/^[\w-]{1,100}$/.test(payload.order_id) || typeof payload.status !== "string") return response(400, "Invalid payment reference.");
   const order = await prisma.order.findUnique({ where: { number: payload.order_id }, include: { items: true } });
-  if (!order) return response(404, "Order not found.");
-  if (order.paymentProvider !== config.provider || order.paymentMode !== config.mode || !matchesLiqPayPayment(payload, order)) return response(400, "Payment does not match order.");
+  if (!order || !order.number) return response(404, "Order not found.");
+  if (order.paymentProvider !== config.provider || order.paymentMode !== config.mode || !matchesLiqPayPayment(payload, { number: order.number, total: order.total })) return response(400, "Payment does not match order.");
   const paid = isPaidLiqPayStatus(payload.status, order.paymentMode);
   const reversed = payload.status === "reversed";
   const failed = isFailedLiqPayStatus(payload.status);

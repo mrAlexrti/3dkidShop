@@ -1,13 +1,15 @@
 // Actual services/routes with fail-closed in-memory DB and Telegram API boundaries.
 // Never load .env, PrismaClient, live provider configuration, or customer records.
 import assert from "node:assert/strict";
+import * as acceptance from "../src/lib/payments/acceptance";
 import * as crypto from "node:crypto";
 import * as React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
 import { renderToStaticMarkup } from "react-dom/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type { Order } from "@prisma/client";
+import { Prisma, type Order } from "@prisma/client";
+import * as numbers from "../src/lib/order-number";
 import { sourceModule } from "./source-module";
 import { PaymentMemory, type Row } from "./payment-memory";
 import * as statuses from "../src/lib/status";
@@ -24,7 +26,7 @@ const originalFetch = globalThis.fetch;
 const forbidden = () => { throw new Error("UNEXPECTED_EXTERNAL_EFFECT"); };
 globalThis.fetch = async () => forbidden();
 const db = new PaymentMemory();
-const fixture = (): Row => ({ id: "qa-order", number: "3DK-QA", status: "PENDING", paymentMethod: "card_online", total: "199.00",
+const fixture = (): Row => ({ id: "qa-order", number: "3DK-QA", paymentReference: null, checkoutAcceptance: "LEGACY", status: "PENDING", paymentMethod: "card_online", total: "199.00",
   paymentProvider: "mono", paymentMode: "live", paymentStatus: "PAID", paidAt: new Date("2026-01-01"),
   paymentInvoiceId: "qa-invoice", paymentProviderStatus: "success", paymentModifiedAt: new Date("2026-01-01"),
   paymentExpiresAt: null, paymentNextCheckAt: null, paymentErrorCode: null,
@@ -43,11 +45,11 @@ const database = { order: { ...db.order, updateMany: async (args: { where: Row; 
   return db.order.updateMany(args);
 } } };
 const work = sourceModule<typeof import("../src/lib/orders/take-into-work")>("src/lib/orders/take-into-work.ts", {
-  "@/lib/prisma": { prisma: database }, "@/lib/status": statuses, "@/lib/notifications/orders": notifications,
+  "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: database }, "@/lib/status": statuses, "@/lib/notifications/orders": notifications,
 });
 let authorized = true;
 const action = sourceModule<typeof import("../src/lib/actions/orders")>("src/lib/actions/orders.ts", {
-  "@/lib/prisma": { prisma: db }, "@/lib/orders/take-into-work": work, "@/lib/status": statuses,
+  "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: db }, "@/lib/orders/take-into-work": work, "@/lib/status": statuses,
   "@/lib/order-status": stages, "next/cache": { revalidatePath: () => {} },
   "@/lib/actions/require-admin": { requireAdmin: async () => { if (!authorized) throw new Error("UNAUTHORIZED"); } },
   "@/lib/notifications/orders": notifications, "@/lib/payments/transitions": { cancelPendingPayment: forbidden, paymentSnapshotWhere: (order: Order) => ({ id: order.id, status: order.status }) },
@@ -126,6 +128,7 @@ async function verify() {
   assert.throws(() => callbacks.orderWorkCallback("a".repeat(49)));
   let settings = events.defaultNotificationSettings();
   const dispatcher = sourceModule<typeof import("../src/lib/notifications/orders")>("src/lib/notifications/orders.ts", {
+    "@prisma/client": { Prisma }, "./acceptance": acceptance, "@/lib/order-number": numbers, "@/lib/notifications/outbox": { enqueueAcceptanceNotifications: forbidden },
     "@/lib/payments/initialization-state": initializationState,
     "./telegram": sender, "./email": { sendEmail: async () => ({ sent: true }) }, "./settings": { getNotificationSettings: async () => settings },
     "./events": events, "./templates": templates,
@@ -180,8 +183,9 @@ async function verify() {
     return financialUpdate(args);
   };
   const payment = sourceModule<typeof import("../src/lib/payments/transitions")>("src/lib/payments/transitions.ts", {
+    "@prisma/client": { Prisma }, "./acceptance": acceptance, "@/lib/order-number": numbers, "@/lib/notifications/outbox": { enqueueAcceptanceNotifications: forbidden },
     "@/lib/payments/initialization-state": initializationState,
-    "@/lib/prisma": { prisma: db }, "@/lib/payments/money": money, "@/lib/order-status": stages, "@/lib/notifications/orders": notifications,
+    "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: db }, "@/lib/payments/money": money, "@/lib/order-status": stages, "@/lib/notifications/orders": notifications,
   });
   for (const stage of ["PAID", "FAILED", "CANCELLED", "REFUNDED"] as const) {
     reset({ paidAt: null, paymentStatus: "PENDING", paymentModifiedAt: null, novaPoshtaTtn: null });

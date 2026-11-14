@@ -10,7 +10,8 @@ import { formatOrderReference } from "@/lib/order-reference";
 
 type Money = number | string | { toString(): string };
 export type OrderForNotification = StatusSnapshot & {
-  id: string; number: string; customerName: string; customerEmail?: string | null;
+  id: string; number: string | null; customerName: string; customerEmail?: string | null;
+  checkoutAcceptance?: string;
   customerPhone: string; shippingAddress: string; city: string; total: Money;
   paymentMode?: string | null;
   items: { productName: string; optionsJson: string | null; quantity: number; price: Money }[];
@@ -21,6 +22,7 @@ function siteUrl() {
 }
 
 export function renderNotification(event: NotificationEvent, order: OrderForNotification, locale: Locale = "ua", channel: NotificationChannel = "email") {
+  if (!order.number) throw new Error("UNNUMBERED_ORDER_NOTIFICATION");
   const t = translations[locale].notifications;
   const labels = statusLabels(order, locale);
   const title = t.events[event];
@@ -36,7 +38,7 @@ export function renderNotification(event: NotificationEvent, order: OrderForNoti
   });
   const context = [
     formatOrderReference(order.number, locale), `${t.total}: ${total}`,
-    labels.order, labels.payment, labels.delivery,
+    labels.order, channel === "telegram" && event === "ORDER_CREATED" && order.checkoutAcceptance === "ACCEPTED" && order.paymentProvider === "mono" && order.paymentStatus === "PAID" && order.paidAt ? "Оплата: Оплачено" : labels.payment, labels.delivery,
     order.novaPoshtaTtn ? `${t.tracking}: ${order.novaPoshtaTtn}` : null,
   ].filter((line): line is string => Boolean(line));
   return {

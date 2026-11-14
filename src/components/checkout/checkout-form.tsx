@@ -7,6 +7,7 @@ import { getCheckoutSchema, type CheckoutInput } from "@/lib/validations/checkou
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/cart-store";
 import { createOrder } from "@/lib/actions/create-order";
+import { onlineCheckoutKey, rememberCheckoutResult } from "@/lib/payments/checkout-session";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
@@ -83,7 +84,7 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
   const { t, locale } = useLangStore();
   const c = t.checkout;
   const schema = useMemo(() => getCheckoutSchema(locale), [locale]);
-  const { items, total, clear } = useCartStore();
+  const { items, total, clear, checkoutRevision } = useCartStore();
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
 
@@ -148,14 +149,16 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
   const onSubmit = async (data: CheckoutInput) => {
     setSubmitting(true);
     try {
-      const result = await createOrder(data, items, locale);
+      const retryKey = data.paymentMethod === "card_online" ? await onlineCheckoutKey(data, items, checkoutRevision) : undefined;
+      const result = await createOrder(data, items, locale, retryKey);
       if (result.success) {
+        if (retryKey) rememberCheckoutResult(retryKey, result.resultUrl);
         if (result.payment) {
           toast.message(c.feedback.redirect);
           window.location.assign(result.payment.pageUrl);
-          clear();
           return;
         }
+        if (retryKey) { router.push(result.resultUrl); return; }
         clear();
         toast.success(result.emailSent ? c.feedback.emailed : c.feedback.created);
         router.push(result.resultUrl);

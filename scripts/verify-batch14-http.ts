@@ -18,6 +18,7 @@ async function page(path: string, locale: "ua" | "en") {
 }
 async function verify() {
   const order = await db.order.findFirstOrThrow();
+  assert.ok(order.number);
   const path = getOrderResultPath(order.number);
   const query = path.split("?")[1];
   const api = await fetch(`${base}/api/payments/status?${query}`);

@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { isOperationalOrder, paymentReference } from "@/lib/payments/acceptance";
 import { revalidatePath } from "next/cache";
 import type { OrderStatus } from "@prisma/client";
 import { requireAdmin } from "@/lib/actions/require-admin";
@@ -31,12 +32,13 @@ export async function updateOrderStatus(id: string, status: OrderStatus) {
   }
 
   const order = await prisma.order.findUnique({ where: { id }, include: { items: true } });
-  if (!order || order.status === status) return;
+  if (!order || !isOperationalOrder(order)) throw new Error("ORDER_NOT_ACCEPTED");
+  if (order.status === status) return;
   if (order.status === "COMPLETED" || order.status === "CANCELLED") throw new Error("ORDER_IS_FINAL");
   if (status === "PENDING" && normalizeOrderStage(order.status) !== "NEW") throw new Error("INVALID_ORDER_STAGE_TRANSITION");
 
   if (status === "CANCELLED" && order.paymentProvider === "mono" && !order.paidAt) {
-    if (!await cancelPendingPayment(order.number, "ADMIN_CANCELLED")) throw new Error("ORDER_CHANGED_RELOAD");
+    if (!await cancelPendingPayment(paymentReference(order), "ADMIN_CANCELLED")) throw new Error("ORDER_CHANGED_RELOAD");
     revalidatePath("/admin/orders");
     revalidatePath(`/admin/orders/${id}`);
     return;

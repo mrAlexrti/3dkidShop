@@ -1,7 +1,8 @@
 export type PaymentResultState = "confirmed" | "pending" | "paid" | "failed" | "cancelled" | "expired" | "unknown" | "review" | "unavailable";
-export type PaymentOrderState = { paymentProvider: string | null; paymentStatus: string | null; paymentMethod?: string; status: string; paidAt: Date | null; paymentProviderStatus?: string | null; paymentErrorCode?: string | null };
+export type PaymentOrderState = { checkoutAcceptance?: string; paymentProvider: string | null; paymentStatus: string | null; paymentMethod?: string; status: string; paidAt: Date | null; paymentProviderStatus?: string | null; paymentErrorCode?: string | null };
 
 export function paymentResultState(order: PaymentOrderState): PaymentResultState {
+  if (["PROVISIONAL", "REVIEW"].includes(order.checkoutAcceptance ?? "") && order.paidAt) return "review";
   if (order.paymentStatus === "CANCELLED") return order.paymentProviderStatus === "expired" ? "expired" : "cancelled";
   if (["REFUNDED", "FAILED"].includes(order.paymentStatus ?? "")) return "failed";
   if (order.paymentProvider) {

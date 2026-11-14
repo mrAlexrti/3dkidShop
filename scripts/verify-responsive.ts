@@ -98,6 +98,7 @@ async function verify() {
   const cartPage = load("src/app/(shop)/cart/page.tsx", { "@/components/ui/button": button });
   const drawer = load("src/components/cart/cart-drawer.tsx", { "@/components/ui/button": button });
   const checkoutForm = load("src/components/checkout/checkout-form.tsx", {
+    "@/lib/payments/checkout-session": { onlineCheckoutKey: blocked, rememberCheckoutResult: blocked },
     "@/components/ui/button": button, "react-hook-form": { ...hookForm, useWatch: (args: { name: string }) =>
       args.name === "deliveryType" ? delivery : args.name === "npCityRef" ? "fixture-city" : "cash_on_delivery" },
     "@hookform/resolvers/zod": resolvers, "@/lib/validations/checkout": validation,

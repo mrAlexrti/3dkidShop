@@ -7,10 +7,16 @@ import { Button } from "@/components/ui/button";
 import { useLangStore } from "@/store/lang-store";
 import type { PaymentResultState } from "@/lib/payments/payment-state";
 import { formatOrderReference } from "@/lib/order-reference";
+import { useCartStore } from "@/store/cart-store";
+import { completeCheckoutCart } from "@/lib/payments/checkout-session";
 
-export function OrderResult({ initialState, number, token }: { initialState: PaymentResultState; number: string; token: string }) {
+export function OrderResult({ initialState, number: initialNumber, token, attempt = "" }: { initialState: PaymentResultState; number: string; token: string; attempt?: string }) {
   const { t, locale } = useLangStore();
   const [state, setState] = useState(initialState);
+  const [number, setNumber] = useState(initialNumber);
+  useEffect(() => {
+    if (attempt) { const cart = useCartStore.getState(); completeCheckoutCart(attempt, state, cart.items, cart.clear, cart.checkoutRevision); }
+  }, [attempt, state]);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     if (state !== "pending" && state !== "unknown") return;
@@ -20,9 +26,10 @@ export function OrderResult({ initialState, number, token }: { initialState: Pay
     async function check() {
       attempts++;
       try {
-        const response = await fetch(`/api/payments/status?${new URLSearchParams({ order: number, token })}`, { cache: "no-store", signal: controller.signal });
+        const response = await fetch(`/api/payments/status?${new URLSearchParams({ ...(attempt ? { attempt } : { order: number }), token })}`, { cache: "no-store", signal: controller.signal });
         const result = await response.json();
         if (controller.signal.aborted) return;
+        if (typeof result.number === "string") setNumber(result.number);
         if (["confirmed", "paid", "failed", "cancelled", "expired", "review", "unavailable"].includes(result.state)) { setState(result.state); return; }
         if (result.state === "unknown") setState("unknown");
       } catch { /* Network failure is not payment failure. Keep the pending state. */ }
@@ -30,7 +37,7 @@ export function OrderResult({ initialState, number, token }: { initialState: Pay
     }
     timer = setTimeout(check, 1500);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [state, number, token, retry]);
+  }, [state, number, token, retry, attempt]);
 
   const copy = state === "paid" ? [t.statuses.payment.PAID, t.success.paidDescription]
     : state === "pending" ? [t.statuses.payment.PENDING, t.success.pendingDescription]
