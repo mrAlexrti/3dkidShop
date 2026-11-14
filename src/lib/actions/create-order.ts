@@ -5,6 +5,7 @@ import { getOnlinePaymentConfig } from "@/lib/payments/online-payment";
 import { getOrderResultPath, getAttemptResultPath } from "@/lib/payments/order-result";
 import { randomUUID } from "node:crypto";
 import { checkoutIdentity } from "@/lib/payments/checkout-identity";
+import { verifiedPaymentRetry, type PaymentRetrySource } from "@/lib/payments/retry";
 
 
 import { translations, type Locale } from "@/lib/i18n";
@@ -103,7 +104,8 @@ export async function createOrder(
   data: unknown,
   items: CartItem[],
   locale: Locale = "ua",
-  retryKey?: string
+  retryKey?: string,
+  retrySource?: PaymentRetrySource
 ): Promise<CreateOrderResult> {
   const errors = translations[locale === "en" ? "en" : "ua"].checkout.errors;
   const parsed = getCheckoutSchema(locale === "en" ? "en" : "ua").safeParse(data);
@@ -136,6 +138,10 @@ export async function createOrder(
   }
 
   const onlineConfig = d.paymentMethod === "card_online" ? getOnlinePaymentConfig() : null;
+  if (d.paymentMethod === "card_online" && retrySource) {
+    try { if (await verifiedPaymentRetry(retrySource) !== retryKey) return { success: false, error: errors.payment }; }
+    catch { return { success: false, error: errors.payment }; }
+  }
   if (d.paymentMethod === "card_online" && !onlineConfig) {
     logMonoInitializationError(new MonoError("MONO_NOT_CONFIGURED", { endpoint: "invoice/create" }));
     return {
@@ -217,7 +223,7 @@ export async function createOrder(
     } catch (error) {
       if (error instanceof CheckoutInputError) return { success: false, error: error.message };
       if (identity && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" && Array.isArray(error.meta?.target) && error.meta.target.includes("checkoutKeyHash")) {
-        return createOrder(data, items, locale, retryKey);
+        return createOrder(data, items, locale, retryKey, retrySource);
       }
       if (isOrderNumberCollision(error) && attempt < 4) continue;
       throw error;

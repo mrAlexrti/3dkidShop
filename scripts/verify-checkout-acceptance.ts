@@ -1,6 +1,7 @@
 // Actual application sources; fail-closed DB/provider boundaries. No .env loading,
 // PrismaClient construction, live payments, carrier calls or notifications.
 import assert from "node:assert/strict";
+import * as retryState from "../src/lib/payments/retry-state";
 import * as crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
@@ -75,10 +76,11 @@ const lifecycle = sourceModule<typeof import("../src/lib/payments/transitions")>
 const initialization = sourceModule<typeof import("../src/lib/payments/initialization")>("src/lib/payments/initialization.ts", { "@/lib/prisma": { prisma: db }, "@/lib/payments/transitions": lifecycle, "@/lib/payments/initialization-state": flags, "@/lib/payments/mono": mono, "@/lib/payments/money": money, "./acceptance": acceptance });
 const adapter = sourceModule<typeof import("../src/lib/payments/mono-state")>("src/lib/payments/mono-state.ts", {});
 const online = sourceModule<typeof import("../src/lib/payments/online-payment")>("src/lib/payments/online-payment.ts", { "@/lib/server-env": serverEnv, "@/lib/payments/mono": mono });
-const action = sourceModule<typeof import("../src/lib/actions/create-order")>("src/lib/actions/create-order.ts", { "node:crypto": crypto, "@/lib/product-variants": variants, "@/lib/cart-items": cart, "@/lib/payments/online-payment": online, "@/lib/payments/order-result": result, "@/lib/payments/checkout-identity": identity, "@/lib/i18n": { translations }, "@/lib/prisma": { prisma: db }, "@/lib/validations/checkout": validation, "@/lib/notifications/orders": notifications, "@/lib/order-status": orderStatus, "@/lib/payments/mono": mono, "@/lib/payments/transitions": lifecycle, "@/lib/payments/initialization": initialization, "@/lib/payments/initialization-state": flags, "@/lib/payments/money": money, "@/lib/order-number": numbers, "@prisma/client": { Prisma } });
+const retry = sourceModule<typeof import("../src/lib/payments/retry")>("src/lib/payments/retry.ts", { "node:crypto": crypto, "@/lib/prisma": { prisma: db }, "@/lib/server-env": serverEnv, "./order-result": result, "./retry-state": retryState, "./mono": mono, "./mono-state": adapter, "./transitions": lifecycle });
+const action = sourceModule<typeof import("../src/lib/actions/create-order")>("src/lib/actions/create-order.ts", { "node:crypto": crypto, "@/lib/product-variants": variants, "@/lib/cart-items": cart, "@/lib/payments/online-payment": online, "@/lib/payments/order-result": result, "@/lib/payments/checkout-identity": identity, "@/lib/payments/retry": retry, "@/lib/i18n": { translations }, "@/lib/prisma": { prisma: db }, "@/lib/validations/checkout": validation, "@/lib/notifications/orders": notifications, "@/lib/order-status": orderStatus, "@/lib/payments/mono": mono, "@/lib/payments/transitions": lifecycle, "@/lib/payments/initialization": initialization, "@/lib/payments/initialization-state": flags, "@/lib/payments/money": money, "@/lib/order-number": numbers, "@prisma/client": { Prisma } });
 const reconciliation = sourceModule<typeof import("../src/lib/payments/reconciliation")>("src/lib/payments/reconciliation.ts", { "@/lib/prisma": { prisma: db }, "@/lib/payments/mono": mono, "@/lib/payments/mono-state": adapter, "@/lib/payments/transitions": lifecycle, "@/lib/payments/initialization-state": flags, "@/lib/payments/initialization": initialization, "./acceptance": acceptance });
 const webhook = sourceModule<typeof import("../src/app/api/payments/mono/webhook/route")>("src/app/api/payments/mono/webhook/route.ts", { "next/server": { NextResponse }, "@/lib/payments/mono": { ...mono, verifyMonoSignature: async (_raw: Buffer, signature: string) => signature === "qa-verified" }, "@/lib/payments/mono-state": adapter, "@/lib/payments/transitions": lifecycle });
-const statusRoute = sourceModule<typeof import("../src/app/api/payments/status/route")>("src/app/api/payments/status/route.ts", { "next/server": { NextResponse }, "@/lib/prisma": { prisma: db }, "@/lib/payments/order-result": result, "@/lib/payments/payment-state": states });
+const statusRoute = sourceModule<typeof import("../src/app/api/payments/status/route")>("src/app/api/payments/status/route.ts", { "next/server": { NextResponse }, "@/lib/prisma": { prisma: db }, "@/lib/payments/order-result": result, "@/lib/payments/retry-state": retryState, "@/lib/payments/payment-state": states });
 const work = sourceModule<typeof import("../src/lib/orders/take-into-work")>("src/lib/orders/take-into-work.ts", { "@/lib/prisma": { prisma: db }, "@/lib/payments/acceptance": acceptance, "@/lib/status": status, "@/lib/notifications/orders": notifications });
 const ttn = sourceModule<typeof import("../src/app/api/admin/orders/[id]/create-ttn/route")>("src/app/api/admin/orders/[id]/create-ttn/route.ts", { "next/server": { NextResponse }, "@/lib/prisma": { prisma: db }, "@/lib/payments/acceptance": acceptance, "@/lib/auth": { auth: async () => ({ user: { role: "ADMIN" } }) }, "@/lib/novaposhta": { createNovaPoshtaWaybill: forbidden }, "@/lib/notifications/orders": notifications });
 const admin = sourceModule<typeof import("../src/lib/actions/orders")>("src/lib/actions/orders.ts", { "@/lib/prisma": { prisma: db }, "@/lib/payments/acceptance": acceptance, "next/cache": { revalidatePath: () => {} }, "@/lib/actions/require-admin": { requireAdmin: async () => {} }, "@/lib/notifications/orders": notifications, "@/lib/order-status": orderStatus, "@/lib/payments/transitions": lifecycle, "@/lib/orders/take-into-work": work, "@/lib/status": status });
@@ -148,7 +150,7 @@ async function verify() {
   assert.equal(db.notifications.filter((row) => row.state === "SENT").length, 2);
   const afterRetry = await submit(key); assert.ok(afterRetry.success && !afterRetry.payment); assert.equal(creates, 1);
   const paidState = await statusRoute.GET(new Request(`https://shop.example.invalid/status?${first.resultUrl.split("?")[1]}`));
-  assert.deepEqual(await paidState.json(), { state: "paid", number: "0001" });
+  assert.deepEqual(await paidState.json(), { state: "paid", canRetry: false, number: "0001" });
 
   // Separate authorized payment events retain the historical dispatcher/settings.
   const financial = adapter.monoEvidence(mono.parseMonoSnapshot(paid({ status: "reversed", finalAmount: 0, modifiedDate: new Date(Date.now() + 2000).toISOString() })));
@@ -250,6 +252,50 @@ async function verify() {
   assert.equal((await cron.GET(new Request("https://shop.example.invalid/cron", { headers: { authorization: "Bearer qa-cron-secret" } }))).status, 200);
   assert.equal(db.productWrites, 0);
   for (const secret of [env.MONO_ACQUIRING_TOKEN, env.TELEGRAM_BOT_TOKEN, data.customerEmail, "PRIVATE_TRANSPORT", "PRIVATE_BODY", "pay.monobank.ua/"]) assert.ok(!logs.join("\n").includes(secret));
-  console.log("PASS 1.7.4A: all 15 acceptance categories; exactly one initial Telegram message TOTAL; outbox retry/UNKNOWN/crash/rollback; early/lost/delayed/concurrent events; resubmission; numbering/COD/history; operational and capability guards. All external effects mocked; real PostgreSQL concurrency remains a release prerequisite.");
+  // Explicit terminal retry uses a fresh merchant snapshot, never a client label.
+  for (const terminal of ["failure", "cancelled", "expired"]) {
+    reset(); const originalKey = crypto.randomUUID(); await submit(originalKey);
+    const previous = current(); const previousId = previous.id; const previousRef = String(previous.paymentReference);
+    const source = { reference: previousRef, token: result.createAttemptResultToken(previousRef) };
+    assert.equal(await retry.verifiedPaymentRetry(source), null, "Active payment must not authorize new invoice");
+    const failed = paid({ status: terminal === "cancelled" ? "failure" : terminal, ...(terminal === "cancelled" ? { errCode: "8002" } : {}) });
+    snapshots.set(String(previous.paymentInvoiceId), failed); await post(failed);
+    const priorAudit = structuredClone(previous);
+    const successorKey = await retry.verifiedPaymentRetry(source); assert.ok(successorKey);
+    assert.equal(await retry.verifiedPaymentRetry(source), successorKey, "Duplicate click shares successor identity");
+    assert.equal(await retry.verifiedPaymentRetry({ ...source, token: "forged" }), null);
+    assert.equal(creates, 1, "Preparing retry never creates an invoice");
+    assert.ok((await submit(originalKey)).success); assert.equal(creates, 1, "Ordinary resubmission remains original attempt");
+    assert.equal((await action.createOrder(data, items, "en", crypto.randomUUID(), source)).success, false, "Retry capability is bound to successor key");
+    const retryResult = await action.createOrder(data, items, "en", successorKey, source);
+    assert.ok(retryResult.success && retryResult.payment); assert.equal(creates, 2); assert.equal(db.orders.length, 2);
+    assert.equal(db.orders[0].id, previousId); assert.equal(db.orders[0].number, null); assert.deepEqual(db.orders[0], priorAudit);
+    await action.createOrder(data, items, "en", successorKey, source); assert.equal(creates, 2);
+    // A valid delayed success still belongs to and accepts its original audit record.
+    await post({ ...failed, status: "success", errCode: undefined, modifiedDate: new Date(Date.now() + 2000).toISOString() });
+    assert.equal(db.orders[0].checkoutAcceptance, "ACCEPTED"); assert.ok(db.orders[0].paidAt);
+  }
+  reset(); await submit();
+  const blockedSource = { reference: String(current().paymentReference), token: result.createAttemptResultToken(String(current().paymentReference)) };
+  const terminal = paid({ status: "failure" }); await post(terminal); snapshots.set(String(current().paymentInvoiceId), terminal);
+  const allowedKey = await retry.verifiedPaymentRetry(blockedSource); assert.ok(allowedKey);
+  snapshots.set(String(current().paymentInvoiceId), paid({ status: "processing", modifiedDate: new Date(Date.now() + 2000).toISOString() }));
+  assert.equal((await action.createOrder(data, items, "en", allowedKey, blockedSource)).success, false, "Re-check provider at submission, blocking a changed/ambiguous state");
+  assert.equal(creates, 1); assert.equal(current().paymentStatus, "PENDING");
+  for (const patch of [{ paymentStatus: "UNKNOWN" }, { paidAt: new Date() }, { checkoutAcceptance: "REVIEW" }, { paymentStatus: "REFUNDED" }, { paymentInvoiceId: null }]) {
+    const snapshot = { ...current(), paymentStatus: "FAILED", paymentProviderStatus: "failure", paymentErrorCode: "PAYMENT_FAILED", ...patch };
+    assert.equal(retryState.canStartNewPayment(snapshot), false);
+  }
+  reset(); await submit();
+  const paidRaceSource = { reference: String(current().paymentReference), token: result.createAttemptResultToken(String(current().paymentReference)) };
+  const failedBeforePaid = paid({ status: "failure" }); snapshots.set(String(current().paymentInvoiceId), failedBeforePaid); await post(failedBeforePaid);
+  const reservedKey = await retry.verifiedPaymentRetry(paidRaceSource); assert.ok(reservedKey);
+  snapshots.set(String(current().paymentInvoiceId), { ...failedBeforePaid, amount: 1 });
+  assert.equal(await retry.verifiedPaymentRetry(paidRaceSource), null, "Reference/invoice alone cannot authorize an amount mismatch");
+  snapshots.set(String(current().paymentInvoiceId), paid({ amount: 19900, modifiedDate: new Date(Date.now() + 2000).toISOString() }));
+  assert.equal((await action.createOrder(data, items, "en", reservedKey, paidRaceSource)).success, false);
+  assert.equal(creates, 1); assert.equal(current().checkoutAcceptance, "ACCEPTED"); assert.ok(current().paidAt);
+  assert.equal(db.notifications.length, 2, "Fresh paid truth accepts original rather than creating another charge");
+  console.log("PASS 1.7.4A: 15 acceptance categories; one initial Telegram message TOTAL; outbox retry/UNKNOWN/rollback; early/lost/delayed/concurrent events; COD/history/guards; explicit verified terminal retry, shared successor identity, refreshed merchant truth, previous audit retained. Providers and database mocked; real PG covered by separate rehearsal.");
 }
 verify().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => { globalThis.fetch = originalFetch; console.warn = originalWarn; });

@@ -1,5 +1,6 @@
 // Real components/source with installed React and isolated browser boundaries. No new dependencies.
 import assert from "node:assert/strict";
+import * as retryState from "../src/lib/payments/retry-state";
 import * as React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -22,7 +23,7 @@ async function verify() {
   let orderReads = 0;
   const { default: resultPage } = sourceModule<{ default: (args: { searchParams: Promise<Record<string, string>> }) => Promise<React.ReactElement<{ initialState: PaymentResultState }>> }>("src/app/(shop)/checkout/success/page.tsx", {
     "react/jsx-runtime": jsxRuntime, "@/lib/i18n-server": { getT: async () => translations.en },
-    "@/components/checkout/order-result": { OrderResult: () => null }, "@/lib/payments/payment-state": paymentStates,
+    "@/components/checkout/order-result": { OrderResult: () => null }, "@/lib/payments/retry-state": retryState, "@/lib/payments/payment-state": paymentStates,
     "@/lib/payments/order-result": { validOrderResultToken: (_number: string, token: string) => token === "isolated-valid" },
     "@/lib/prisma": { prisma: { order: { findUnique: async ({ where }: { where: { number: string } }) => {
       orderReads++;
@@ -38,7 +39,7 @@ async function verify() {
   for (const locale of ["ua", "en"] as const) {
     const t = translations[locale];
     const bindings = {
-      "@/lib/payments/checkout-session": { onlineCheckoutKey: async () => "qa-key", rememberCheckoutResult: () => {}, completeCheckoutCart: () => {} }, "@/store/cart-store": { useCartStore: { getState: () => ({ items: [], clear: () => {} }) } }, "@/lib/order-reference": reference,
+      "@/lib/actions/retry-payment": { preparePaymentRetry: async () => null }, "@/lib/payments/checkout-session": { checkoutRetrySource: () => undefined, explicitPaymentRetry: () => false, onlineCheckoutKey: async () => "qa-key", rememberCheckoutResult: () => {}, completeCheckoutCart: () => {} }, "@/store/cart-store": { useCartStore: { getState: () => ({ items: [], clear: () => {} }) } }, "@/lib/order-reference": reference,
       "react/jsx-runtime": jsxRuntime, "lucide-react": icons, "@/components/ui/button": { Button },
       "@/store/lang-store": { useLangStore: () => ({ t, locale }) }, "next/link": { default: Link, __esModule: true },
     };
@@ -51,6 +52,27 @@ async function verify() {
       if (state === "pending") assert.ok(!html.includes(t.success.paidTitle) && !html.includes(t.success.title));
       if (locale === "en") assert.doesNotMatch(html, /[А-Яа-яІіЇїЄєҐґ]/);
     }
+    for (const state of ["failed", "cancelled", "expired", "pending", "unknown", "paid", "review"] as PaymentResultState[]) {
+      const html = renderToStaticMarkup(React.createElement(OrderResult, { initialState: state, number: "", token: "qa", attempt: "pay_qa", canRetry: true }));
+      assert.equal(html.includes(t.success.newPaymentAttempt), ["failed", "cancelled", "expired"].includes(state));
+    }
+    const explicit: string[] = [];
+    const { OrderResult: InteractiveResult } = sourceModule<{ OrderResult: typeof ResultComponent }>("src/components/checkout/order-result.tsx", {
+      ...bindings,
+      react: { useState: (initial: unknown) => [initial, () => {}], useEffect: () => {} },
+      "@/lib/actions/retry-payment": { preparePaymentRetry: async (reference: string, token: string) => { assert.equal(reference, "pay_qa"); assert.equal(token, "qa"); explicit.push("verify"); return { key: "b".repeat(64) }; } },
+      "@/lib/payments/checkout-session": { completeCheckoutCart: () => {}, explicitPaymentRetry: () => { explicit.push("explicit-key"); return true; } },
+    });
+    globalThis.window = { location: { assign: (url: string) => { assert.equal(url, "/checkout"); explicit.push("checkout"); } } } as unknown as Window & typeof globalThis;
+    const interactive = InteractiveResult({ initialState: "failed", number: "", token: "qa", attempt: "pay_qa", canRetry: true });
+    assert.deepEqual(explicit, [], "Displaying a terminal result must never create/authorize a new attempt");
+    function click(node: React.ReactNode): (() => Promise<void>) | undefined {
+      if (!React.isValidElement(node)) return;
+      const props = node.props as { children?: React.ReactNode; onClick?: () => Promise<void> };
+      if (props.children === t.success.newPaymentAttempt) return props.onClick;
+      for (const child of React.Children.toArray(props.children)) { const found = click(child); if (found) return found; }
+    }
+    await click(interactive)!(); assert.deepEqual(explicit, ["verify", "explicit-key", "checkout"]);
     for (const outcome of ["online", "offline", "failed", "redirect-error"] as const) {
       const log: string[] = [];
       const payment = { provider: "mono", pageUrl: "https://pay.mbnk.biz/isolated" };
@@ -87,7 +109,7 @@ async function verify() {
       return Response.json({ state: calls === 1 ? "pending" : outcome });
     };
     const { OrderResult } = sourceModule<{ OrderResult: typeof ResultComponent }>("src/components/checkout/order-result.tsx", {
-      "@/lib/payments/checkout-session": { onlineCheckoutKey: async () => "qa-key", rememberCheckoutResult: () => {}, completeCheckoutCart: () => {} }, "@/store/cart-store": { useCartStore: { getState: () => ({ items: [], clear: () => {} }) } }, "@/lib/order-reference": reference,
+      "@/lib/actions/retry-payment": { preparePaymentRetry: async () => null }, "@/lib/payments/checkout-session": { checkoutRetrySource: () => undefined, explicitPaymentRetry: () => false, onlineCheckoutKey: async () => "qa-key", rememberCheckoutResult: () => {}, completeCheckoutCart: () => {} }, "@/store/cart-store": { useCartStore: { getState: () => ({ items: [], clear: () => {} }) } }, "@/lib/order-reference": reference,
       react: { useState: (initial: unknown) => [initial, (value: unknown) => { observed = value; }], useEffect: (callback: typeof effect) => { effect = callback; } },
       "react/jsx-runtime": jsxRuntime, "lucide-react": icons, "@/components/ui/button": { Button },
       "@/store/lang-store": { useLangStore: () => ({ t: translations.en }) }, "next/link": { default: Link, __esModule: true },

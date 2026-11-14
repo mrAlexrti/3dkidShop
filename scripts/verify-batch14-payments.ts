@@ -1,5 +1,6 @@
 // Isolated actual payment/action/route source. No DB, provider or notification calls.
 import assert from "node:assert/strict";
+import * as retryState from "../src/lib/payments/retry-state";
 import { NextResponse } from "next/server";
 import type { Order, Prisma } from "@prisma/client";
 import * as liqpay from "../src/lib/payments/liqpay";
@@ -35,7 +36,7 @@ const callback = sourceModule<Callback>("src/app/api/payments/liqpay/callback/ro
   "@/lib/order-status": orderStatus, "@/lib/payments/legacy-liqpay": legacy, "@/lib/payments/liqpay": liqpay,
 });
 const status = sourceModule<{ GET(req: Request): Promise<Response> }>("src/app/api/payments/status/route.ts", {
-  "next/server": { NextResponse }, "@/lib/prisma": { prisma: memory }, "@/lib/payments/order-result": result, "@/lib/payments/payment-state": states,
+  "next/server": { NextResponse }, "@/lib/prisma": { prisma: memory }, "@/lib/payments/order-result": result, "@/lib/payments/retry-state": retryState, "@/lib/payments/payment-state": states,
 });
 const payload = (changes: Record<string, unknown> = {}) => ({ order_id: "3DK-isolated", public_key: "sandbox_isolated_public", action: "pay", status: "sandbox", amount: "199.00", currency: "UAH", ...changes });
 const request = (data: string, signature = liqpay.signLiqPayData(data)) => new Request("http://127.0.0.1/api/payments/liqpay/callback", { method: "POST", body: new URLSearchParams({ data, signature }) });

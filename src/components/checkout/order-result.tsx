@@ -8,12 +8,16 @@ import { useLangStore } from "@/store/lang-store";
 import type { PaymentResultState } from "@/lib/payments/payment-state";
 import { formatOrderReference } from "@/lib/order-reference";
 import { useCartStore } from "@/store/cart-store";
-import { completeCheckoutCart } from "@/lib/payments/checkout-session";
+import { completeCheckoutCart, explicitPaymentRetry } from "@/lib/payments/checkout-session";
+import { preparePaymentRetry } from "@/lib/actions/retry-payment";
 
-export function OrderResult({ initialState, number: initialNumber, token, attempt = "" }: { initialState: PaymentResultState; number: string; token: string; attempt?: string }) {
+export function OrderResult({ initialState, number: initialNumber, token, attempt = "", canRetry: initialCanRetry = false }: { initialState: PaymentResultState; number: string; token: string; attempt?: string; canRetry?: boolean }) {
   const { t, locale } = useLangStore();
   const [state, setState] = useState(initialState);
   const [number, setNumber] = useState(initialNumber);
+  const [canRetry, setCanRetry] = useState(initialCanRetry);
+  const [starting, setStarting] = useState(false);
+  const [retryError, setRetryError] = useState(false);
   useEffect(() => {
     if (attempt) { const cart = useCartStore.getState(); completeCheckoutCart(attempt, state, cart.items, cart.clear, cart.checkoutRevision); }
   }, [attempt, state]);
@@ -30,6 +34,7 @@ export function OrderResult({ initialState, number: initialNumber, token, attemp
         const result = await response.json();
         if (controller.signal.aborted) return;
         if (typeof result.number === "string") setNumber(result.number);
+        if (typeof result.canRetry === "boolean") setCanRetry(result.canRetry);
         if (["confirmed", "paid", "failed", "cancelled", "expired", "review", "unavailable"].includes(result.state)) { setState(result.state); return; }
         if (result.state === "unknown") setState("unknown");
       } catch { /* Network failure is not payment failure. Keep the pending state. */ }
@@ -57,6 +62,17 @@ export function OrderResult({ initialState, number: initialNumber, token, attemp
       <p className="mt-3 max-w-md text-ink/70">{copy[1]}</p>
     </div>
     {(state === "pending" || state === "unknown") && <Button className="mt-6" variant="outline" onClick={() => setRetry((value) => value + 1)}>{t.success.checkAgain}</Button>}
+    {canRetry && attempt && ["failed", "cancelled", "expired"].includes(state) && <Button className="mt-6" disabled={starting} onClick={async () => {
+      if (starting) return;
+      setStarting(true); setRetryError(false);
+      try {
+        const result = await preparePaymentRetry(attempt, token);
+        if (!result || !explicitPaymentRetry(attempt, result.key, token)) { setRetryError(true); return; }
+        window.location.assign("/checkout");
+      } catch { setRetryError(true); }
+      finally { setStarting(false); }
+    }}>{t.success.newPaymentAttempt}</Button>}
+    {retryError && <p role="alert" className="mt-4 max-w-md text-sm text-ink/70">{t.success.retryUnavailable}</p>}
     <Link href="/catalog" className="mt-8 inline-block rounded-full bg-pink-500 px-7 py-3.5 text-base text-white hover:bg-pink-600">{t.success.continue}</Link>
   </div>;
 }

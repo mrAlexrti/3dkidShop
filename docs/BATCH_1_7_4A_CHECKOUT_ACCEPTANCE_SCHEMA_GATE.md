@@ -785,4 +785,36 @@ filament management, unrelated roadmap or styling changes were introduced.
   financial, carrier or notification operation was authorized or performed.
 
 All changes remain unstaged and uncommitted on the implementation branch.
-HEAD remains the prior review-document commit; no push/merge/deployment occurred.
+The implementation was subsequently committed for review at
+`cf7334bc84ce007f3d4fa6a205a342c1ce83d485`. The following local release-gate work
+starts from that commit and is uncommitted.
+
+### Final release-gate follow-up — 2026-11-14
+
+See [the final gate assessment and operator runbook](BATCH_1_7_4A_RELEASE_GATES.md)
+for the current evidence and conditional activation/cutover/rollback procedure.
+It supersedes the earlier statement that disposable PostgreSQL testing had not
+been performed: a fresh PostgreSQL 18.2 cluster now verifies the exact expansion,
+Prisma schema agreement, concurrent COD/online advisory numbering, actual webhook
+and reconciliation races, atomic outbox uniqueness/rollback, CHECK/FK constraints
+and historical records. Production version/pooler/scale remain unverified.
+
+Customer terminal-result display now retains the retry identity. Only an explicit
+customer action following a fresh merchant-verified terminal snapshot authorizes
+one stable successor key; checkout checks again before a new invoice. Pending,
+unknown, paid, refund and review states fail closed. Previous attempts remain
+auditable. Historical v1 links/response shapes, COD and operational status semantics
+are preserved. No additional schema change is needed.
+
+Recovery now exposes aggregate due/overdue counters and returns HTTP 503 on provider
+reconciliation failures while independently attempting outbox recovery. An inactive,
+JSON-aware external runner detects REVIEW, UNKNOWN and overdue work. The GitHub
+default branch is confirmed as `main`, so the old production-branch Actions template
+cannot be assumed operational. A one-minute external scheduler procedure is
+prepared without changing `main`, active workflows or Vercel configuration.
+
+Local tests, validation and build evidence are recorded in the linked report.
+Production scheduler/runtime verification, backup restore, schema preflight,
+representative lock rehearsal and old-instance drain remain release blockers.
+No Production/existing-database migration, live recovery/send, commit, push, merge
+or deployment was performed during this follow-up.

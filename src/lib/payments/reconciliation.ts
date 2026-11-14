@@ -48,5 +48,7 @@ export async function reconcilePendingPayments(now = new Date()) {
     }
   }
   const reviewRequired = await prisma.order.count({ where: { checkoutAcceptance: "REVIEW" } });
-  return { checked, updated, errors, reviewRequired };
+  const dueRemaining = await prisma.order.count({ where: { paymentProvider: "mono", paymentNextCheckAt: { lte: now } } });
+  const overdue = await prisma.order.count({ where: { paymentProvider: "mono", paymentNextCheckAt: { lte: new Date(now.getTime() - 600000) } } });
+  return { checked, updated, errors, reviewRequired, dueRemaining, overdue };
 }

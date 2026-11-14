@@ -1,6 +1,9 @@
 # INACTIVE TEMPLATE: this directory is not .github/workflows.
 # Review/configure target, runtime budget and authentication before activation.
 # GitHub Actions scheduling runs from the default branch; main is NOT production.
+# NOT the recommended production scheduler: five-minute cadence has limited
+# capacity and status-only checks miss REVIEW/UNKNOWN. Use the one-minute external
+# runner and JSON-aware monitor in docs/BATCH_1_7_4A_RELEASE_GATES.md.
 name: Payment and notification recovery (template)
 on:
   schedule:

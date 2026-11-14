@@ -90,7 +90,7 @@ const cron = sourceModule<typeof import("../src/app/api/cron/payments/route")>("
 });
 const loadAction = (numberModule = numbers) => {
   const create = sourceModule<typeof import("../src/lib/actions/create-order")>("src/lib/actions/create-order.ts", {
-  "./acceptance": acceptance, "@/lib/payments/acceptance": acceptance, "node:crypto": crypto, "@/lib/payments/checkout-identity": identity, "@prisma/client": { Prisma }, "@/lib/order-number": numberModule, "@/lib/notifications/outbox": { enqueueAcceptanceNotifications: async () => {}, recoverNotificationOutbox: async () => ({}) },
+  "./acceptance": acceptance, "@/lib/payments/acceptance": acceptance, "node:crypto": crypto, "@/lib/payments/checkout-identity": identity, "@prisma/client": { Prisma }, "@/lib/order-number": numberModule, "@/lib/payments/retry": { verifiedPaymentRetry: async () => { throw new Error("UNEXPECTED_RETRY"); } }, "@/lib/notifications/outbox": { enqueueAcceptanceNotifications: async () => {}, recoverNotificationOutbox: async () => ({}) },
   "@/lib/payments/initialization-state": initializationState, "@/lib/payments/initialization": initialization,
   "@/lib/prisma": { prisma: db }, "@/lib/i18n": { translations }, "@/lib/validations/checkout": validation,
   "@/lib/product-variants": variants, "@/lib/cart-items": cart, "@/lib/payments/online-payment": online,
@@ -182,6 +182,8 @@ async function verify() {
   assert.equal(db.orders[0].paymentStatus, "PENDING", "Wall clock expiry is not financial evidence");
   reset(); querySnapshot = snapshot({ reference: "3DK-wrong" }); await reconcile.reconcilePendingPayments(new Date(timestamp)); assert.equal(db.orders[0].paymentErrorCode, "RECONCILIATION_UNAVAILABLE");
   assert.equal((await cron.GET(new Request("https://shop.example.invalid/cron"))).status, 401);
+  assert.equal((await cron.GET(new Request("https://shop.example.invalid/cron", { headers: { authorization: "Bearer isolated-cron-secret" } }))).status, 503, "Provider failures must reach scheduler alerting");
+  reset(); querySnapshot = snapshot({ status: "processing" });
   assert.equal((await cron.GET(new Request("https://shop.example.invalid/cron", { headers: { authorization: "Bearer isolated-cron-secret" } }))).status, 200);
   // All acceptance reads are inside the transaction, including a real SQL lock
   // statement. The mock checks the query contract; no live PG locking is claimed.

@@ -81,5 +81,6 @@ export async function recoverNotificationOutbox(now = new Date()) {
   }
   const unknownTotal = await prisma.orderNotification.count({ where: { state: "UNKNOWN" } });
   const dueRemaining = await prisma.orderNotification.count({ where: { state: { in: ["PENDING", "RETRY"] }, nextAttemptAt: { lte: now } } });
-  return { sent, unknown, retried, unknownTotal, dueRemaining };
+  const overdue = await prisma.orderNotification.count({ where: { state: { in: ["PENDING", "RETRY"] }, nextAttemptAt: { lte: new Date(now.getTime() - 600000) } } });
+  return { sent, unknown, retried, unknownTotal, dueRemaining, overdue };
 }

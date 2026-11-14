@@ -17,10 +17,11 @@ export async function GET(request: Request) {
   try {
     // Independent recovery: a provider outage must not block already queued sends.
     const [payments, notifications] = await Promise.allSettled([reconcilePendingPayments(), recoverNotificationOutbox()]);
-    return NextResponse.json({ success: payments.status === "fulfilled" && notifications.status === "fulfilled",
+    const success = payments.status === "fulfilled" && notifications.status === "fulfilled" && payments.value.errors === 0;
+    return NextResponse.json({ success,
       ...(payments.status === "fulfilled" ? payments.value : { paymentsUnavailable: true }),
       notifications: notifications.status === "fulfilled" ? notifications.value : { unavailable: true },
-    }, { status: payments.status === "fulfilled" && notifications.status === "fulfilled" ? 200 : 503 });
+    }, { status: success ? 200 : 503, headers: { "Cache-Control": "private, no-store" } });
   }
   catch { return NextResponse.json({ success: false }, { status: 503 }); }
 }

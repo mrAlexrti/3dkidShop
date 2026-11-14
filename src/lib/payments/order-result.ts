@@ -22,7 +22,8 @@ export function getAttemptResultPath(reference: string) {
   return `/checkout/success?${new URLSearchParams({ attempt: reference, token: createAttemptResultToken(reference) })}`;
 }
 
-// A short-lived capability grants status-only access, never customer/order details.
+// Legacy status-only capabilities remain valid. V2 attempt capabilities also permit
+// requesting a verified terminal retry, never customer/order details or acceptance.
 export function createOrderResultToken(number: string, now = Date.now()) {
   return `${now}.${signature(number, String(now))}`;
 }

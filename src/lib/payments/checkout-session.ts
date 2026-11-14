@@ -2,7 +2,7 @@ import type { CartItem } from "@/types";
 import { requestedSizeId } from "@/lib/cart-items";
 
 const storageKey = "3dkid-online-checkout-v2";
-type PendingCheckout = { key: string; inputHash: string; cart: string; revision: number; reference?: string };
+type PendingCheckout = { key: string; inputHash: string; cart: string; revision: number; reference?: string; retrySource?: { reference: string; token: string } };
 
 function read(): PendingCheckout | null {
   try { return JSON.parse(localStorage.getItem(storageKey) ?? "null"); } catch { return null; }
@@ -28,9 +28,20 @@ export function rememberCheckoutResult(key: string, resultUrl: string) {
   if (reference) localStorage.setItem(storageKey, JSON.stringify({ ...existing, reference }));
 }
 export function completeCheckoutCart(reference: string, state: string, items: CartItem[], clear: () => void, revision = 0) {
-  if (!["paid", "failed", "cancelled", "expired"].includes(state)) return;
+  if (state !== "paid") return;
   const existing = read();
   if (!existing || existing.reference !== reference) return;
   if (state === "paid" && existing.revision === revision && existing.cart === JSON.stringify(items)) clear();
   localStorage.removeItem(storageKey);
+}
+
+export function explicitPaymentRetry(reference: string, key: string, token: string) {
+  const existing = read();
+  if (!existing || existing.reference !== reference || !/^[a-f0-9]{64}$/.test(key)) return false;
+  localStorage.setItem(storageKey, JSON.stringify({ ...existing, key, reference: undefined, retrySource: { reference, token } }));
+  return true;
+}
+export function checkoutRetrySource(key?: string) {
+  const existing = read();
+  return key && existing?.key === key ? existing.retrySource : undefined;
 }

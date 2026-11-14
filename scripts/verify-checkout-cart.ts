@@ -27,7 +27,13 @@ async function verify() {
   for (const state of ["failed", "cancelled", "expired"]) {
     const retry = await session.onlineCheckoutKey({}, items); session.rememberCheckoutResult(retry, `/checkout/success?attempt=${ref}`);
     session.completeCheckoutCart(ref, state, items, () => cleared++); assert.equal(cleared, 1);
-    assert.notEqual(await session.onlineCheckoutKey({}, items), retry); storage.clear();
+    assert.equal(await session.onlineCheckoutKey({}, items), retry, "Terminal display must retain identity until explicit retry");
+    assert.equal(session.explicitPaymentRetry("pay_other", "b".repeat(64), "qa-token"), false);
+    assert.equal(session.explicitPaymentRetry(ref, "b".repeat(64), "qa-token"), true);
+    assert.equal(await session.onlineCheckoutKey({}, items), "b".repeat(64));
+    assert.deepEqual(session.checkoutRetrySource("b".repeat(64)), { reference: ref, token: "qa-token" });
+    assert.equal(session.explicitPaymentRetry(ref, "c".repeat(64), "qa-token"), false, "Duplicate click cannot rotate the successor identity");
+    storage.clear();
   }
   const editedKey = await session.onlineCheckoutKey({}, items); session.rememberCheckoutResult(editedKey, `/checkout/success?attempt=${ref}`);
   session.completeCheckoutCart(ref, "paid", [{ ...items[0], quantity: 2 }], () => cleared++); assert.equal(cleared, 1, "Paid return must preserve newer cart edits");

@@ -7,7 +7,7 @@ import { getCheckoutSchema, type CheckoutInput } from "@/lib/validations/checkou
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/cart-store";
 import { createOrder } from "@/lib/actions/create-order";
-import { onlineCheckoutKey, rememberCheckoutResult } from "@/lib/payments/checkout-session";
+import { onlineCheckoutKey, rememberCheckoutResult, checkoutRetrySource } from "@/lib/payments/checkout-session";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
@@ -150,7 +150,7 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
     setSubmitting(true);
     try {
       const retryKey = data.paymentMethod === "card_online" ? await onlineCheckoutKey(data, items, checkoutRevision) : undefined;
-      const result = await createOrder(data, items, locale, retryKey);
+      const result = await createOrder(data, items, locale, retryKey, checkoutRetrySource(retryKey));
       if (result.success) {
         if (retryKey) rememberCheckoutResult(retryKey, result.resultUrl);
         if (result.payment) {
