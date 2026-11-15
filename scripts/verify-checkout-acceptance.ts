@@ -9,6 +9,9 @@ import * as jsxRuntime from "react/jsx-runtime";
 import { sourceModule } from "./source-module";
 import { PaymentMemory, matches, type Row } from "./payment-memory";
 import * as acceptance from "../src/lib/payments/acceptance";
+import * as codEligibility from "../src/lib/orders/cod-eligibility";
+import * as paymentMethods from "../src/lib/payments/payment-method";
+import * as dates from "../src/lib/date-time";
 import * as flags from "../src/lib/payments/initialization-state";
 import * as money from "../src/lib/payments/money";
 import * as numbers from "../src/lib/order-number";
@@ -31,6 +34,7 @@ const env: Record<string, string> = { MONO_ACQUIRING_TOKEN: "qa-private-token", 
 const serverEnv = { readServerEnv: (name: string) => env[name] ?? "", getAuthSecret: () => "qa-result-secret" };
 const forbidden = () => { throw new Error("UNEXPECTED_EXTERNAL_EFFECT"); };
 let creates = 0; let queries = 0; let emailSends = 0; const telegramSends: string[] = [];
+const keyboards: unknown[] = [];
 let transport: "ok" | "retry" | "unknown" | "permanent" = "ok";
 let createMode: "ok" | "network" | "bad-page" | "rejected" = "ok";
 let onCreate: ((snapshot: Row) => Promise<void>) | undefined;
@@ -56,6 +60,7 @@ globalThis.fetch = async (input, init) => {
   }
   if (url === "https://api.telegram.org/botqa-bot-token/sendMessage") {
     const body = JSON.parse(String(init?.body)); telegramSends.push(body.text);
+    keyboards.push(body.reply_markup);
     if (transport === "retry") return Response.json({ ok: false, error_code: 429 }, { status: 429 });
     if (transport === "permanent") return Response.json({ ok: false, error_code: 403 }, { status: 403 });
     if (transport === "unknown") throw new Error("LOST_TELEGRAM_RESPONSE");
@@ -69,7 +74,7 @@ const identity = sourceModule<typeof import("../src/lib/payments/checkout-identi
 const telegram = sourceModule<typeof import("../src/lib/notifications/telegram")>("src/lib/notifications/telegram.ts", { "@/lib/server-env": serverEnv });
 const emailMessages: { subject: string; html: string }[] = [];
 const email = { sendEmail: async (message: { subject: string; html: string }) => { emailSends++; emailMessages.push(message); return { sent: true as const, providerMessageId: "qa-email" }; } };
-const templates = sourceModule<typeof import("../src/lib/notifications/templates")>("src/lib/notifications/templates.ts", { "@/lib/product-variants": variants, "@/lib/payments/order-result": result, "@/lib/i18n": { translations }, "@/lib/status": status, "@/lib/server-env": serverEnv, "./telegram-actions": callbacks, "@/lib/order-reference": reference });
+const templates = sourceModule<typeof import("../src/lib/notifications/templates")>("src/lib/notifications/templates.ts", { "@/lib/orders/cod-eligibility": codEligibility, "@/lib/date-time": dates, "@/lib/product-variants": variants, "@/lib/payments/order-result": result, "@/lib/i18n": { translations }, "@/lib/status": status, "@/lib/server-env": serverEnv, "./telegram-actions": callbacks, "@/lib/order-reference": reference });
 const outbox = sourceModule<typeof import("../src/lib/notifications/outbox")>("src/lib/notifications/outbox.ts", { "node:crypto": crypto, "@/lib/prisma": { prisma: db }, "./templates": templates, "./settings": settings, "./telegram": telegram, "./email": email });
 const notifications = sourceModule<typeof import("../src/lib/notifications/orders")>("src/lib/notifications/orders.ts", { "./email": email, "./telegram": telegram, "./settings": settings, "./events": events, "./templates": templates, "@/lib/payments/initialization-state": flags });
 const lifecycle = sourceModule<typeof import("../src/lib/payments/transitions")>("src/lib/payments/transitions.ts", { "@prisma/client": { Prisma }, "@/lib/prisma": { prisma: db }, "@/lib/payments/money": money, "@/lib/order-status": orderStatus, "@/lib/notifications/orders": notifications, "@/lib/payments/initialization-state": flags, "./acceptance": acceptance, "@/lib/order-number": numbers, "@/lib/notifications/outbox": outbox });
@@ -81,7 +86,7 @@ const action = sourceModule<typeof import("../src/lib/actions/create-order")>("s
 const reconciliation = sourceModule<typeof import("../src/lib/payments/reconciliation")>("src/lib/payments/reconciliation.ts", { "@/lib/prisma": { prisma: db }, "@/lib/payments/mono": mono, "@/lib/payments/mono-state": adapter, "@/lib/payments/transitions": lifecycle, "@/lib/payments/initialization-state": flags, "@/lib/payments/initialization": initialization, "./acceptance": acceptance });
 const webhook = sourceModule<typeof import("../src/app/api/payments/mono/webhook/route")>("src/app/api/payments/mono/webhook/route.ts", { "next/server": { NextResponse }, "@/lib/payments/mono": { ...mono, verifyMonoSignature: async (_raw: Buffer, signature: string) => signature === "qa-verified" }, "@/lib/payments/mono-state": adapter, "@/lib/payments/transitions": lifecycle });
 const statusRoute = sourceModule<typeof import("../src/app/api/payments/status/route")>("src/app/api/payments/status/route.ts", { "next/server": { NextResponse }, "@/lib/prisma": { prisma: db }, "@/lib/payments/order-result": result, "@/lib/payments/retry-state": retryState, "@/lib/payments/payment-state": states });
-const work = sourceModule<typeof import("../src/lib/orders/take-into-work")>("src/lib/orders/take-into-work.ts", { "@/lib/prisma": { prisma: db }, "@/lib/payments/acceptance": acceptance, "@/lib/status": status, "@/lib/notifications/orders": notifications });
+const work = sourceModule<typeof import("../src/lib/orders/take-into-work")>("src/lib/orders/take-into-work.ts", { "./cod-eligibility": codEligibility, "@/lib/payments/payment-method": paymentMethods, "@/lib/prisma": { prisma: db }, "@/lib/payments/acceptance": acceptance, "@/lib/status": status, "@/lib/notifications/orders": notifications });
 const ttn = sourceModule<typeof import("../src/app/api/admin/orders/[id]/create-ttn/route")>("src/app/api/admin/orders/[id]/create-ttn/route.ts", { "next/server": { NextResponse }, "@/lib/prisma": { prisma: db }, "@/lib/payments/acceptance": acceptance, "@/lib/auth": { auth: async () => ({ user: { role: "ADMIN" } }) }, "@/lib/novaposhta": { createNovaPoshtaWaybill: forbidden }, "@/lib/notifications/orders": notifications });
 const admin = sourceModule<typeof import("../src/lib/actions/orders")>("src/lib/actions/orders.ts", { "@/lib/prisma": { prisma: db }, "@/lib/payments/acceptance": acceptance, "next/cache": { revalidatePath: () => {} }, "@/lib/actions/require-admin": { requireAdmin: async () => {} }, "@/lib/notifications/orders": notifications, "@/lib/order-status": orderStatus, "@/lib/payments/transitions": lifecycle, "@/lib/orders/take-into-work": work, "@/lib/status": status });
 const cron = sourceModule<typeof import("../src/app/api/cron/payments/route")>("src/app/api/cron/payments/route.ts", { "node:crypto": crypto, "next/server": { NextResponse }, "@/lib/server-env": serverEnv, "@/lib/payments/reconciliation": reconciliation, "@/lib/notifications/outbox": outbox });
@@ -93,6 +98,7 @@ function reset() {
   db.orders = []; db.notifications = []; db.events = []; db.collisions = 0;
   db.products = [{ id: "p1", name: "Server product", price: "199.00", options: [], isActive: true, isOrderable: true, stock: 0 }];
   creates = queries = emailSends = 0; telegramSends.length = 0; emailMessages.length = 0; snapshots.clear(); onCreate = undefined;
+  keyboards.length = 0;
   transport = "ok"; createMode = "ok"; settingsFail = false; telegramEnabled = true; env.ONLINE_PAYMENT_MODE = "live";
 }
 function paid(patch: Row = {}) {
@@ -106,6 +112,7 @@ async function verify() {
   let adminQueries = 0;
   const assertAcceptedQuery = (args: { where: unknown }) => { assert.deepEqual(args.where, acceptance.operationalOrderWhere); adminQueries++; };
   const adminBindings = {
+    "@/lib/date-time": dates,
     "react/jsx-runtime": jsxRuntime, "@/lib/payments/acceptance": acceptance,
     "@/components/admin/order-status-summary": { OrderStatusSummary: () => null }, "@/lib/order-reference": reference,
     "@/lib/utils": { formatPrice: () => "0" }, "@/lib/i18n-server": { getT: async () => translations.en, getLocale: async () => "en" },
@@ -145,6 +152,10 @@ async function verify() {
   await runOutbox();
   assert.equal(telegramSends.length, 1, "Exactly one initial Telegram message TOTAL, not merely one creation event");
   assert.ok(telegramSends[0].startsWith("Нове замовлення")); assert.ok(telegramSends[0].includes("Оплата: Оплачено"));
+  assert.ok(telegramSends[0].includes(`Створено: ${dates.formatManagerDateTime(current().createdAt as Date)}`));
+  assert.ok(telegramSends[0].includes(`Прийнято після оплати: ${dates.formatManagerDateTime(current().acceptedAt as Date)}`));
+  assert.ok(telegramSends[0].includes(`Оплату підтверджено: ${dates.formatManagerDateTime(current().paidAt as Date)}`));
+  assert.match(JSON.stringify(keyboards[0]), /ow1:/); assert.doesNotMatch(JSON.stringify(keyboards[0]), /oc1:|ox1:/);
   assert.ok(!telegramSends.some((text) => text.startsWith("Оплату підтверджено"))); assert.equal(emailSends, 1);
   assert.ok(emailMessages[0].subject.startsWith(translations.en.notifications.events.ORDER_CREATED)); assert.ok(emailMessages[0].html.includes('lang="en"'));
   assert.equal(db.notifications.filter((row) => row.state === "SENT").length, 2);
@@ -241,6 +252,10 @@ async function verify() {
   reset(); db.orders = [{ id: "historical", number: "3DK-OLD", checkoutAcceptance: "LEGACY", paymentReference: null, paymentProvider: null, paymentErrorCode: null }];
   assert.equal(acceptance.isOperationalOrder(db.orders[0]), true);
   const cod = await submit(crypto.randomUUID(), "cash_on_delivery"); assert.ok(cod.success && !cod.payment); assert.equal(current().number, "0001"); assert.equal(creates, 0); assert.equal(telegramSends.length, 1);
+  assert.match(JSON.stringify(keyboards[0]), /oc1:/); assert.match(JSON.stringify(keyboards[0]), /ox1:/);
+  assert.ok(telegramSends[0].includes("Підтвердити") === false, "Actions belong in keyboard");
+  assert.ok(telegramSends[0].includes(`Створено: ${dates.formatManagerDateTime(current().createdAt as Date)}`));
+  assert.ok(!telegramSends[0].includes("Прийнято після оплати:") && !telegramSends[0].includes("Оплату підтверджено:"));
   db.orders.push({ id: "max", number: "9999" }); await submit(crypto.randomUUID(), "cash_on_delivery"); assert.equal(current().number, "10000");
   assert.equal(acceptance.isOperationalOrder({ number: "0009", checkoutAcceptance: "LEGACY", paymentProvider: "mono", paymentErrorCode: flags.INVOICE_INITIALIZING }), false);
   for (const historic of ["0001", "3DK-OLD"]) { const token = result.createOrderResultToken(historic); assert.ok(result.validOrderResultToken(historic, token)); }

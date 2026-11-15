@@ -4,7 +4,9 @@ import { translations, type Locale } from "@/lib/i18n";
 import { statusLabels, type StatusSnapshot } from "@/lib/status";
 import { readServerEnv } from "@/lib/server-env";
 import type { NotificationEvent, NotificationChannel } from "./events";
-import { orderWorkCallback } from "./telegram-actions";
+import { orderWorkCallback, codOrderCallback } from "./telegram-actions";
+import { isCodActionEligible, isGenuineCod } from "@/lib/orders/cod-eligibility";
+import { formatManagerDateTime } from "@/lib/date-time";
 import type { TelegramInlineKeyboard } from "./telegram";
 import { formatOrderReference } from "@/lib/order-reference";
 
@@ -12,6 +14,7 @@ type Money = number | string | { toString(): string };
 export type OrderForNotification = StatusSnapshot & {
   id: string; number: string | null; customerName: string; customerEmail?: string | null;
   checkoutAcceptance?: string;
+  createdAt?: Date; acceptedAt?: Date | null;
   customerPhone: string; shippingAddress: string; city: string; total: Money;
   paymentMode?: string | null;
   items: { productName: string; optionsJson: string | null; quantity: number; price: Money }[];
@@ -29,7 +32,15 @@ export function renderNotification(event: NotificationEvent, order: OrderForNoti
   const adminUrl = `${siteUrl()}/admin/orders/${encodeURIComponent(order.id)}`;
   const work = translations[locale].statuses.work;
   const telegramKeyboard: TelegramInlineKeyboard | undefined = channel === "telegram" && event === "ORDER_CREATED" ? {
-    inline_keyboard: [[{ text: work.take, callback_data: orderWorkCallback(order.id) }], [{ text: work.open, url: adminUrl }]],
+    inline_keyboard: [
+      ...(isGenuineCod(order)
+        ? isCodActionEligible(order) ? [[
+          { text: translations[locale].statuses.cod.confirm, callback_data: codOrderCallback(order.id, "confirm") },
+          { text: translations[locale].statuses.cod.cancel, callback_data: codOrderCallback(order.id, "cancel") },
+        ]] : []
+        : [[{ text: work.take, callback_data: orderWorkCallback(order.id) }]]),
+      [{ text: work.open, url: adminUrl }],
+    ],
   } : undefined;
   const total = new Intl.NumberFormat(locale === "en" ? "en-US" : "uk-UA", { style: "currency", currency: "UAH" }).format(Number(order.total.toString()));
   const lines = order.items.map((item) => {
@@ -38,7 +49,10 @@ export function renderNotification(event: NotificationEvent, order: OrderForNoti
   });
   const context = [
     formatOrderReference(order.number, locale), `${t.total}: ${total}`,
-    labels.order, channel === "telegram" && event === "ORDER_CREATED" && order.checkoutAcceptance === "ACCEPTED" && order.paymentProvider === "mono" && order.paymentStatus === "PAID" && order.paidAt ? "Оплата: Оплачено" : labels.payment, labels.delivery,
+    order.createdAt ? `${t.created}: ${formatManagerDateTime(order.createdAt, locale)}` : null,
+    order.paymentProvider === "mono" && order.acceptedAt ? `${t.accepted}: ${formatManagerDateTime(order.acceptedAt, locale)}` : null,
+    order.paymentProvider && order.paidAt ? `${t.paid}: ${formatManagerDateTime(order.paidAt, locale)}` : null,
+    labels.order, channel === "telegram" && event === "ORDER_CREATED" && order.checkoutAcceptance === "ACCEPTED" && order.paymentProvider === "mono" && order.paymentStatus === "PAID" && order.paidAt ? `${translations[locale].statuses.fields.payment}: ${t.paymentReceived}` : labels.payment, labels.delivery,
     order.novaPoshtaTtn ? `${t.tracking}: ${order.novaPoshtaTtn}` : null,
   ].filter((line): line is string => Boolean(line));
   return {

@@ -1,6 +1,8 @@
 // All external boundaries fail closed. Never load .env or a real Prisma client.
 import assert from "node:assert/strict";
 import * as acceptance from "../src/lib/payments/acceptance";
+import * as codEligibility from "../src/lib/orders/cod-eligibility";
+import * as dates from "../src/lib/date-time";
 import { NextResponse } from "next/server";
 import type { Order, Prisma } from "@prisma/client";
 import * as status from "../src/lib/status";
@@ -23,6 +25,7 @@ globalThis.fetch = async () => { throw new Error("EXTERNAL_CALL_BLOCKED"); };
 process.env.AUTH_SECRET = "isolated-batch16-result-secret";
 const fixture = (): templates.OrderForNotification => ({
   id: "isolated", number: "3DK-isolated", status: "PROCESSING", paymentStatus: null,
+  createdAt: new Date("2026-11-15T20:30:00Z"),
   paymentProvider: null, paymentMode: null, paidAt: null, novaPoshtaTtn: null,
   novaPoshtaStatus: null, novaPoshtaStatusCode: null, novaPoshtaDeliveredAt: null,
   customerName: "<QA & Customer>", customerPhone: "+380000000000", customerEmail: "qa@example.invalid",
@@ -73,6 +76,7 @@ async function verify() {
   for (const locale of ["ua", "en"] as const) {
     const raw = { ...ttn, items: ttn.items.map((item, index) => ({ ...item, id: `isolated-item-${index}` })), deliveryMethod: "np_warehouse", subtotal: 199, shippingCost: 0, novaPoshtaStatus: "RAW_PROVIDER_UNKNOWN", novaPoshtaStatusCode: "RAW_CODE_UNKNOWN", novaPoshtaCodStatus: "RAW_COD_UNKNOWN" };
     const detail = sourceModule<{ default(args: { params: Promise<{ id: string }> }): Promise<React.ReactElement> }>("src/app/admin/orders/[id]/page.tsx", {
+      "@/lib/date-time": dates,
       "react/jsx-runtime": jsxRuntime, "@/lib/i18n": { translations }, "@/lib/status": status,
       "@/lib/order-reference": reference,
       "next/link": { default: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => React.createElement("a", props), __esModule: true },
@@ -87,6 +91,7 @@ async function verify() {
       "@/lib/i18n-server": { getLocale: async () => locale },
     });
     const html = renderToStaticMarkup(await detail.default({ params: Promise.resolve({ id: base.id }) }));
+    assert.ok(html.includes(`${translations[locale].notifications.created}: <time dateTime="2026-11-15T20:30:00.000Z">${dates.formatManagerDateTime(base.createdAt, locale)}</time>`));
     const diagnostics = html.match(/<details\b[^>]*>[\s\S]*?<\/details>/)?.[0];
     assert.ok(diagnostics); assert.ok(!diagnostics.includes(" open"));
     assert.ok(diagnostics.includes(translations[locale].statuses.providerDetails));
@@ -186,6 +191,7 @@ async function verify() {
     },
   } };
   const work = sourceModule<typeof import("../src/lib/orders/take-into-work")>("src/lib/orders/take-into-work.ts", {
+    "./cod-eligibility": codEligibility, "@/lib/payments/payment-method": paymentMethods,
     "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: orderDb }, "@/lib/status": status,
     "@/lib/notifications/orders": { emitOrderEvents: async () => { changes++; } },
   });

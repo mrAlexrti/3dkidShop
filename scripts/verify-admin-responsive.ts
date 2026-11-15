@@ -1,5 +1,7 @@
 // Actual Admin pages with in-memory data, plus a hydrated sidebar in installed Edge.
-// Run: npx tsx scripts/verify-admin-responsive.ts [absolute Edge/Chromium path] [--desktop-only]
+// Run: npx tsx scripts/verify-admin-responsive.ts [absolute Edge/Chromium path] [--desktop-only|--batch174b]
+// --batch174b checks the changed manager views, without the unrelated historical
+// pixel oracle (creation timestamps intentionally change their desktop geometry).
 // No env loading, database, API calls, notifications, or dependency installation.
 import assert from "node:assert/strict";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
@@ -27,11 +29,14 @@ import * as fonts from "../src/lib/fonts";
 import * as events from "../src/lib/notifications/events";
 import * as reference from "../src/lib/order-reference";
 import * as acceptance from "../src/lib/payments/acceptance";
+import * as dates from "../src/lib/date-time";
+import * as contacts from "../src/lib/admin/attempt-contacts";
 import * as attemptDiagnostics from "../src/lib/payments/attempt-diagnostics";
 import { heroAssets } from "../src/lib/hero-assets";
 import { sourceModule } from "./source-module";
 
 async function verify() {
+  const batch174b = process.argv.includes("--batch174b");
   const accepted = "9741b1107e75350f82065d33777d71b16d9f66ba";
   const output = resolve(".next/cache/admin-responsive-qa");
   mkdirSync(output, { recursive: true });
@@ -58,10 +63,11 @@ async function verify() {
     novaPoshtaCodStatus: "UNKNOWN_COD".repeat(20), novaPoshtaError: "ERROR_WITHOUT_SPACES".repeat(20) };
   let detailOrder = order;
   const common = {
+    "@/lib/date-time": dates, "@/lib/admin/attempt-contacts": contacts,
     "@/lib/payments/attempt-diagnostics": attemptDiagnostics,
     "@/lib/admin/payment-attempts": { listPaymentAttempts: async () => ({ filters: attemptDiagnostics.parseAttemptFilters({}), page: 1, pages: 3, total: 61, attempts: [
-      { id: "qa-attempt-".repeat(4), createdAt: new Date("2026-11-14T12:00:00Z"), customerName: order.customerName, amount: "1234.00", currency: "UAH", provider: "mono", state: "unknown", review: true, reference: "pay_" + "a".repeat(96), invoiceId: "invoice_".repeat(15), expiresAt: null, modifiedAt: new Date("2026-11-14"), nextCheckAt: null, reason: "INVOICE_CREATE_UNCERTAIN" },
-      { id: "qa-paid-review", createdAt: new Date("2026-11-14"), customerName: "QA", amount: "199.00", currency: "UAH", provider: "mono", state: "paid_unaccepted", review: true, reference: "pay_qa", invoiceId: "invoice_qa", expiresAt: null, modifiedAt: null, nextCheckAt: null, reason: "LATE_PAYMENT_REVIEW" },
+      { id: "qa-attempt-".repeat(4), createdAt: new Date("2026-11-14T12:00:00Z"), customerName: order.customerName, customerPhone: order.customerPhone, customerEmail: "customer".repeat(24) + "@example.invalid", amount: "1234.00", currency: "UAH", provider: "mono", state: "unknown", review: true, reference: "pay_" + "a".repeat(96), invoiceId: "invoice_".repeat(15), expiresAt: null, modifiedAt: new Date("2026-11-14"), nextCheckAt: null, reason: "INVOICE_CREATE_UNCERTAIN" },
+      { id: "qa-paid-review", createdAt: new Date("2026-11-14"), customerName: "QA", customerPhone: null, customerEmail: null, amount: "199.00", currency: "UAH", provider: "mono", state: "paid_unaccepted", review: true, reference: "pay_qa", invoiceId: "invoice_qa", expiresAt: null, modifiedAt: null, nextCheckAt: null, reason: "LATE_PAYMENT_REVIEW" },
     ] }) },
     "@/lib/payments/acceptance": acceptance,
     "@/lib/order-reference": reference,
@@ -94,6 +100,7 @@ async function verify() {
     detail: "orders/[id]/page.tsx", "product-new": "products/new/page.tsx", "product-edit": "products/[id]/edit/page.tsx",
     "category-edit": "categories/[id]/edit/page.tsx", content: "content/page.tsx" };
   for (const version of ["current", "accepted"] as const) {
+    if (batch174b && version === "accepted") continue;
     const bindings: Record<string, unknown> = { ...common };
     const load = (file: string): Components => {
       let source = file;
@@ -139,6 +146,7 @@ async function verify() {
     const Layout = load("src/app/admin/layout.tsx").default as (props: object) => Promise<React.ReactElement>;
     for (locale of ["ua", "en"] as const) {
       for (const [key, file] of Object.entries(pageFiles)) {
+        if (batch174b && !["dashboard", "orders", "detail", "payment-attempts"].includes(key)) continue;
         if (version === "accepted" && key === "payment-attempts") continue; // New page has no historical screenshot oracle.
         pathname = key === "dashboard" ? "/admin" : `/admin/${key.startsWith("product-") ? "products" : key === "category-edit" ? "categories" : key === "detail" ? "orders/o1" : key}`;
         const Page = load(`src/app/admin/${file}`).default as (props: object) => Promise<React.ReactElement>;
@@ -146,6 +154,7 @@ async function verify() {
         for (const name of cases) {
           detailOrder = name === "detail-long" ? stressOrder : name === "detail-new" ? { ...order, status: "PENDING" } : name === "detail-create-ttn" ? { ...order, novaPoshtaTtn: null } as unknown as typeof order : order;
           const body = await Page({ params: Promise.resolve({ id: "fixture" }), searchParams: Promise.resolve({}) });
+          if (batch174b && ["dashboard", "orders", "detail"].includes(key)) assert.ok(renderToStaticMarkup(h(language.LangStoreContext.Provider, { value: language.createLangStore(locale) }, body)).includes(dates.formatManagerDateTime(order.createdAt, locale)), `${key}: stored creation timestamp`);
           pages.set(`/${version}/${locale}/${name}`, renderToStaticMarkup(h(language.LangStoreContext.Provider,
             { value: language.createLangStore(locale) }, await Layout({ children: body }))));
         }
@@ -193,7 +202,7 @@ async function verify() {
   });
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
   const address = server.address() as { port: number };
-  const browser = spawn(process.argv.slice(2).find((arg) => arg !== "--desktop-only") || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  const browser = spawn(process.argv.slice(2).find((arg) => !arg.startsWith("--")) || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
     ["--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--remote-debugging-port=0", `--user-data-dir=${resolve(output, `edge-${Date.now()}`)}`, "about:blank"],
     { windowsHide: true, stdio: "ignore" });
   let socket: WebSocket | undefined;
@@ -239,6 +248,16 @@ async function verify() {
       for (const key of pages.keys()) {
         if (!key.startsWith("/current/")) continue;
         await navigate(key);
+        if (batch174b && key.endsWith("payment-attempts")) {
+          assert.equal(await evaluate("document.querySelectorAll('article').length===2 && document.querySelectorAll('details:not([open])').length===2 && !!document.querySelector('a[href^=\"tel:\"]') && !document.querySelector('table')"), true);
+          // Native summary is keyboard-operable without a client bundle.
+          await send("Page.bringToFront");
+          await evaluate("document.querySelector('summary').focus()");
+          assert.equal(await evaluate("document.activeElement===document.querySelector('summary')"), true, "Summary receives keyboard focus");
+          await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", text: "\r", unmodifiedText: "\r", windowsVirtualKeyCode: 13 });
+          await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+          await settle(); assert.equal(await evaluate("document.querySelector('details').open"), true);
+        }
         // Expand diagnostics so long carrier values are measured as well.
         await evaluate("document.querySelectorAll('details').forEach(el=>el.open=true)");
         const measure = await evaluate(`(() => {
@@ -296,6 +315,7 @@ async function verify() {
     }
     // Compare accepted/current desktop screenshots on identical fixtures and global CSS.
     for (const width of [1280, 1440]) {
+      if (batch174b) break;
       await send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: false });
       for (const key of pages.keys()) {
         if (!key.startsWith("/current/") || key.includes("detail-long") || key.includes("payment-attempts")) continue;
@@ -326,8 +346,10 @@ async function verify() {
     assert.equal(await evaluate("!document.querySelector('[role=dialog]') && !document.querySelector('#admin-content').inert && document.body.style.position!== 'fixed' && !!document.querySelector('aside').getClientRects().length"), true);
     writeFileSync(resolve(output, "results.json"), JSON.stringify(results, null, 2));
     writeFileSync(resolve(output, "desktop-results.json"), JSON.stringify(desktopResults, null, 2));
-    if (results.length) console.log(`PASS ${results.length} Admin viewport renders; UA/EN; five contained tables; create/edit forms, content/notifications, long diagnostics, TTN states; drawer close/Escape/backdrop/navigation, focus trap/restore, language and short-height scroll.`);
-    console.log(`PASS ${desktopResults.length} desktop comparisons at 1280/1440: identical geometry; screenshot differences within 0.1% raster tolerance; drawer resize cleanup. Artifacts: ${output}`);
+    if (results.length) console.log(batch174b
+      ? `PASS ${results.length} Batch 1.7.4B manager viewport renders: UA/EN; contact links, long contacts/diagnostics, keyboard disclosure; stored creation times; no page overflow; drawer behavior. Artifacts: ${output}`
+      : `PASS ${results.length} Admin viewport renders; UA/EN; five contained tables; create/edit forms, content/notifications, long diagnostics, TTN states; drawer close/Escape/backdrop/navigation, focus trap/restore, language and short-height scroll.`);
+    if (!batch174b) console.log(`PASS ${desktopResults.length} desktop comparisons at 1280/1440: identical geometry; screenshot differences within 0.1% raster tolerance; drawer resize cleanup. Artifacts: ${output}`);
   } finally { socket?.close(); browser.kill(); server.closeAllConnections(); server.close(); }
 }
 void verify().catch((error) => { console.error(error); process.exitCode = 1; });

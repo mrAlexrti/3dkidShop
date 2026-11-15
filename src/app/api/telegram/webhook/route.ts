@@ -3,9 +3,9 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { readServerEnv } from "@/lib/server-env";
-import { parseOrderWorkCallback } from "@/lib/notifications/telegram-actions";
+import { parseOrderWorkCallback, parseCodOrderCallback } from "@/lib/notifications/telegram-actions";
 import { answerTelegramCallback } from "@/lib/notifications/telegram";
-import { takeOrderIntoWork } from "@/lib/orders/take-into-work";
+import { actOnTelegramWork, actOnCodOrder, type CodActionResult } from "@/lib/orders/take-into-work";
 import { translations } from "@/lib/i18n";
 
 export const runtime = "nodejs";
@@ -48,16 +48,24 @@ export async function POST(request: Request) {
   const query = update.callback_query;
   if (!query) return reply(200); // Other authenticated update types are ignored.
   if (String(query.message.chat.id) !== adminId || String(query.from.id) !== adminId) return reply(403);
-  const id = parseOrderWorkCallback(query.data);
+  const cod = parseCodOrderCallback(query.data);
+  const id = cod?.id ?? parseOrderWorkCallback(query.data);
   if (!id) {
-    await answerTelegramCallback(query.id, "Невідома дія");
+    await answerTelegramCallback(query.id, translations.ua.statuses.cod.unknownAction);
     return reply(200);
   }
   try {
-    const result = await takeOrderIntoWork(id);
+    const acknowledge = async ({ result, status }: CodActionResult) => {
+      const t = translations.ua.statuses;
+      const text = result === "ineligible"
+        ? `${t.cod.ineligible} ${t.cod.current}: ${t.cod.states[status as keyof typeof t.cod.states] ?? t.work.conflict}`
+        : result === "taken" && cod ? t.cod.confirmed : result === "cancelled" ? t.cod.cancelled : t.work[result];
+      await answerTelegramCallback(query.id, text);
+    };
+    // Historical COD ow1 buttons receive the same strict eligibility/CAS guard.
+    const result = cod ? await actOnCodOrder(id, cod.action, "ua", acknowledge) : await actOnTelegramWork(id, acknowledge);
     revalidatePath("/admin/orders"); revalidatePath(`/admin/orders/${id}`);
-    await answerTelegramCallback(query.id, translations.ua.statuses.work[result]);
-    return reply(result === "conflict" ? 503 : 200);
+    return reply(result.result === "conflict" ? 503 : 200);
   } catch {
     await answerTelegramCallback(query.id, translations.ua.statuses.updateFailed);
     return reply(503);

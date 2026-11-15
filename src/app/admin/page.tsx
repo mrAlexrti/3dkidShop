@@ -7,6 +7,7 @@ import { formatPrice } from "@/lib/utils";
 import { getT, getLocale } from "@/lib/i18n-server";
 import { Package, FolderTree, ShoppingCart, TrendingUp } from "lucide-react";
 import { formatOrderReference } from "@/lib/order-reference";
+import { formatManagerDateTime } from "@/lib/date-time";
 
 export default async function AdminDashboard() {
   const t = await getT();
@@ -56,7 +57,7 @@ export default async function AdminDashboard() {
             <tbody>
               {orders.map((o) => (
                 <tr key={o.id} className="border-t border-pink-100">
-                  <td className="px-4 py-3">{formatOrderReference(o.number, locale)}</td>
+                  <td className="px-4 py-3">{formatOrderReference(o.number, locale)}<time className="mt-1 block text-xs text-ink/60" dateTime={o.createdAt.toISOString()}>{formatManagerDateTime(o.createdAt, locale)}</time></td>
                   <td className="px-4 py-3">{o.customerName}</td>
                   <td className="px-4 py-3"><OrderStatusSummary order={o} locale={locale} /></td>
                   <td className="px-4 py-3 font-medium">{formatPrice(Number(o.total))}</td>

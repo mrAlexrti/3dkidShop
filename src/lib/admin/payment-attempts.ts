@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/actions/require-admin";
 import { paymentAttemptsWhere, paymentAttemptSelect, attemptState, attemptStatusWhere, attemptReason, parseAttemptFilters, type AttemptSearchParams } from "@/lib/payments/attempt-diagnostics";
 import type { Prisma } from "@prisma/client";
+import { contactText } from "./attempt-contacts";
 
 export const ATTEMPTS_PAGE_SIZE = 25;
 const identifier = (value: string | null, length: number) => value && new RegExp(`^[A-Za-z0-9_-]{1,${length}}$`).test(value) ? value : null;
@@ -14,7 +15,10 @@ export async function listPaymentAttempts(params: AttemptSearchParams) {
   if (filters.invalid) return { filters, page: 1, pages: 1, total: 0, attempts: [] };
   const where: Prisma.OrderWhereInput = { AND: [
     paymentAttemptsWhere, attemptStatusWhere(filters.status),
-    ...(filters.q ? [{ OR: [{ id: { contains: filters.q, mode: "insensitive" as const } }, { paymentReference: { contains: filters.q, mode: "insensitive" as const } }, { paymentReference: null, number: { contains: filters.q, mode: "insensitive" as const } }] }] : []),
+    ...(filters.q ? [{ OR: [
+      ...(["id", "paymentReference", "customerName", "customerPhone", "customerEmail"] as const).map((field) => ({ [field]: { contains: filters.q, mode: "insensitive" as const } })),
+      { paymentReference: null, number: { contains: filters.q, mode: "insensitive" as const } },
+    ] }] : []),
     ...(filters.start || filters.end ? [{ createdAt: { ...(filters.start ? { gte: filters.start } : {}), ...(filters.end ? { lt: filters.end } : {}) } }] : []),
   ] };
   const total = await prisma.order.count({ where });
@@ -22,7 +26,8 @@ export async function listPaymentAttempts(params: AttemptSearchParams) {
   const page = Math.min(filters.page, pages);
   const rows = await prisma.order.findMany({ where, select: paymentAttemptSelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * ATTEMPTS_PAGE_SIZE, take: ATTEMPTS_PAGE_SIZE });
   const attempts = rows.map((row) => ({
-    id: row.id, createdAt: row.createdAt, customerName: row.customerName, amount: row.total.toString(),
+    id: row.id, createdAt: row.createdAt, customerName: contactText(row.customerName),
+    customerPhone: contactText(row.customerPhone, 64), customerEmail: contactText(row.customerEmail), amount: row.total.toString(),
     currency: row.paymentProvider === "mono" ? "UAH" : null,
     provider: (row.paymentProvider === "mono" ? "mono" : row.paymentProvider === "liqpay" ? "liqpay" : "other") as "mono" | "liqpay" | "other",
     state: attemptState(row), review: row.checkoutAcceptance === "REVIEW",

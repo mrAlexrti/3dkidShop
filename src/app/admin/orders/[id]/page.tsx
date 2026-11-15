@@ -15,18 +15,10 @@ import { getLocale } from "@/lib/i18n-server";
 import { translations } from "@/lib/i18n";
 import { statusLabels } from "@/lib/status";
 import { formatOrderReference } from "@/lib/order-reference";
+import { formatManagerDateTime } from "@/lib/date-time";
 
 function safeOptionLabel(optionsJson: string | null) {
   return orderSizeLabel(optionsJson) || "—";
-}
-
-function formatDateTime(value: Date | null) {
-  if (!value) return "—";
-
-  return new Intl.DateTimeFormat("uk-UA", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(value);
 }
 
 function deliveryTypeLabel(value: string | null) {
@@ -62,6 +54,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
         </div>
       </div>
 
+      <p className="mt-3 text-sm text-ink/70">{translations[locale].notifications.created}: <time dateTime={order.createdAt.toISOString()}>{formatManagerDateTime(order.createdAt, locale)}</time> · {translations[locale].notifications.timezone}</p>
       <div className="glass mt-6 rounded-xl2 p-4"><OrderStatusSummary order={order} locale={locale} /></div>
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="glass min-w-0 rounded-xl2 p-4 shadow-soft sm:p-6 lg:col-span-2">
@@ -132,9 +125,9 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
               <div><dt className="text-ink/50">Branch Ref</dt><dd className="break-all">{order.novaPoshtaBranchRef || "—"}</dd></div>
               <div><dt className="text-ink/50">{statusCopy.fields.delivery}</dt><dd>{statusLabels(order, locale).delivery}</dd></div>
               <div><dt className="text-ink/50">Сума післяплати</dt><dd>{order.novaPoshtaCodAmount ? formatPrice(Number(order.novaPoshtaCodAmount)) : "—"}</dd></div>
-              <div><dt className="text-ink/50">Доставлено</dt><dd>{formatDateTime(order.novaPoshtaDeliveredAt)}</dd></div>
-              <div><dt className="text-ink/50">Створено</dt><dd>{formatDateTime(order.novaPoshtaCreatedAt)}</dd></div>
-              <div><dt className="text-ink/50">Остання синхронізація</dt><dd>{formatDateTime(order.novaPoshtaSyncedAt)}</dd></div>
+              <div><dt className="text-ink/50">Доставлено</dt><dd>{formatManagerDateTime(order.novaPoshtaDeliveredAt, locale)}</dd></div>
+              <div><dt className="text-ink/50">Створено</dt><dd>{formatManagerDateTime(order.novaPoshtaCreatedAt, locale)}</dd></div>
+              <div><dt className="text-ink/50">Остання синхронізація</dt><dd>{formatManagerDateTime(order.novaPoshtaSyncedAt, locale)}</dd></div>
             </dl>
             <details className="mt-4 text-sm">
               <summary className="cursor-pointer text-ink/60">{statusCopy.providerDetails}</summary>

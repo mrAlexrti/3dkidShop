@@ -2,6 +2,9 @@
 // Never load .env, PrismaClient, live provider configuration, or customer records.
 import assert from "node:assert/strict";
 import * as acceptance from "../src/lib/payments/acceptance";
+import * as codEligibility from "../src/lib/orders/cod-eligibility";
+import * as paymentMethods from "../src/lib/payments/payment-method";
+import * as dates from "../src/lib/date-time";
 import * as crypto from "node:crypto";
 import * as React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
@@ -45,6 +48,7 @@ const database = { order: { ...db.order, updateMany: async (args: { where: Row; 
   return db.order.updateMany(args);
 } } };
 const work = sourceModule<typeof import("../src/lib/orders/take-into-work")>("src/lib/orders/take-into-work.ts", {
+  "./cod-eligibility": codEligibility, "@/lib/payments/payment-method": paymentMethods,
   "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: database }, "@/lib/status": statuses, "@/lib/notifications/orders": notifications,
 });
 let authorized = true;
@@ -68,6 +72,7 @@ const post = (body: unknown = callback(), secret: string | null = "qa_webhook_se
   method: "POST", body: typeof body === "string" ? body : JSON.stringify(body), headers: secret == null ? {} : { "X-Telegram-Bot-Api-Secret-Token": secret },
 }));
 const templates = sourceModule<typeof import("../src/lib/notifications/templates")>("src/lib/notifications/templates.ts", {
+  "@/lib/orders/cod-eligibility": codEligibility, "@/lib/date-time": dates,
   "@/lib/order-reference": reference,
   "@/lib/product-variants": variants, "@/lib/payments/order-result": { getOrderResultPath: (number: string) => `/result/${number}` },
   "@/lib/i18n": { translations }, "@/lib/status": statuses, "@/lib/server-env": serverEnv, "./telegram-actions": callbacks,

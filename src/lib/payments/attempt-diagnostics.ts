@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { INITIALIZATION_MARKERS } from "./acceptance";
+import { kyivDayBoundary } from "../date-time";
 
 // Complement of operational visibility for provider-backed records. The null
 // number case also exposes inconsistent imported records without accepting them.
@@ -13,7 +14,7 @@ export const paymentAttemptsWhere: Prisma.OrderWhereInput = {
 };
 
 export const paymentAttemptSelect = {
-  id: true, number: true, createdAt: true, customerName: true, total: true,
+  id: true, number: true, createdAt: true, customerName: true, customerPhone: true, customerEmail: true, total: true,
   checkoutAcceptance: true, paymentProvider: true, paymentStatus: true, paidAt: true,
   paymentReference: true, paymentInvoiceId: true, paymentProviderStatus: true,
   paymentExpiresAt: true, paymentModifiedAt: true, paymentNextCheckAt: true, paymentErrorCode: true,
@@ -67,18 +68,17 @@ export function parseAttemptFilters(params: AttemptSearchParams) {
   const status = ATTEMPT_FILTERS.includes(rawStatus as AttemptFilter) ? rawStatus as AttemptFilter : "all";
   if (rawStatus && status === "all" && rawStatus !== "all") invalid = true;
   const q = one("q").slice(0, 101);
-  if (q && !/^[A-Za-z0-9_-]{1,100}$/.test(q)) invalid = true;
+  if (q && !/^[\p{L}\p{M}\p{N} @+().’'_-]{1,100}$/u.test(q)) invalid = true;
   const from = one("from"); const to = one("to");
   const day = (value: string) => {
     if (!value) return null;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) { invalid = true; return null; }
-    const date = new Date(`${value}T00:00:00.000Z`);
-    if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value || date.getUTCFullYear() < 2000 || date.getUTCFullYear() > 9998) { invalid = true; return null; }
+    const date = kyivDayBoundary(value);
+    if (!date) invalid = true;
     return date;
   };
   const start = day(from); const end = day(to);
   if (start && end && start > end) invalid = true;
   const rawPage = one("page");
   const page = /^\d{1,6}$/.test(rawPage) && Number(rawPage) > 0 ? Number(rawPage) : 1;
-  return { status, q, from, to, page, invalid, start, end: end ? new Date(end.getTime() + 86400000) : null };
+  return { status, q, from, to, page, invalid, start, end: end ? kyivDayBoundary(to, true) : null };
 }

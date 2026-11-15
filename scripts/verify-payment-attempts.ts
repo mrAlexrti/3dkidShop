@@ -7,6 +7,8 @@ import * as icons from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { sourceModule } from "./source-module";
 import * as diagnostics from "../src/lib/payments/attempt-diagnostics";
+import * as dates from "../src/lib/date-time";
+import * as contacts from "../src/lib/admin/attempt-contacts";
 import { translations } from "../src/lib/i18n";
 import { operationalOrderWhere } from "../src/lib/payments/acceptance";
 
@@ -40,12 +42,13 @@ function where(row: Row, query: Row): Truth {
   }));
 }
 const snapshot = (id: string, patch: Row = {}): Row => ({ id, number: null, createdAt: new Date("2026-11-14T12:00:00Z"), customerName: "QA <Customer>", total: "199.00", checkoutAcceptance: "PROVISIONAL", paymentProvider: "mono", paymentStatus: "PENDING", paidAt: null, paymentReference: `pay_${id}`, paymentInvoiceId: `invoice_${id}`, paymentProviderStatus: "created", paymentExpiresAt: new Date("2000-01-01"), paymentModifiedAt: null, paymentNextCheckAt: new Date("2026-11-14T12:05:00Z"), paymentErrorCode: null,
-  paymentPageUrl: "https://pay.monobank.ua/PRIVATE_HOSTED_URL", checkoutKeyHash: "PRIVATE_RETRY_HASH", checkoutPayloadHash: "PRIVATE_PAYLOAD_HASH", token: "PRIVATE_CAPABILITY", customerEmail: "PRIVATE_EMAIL", customerPhone: "PRIVATE_PHONE", shippingAddress: "PRIVATE_ADDRESS", notifications: { payload: "PRIVATE_NOTIFICATION_PAYLOAD" }, ...patch });
+  paymentPageUrl: "https://pay.monobank.ua/PRIVATE_HOSTED_URL", checkoutKeyHash: "PRIVATE_RETRY_HASH", checkoutPayloadHash: "PRIVATE_PAYLOAD_HASH", token: "PRIVATE_CAPABILITY", customerEmail: "qa@example.invalid", customerPhone: "+380 (50) 123-45-67", shippingAddress: "PRIVATE_ADDRESS", notifications: { payload: "PRIVATE_NOTIFICATION_PAYLOAD" }, ...patch });
 let rows: Row[] = [];
 let role: string | null = "ADMIN";
 let reads = 0; let lastQuery: Row = {};
 const auth = sourceModule<typeof import("../src/lib/actions/require-admin")>("src/lib/actions/require-admin.ts", { "@/lib/auth": { auth: async () => role ? { user: { role } } : null } });
 const service = sourceModule<typeof import("../src/lib/admin/payment-attempts")>("src/lib/admin/payment-attempts.ts", {
+  "./attempt-contacts": contacts,
   "@/lib/actions/require-admin": auth, "@/lib/payments/attempt-diagnostics": diagnostics,
   "@/lib/prisma": { prisma: { order: {
     count: async ({ where: query }: { where: Row }) => { reads++; return rows.filter((row) => where(row, query) === true).length; },
@@ -62,12 +65,17 @@ const service = sourceModule<typeof import("../src/lib/admin/payment-attempts")>
 });
 let locale: "ua" | "en" = "en";
 const page = sourceModule<typeof import("../src/app/admin/payment-attempts/page")>("src/app/admin/payment-attempts/page.tsx", {
+  "@/lib/date-time": dates, "@/lib/admin/attempt-contacts": contacts,
   "react/jsx-runtime": jsxRuntime, "next/link": { default: (props: object) => React.createElement("a", props), __esModule: true },
   "@/lib/admin/payment-attempts": service, "@/lib/payments/attempt-diagnostics": diagnostics,
   "@/lib/i18n-server": { getT: async () => translations[locale], getLocale: async () => locale },
 });
 const render = async (params: diagnostics.AttemptSearchParams = {}) => renderToStaticMarkup(await page.default({ searchParams: Promise.resolve(params) }));
 async function verify() {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error("NETWORK_FORBIDDEN"); };
+  // Nonempty PII fixtures ensure denied render/read paths cannot disclose data.
+  rows = [snapshot("private-customer")];
   for (const denied of [null, "MANAGER", "CUSTOMER"]) {
     role = denied; const before = reads;
     await assert.rejects(service.listPaymentAttempts({}), /Unauthorized/);
@@ -111,6 +119,8 @@ async function verify() {
   }
   assert.deepEqual((await service.listPaymentAttempts({ q: "PAY_PAID-REVIEW" })).attempts.map((row) => row.id), ["paid-review"]);
   assert.deepEqual((await service.listPaymentAttempts({ q: "3dk-old" })).attempts.map((row) => row.id), ["legacy"]);
+  assert.equal(all.attempts[0].customerPhone, "+380 (50) 123-45-67"); assert.equal(all.attempts[0].customerEmail, "qa@example.invalid");
+  for (const q of ["QA", "+380 (50)", "qa@example.invalid"]) assert.equal((await service.listPaymentAttempts({ q })).total, 14, q);
   for (const language of ["ua", "en"] as const) {
     locale = language; const html = await render(); const t = translations[language].admin.paymentAttempts;
     const sidebar = sourceModule<typeof import("../src/components/admin/admin-sidebar")>("src/components/admin/admin-sidebar.tsx", {
@@ -123,14 +133,28 @@ async function verify() {
     assert.match(navigation, /href="\/admin\/payment-attempts"[^>]*aria-current="page"/);
     assert.ok(navigation.includes(translations[language].admin.nav.paymentAttempts));
     for (const label of [translations[language].admin.nav.paymentAttempts, t.states.awaiting, t.states.processing, t.states.failed, t.states.expired, t.states.unknown, t.states.review, t.paidWarning, t.noCheck]) assert.ok(html.includes(label), label);
-    assert.ok(html.includes('method="get"')); assert.ok(html.includes('overflow-x-auto')); assert.ok(html.includes("UAH"));
+    assert.ok(html.includes('method="get"')); assert.ok(!html.includes('overflow-x-auto')); assert.ok(html.includes("UAH"));
+    assert.match(html, /href="tel:\+380501234567"/); assert.match(html, /href="mailto:qa@example.invalid"/);
+    assert.ok(html.includes(t.details)); assert.ok(html.includes("<details")); assert.ok(!html.includes("<table"));
+    assert.ok(html.indexOf(t.phone) < html.indexOf("<details"));
     assert.ok(html.includes("QA &lt;Customer&gt;"));
     assert.ok(!html.includes('method="post"') && !html.includes("formAction") && !html.includes("create-ttn") && !html.includes("/admin/orders/"));
     if (language === "en") assert.doesNotMatch(html, /[А-Яа-яІіЇїЄєҐґ]/);
-    for (const secret of ["PRIVATE_HOSTED_URL", "PRIVATE_RETRY_HASH", "PRIVATE_PAYLOAD_HASH", "PRIVATE_CAPABILITY", "PRIVATE_EMAIL", "PRIVATE_PHONE", "PRIVATE_ADDRESS", "PRIVATE_NOTIFICATION_PAYLOAD", "PRIVATE_SECRET_IN_ERROR", "PRIVATE_TOKEN"]) {
+    for (const secret of ["PRIVATE_HOSTED_URL", "PRIVATE_RETRY_HASH", "PRIVATE_PAYLOAD_HASH", "PRIVATE_CAPABILITY", "PRIVATE_ADDRESS", "PRIVATE_NOTIFICATION_PAYLOAD", "PRIVATE_SECRET_IN_ERROR", "PRIVATE_TOKEN"]) {
       assert.ok(!html.includes(secret)); assert.ok(!JSON.stringify(all).includes(secret));
     }
   }
+  rows = [snapshot("contact-search", { customerName: "Олена Коваль", customerPhone: "+380501234567", customerEmail: "olena+shop@example.invalid" })];
+  for (const q of ["Олена Коваль", "501234567", "olena+shop@example.invalid"]) assert.equal((await service.listPaymentAttempts({ q })).total, 1, q);
+  for (const q of ["%", "_secret/", "user@example.invalid\nInjected", "a".repeat(101)]) {
+    const before = reads; assert.equal((await service.listPaymentAttempts({ q })).filters.invalid, true); assert.equal(reads, before);
+  }
+  for (const [email, phone] of [[null, null], ["", ""], ["javascript:alert(1)", "javascript:alert(1)"], ["qa@example.invalid?bcc=other@example.invalid", "+380501234567;ext=999"], ["qa@example.invalid\r\nBcc:other@example.invalid", "+380501234567\n123"], ["<script>alert(1)</script>", "<img onerror=alert(1)>"]]) {
+    rows = [snapshot("bad-contacts", { customerEmail: email, customerPhone: phone })]; const html = await render();
+    assert.doesNotMatch(html, /href="(?:tel:|mailto:|javascript:)/); assert.ok(!html.includes("<script>") && !html.includes("<img "));
+  }
+  assert.equal(contacts.emailHref("qa+shop@example.invalid"), "mailto:qa%2Bshop@example.invalid");
+  assert.equal(contacts.phoneHref("+380 (50) 123-45-67"), "tel:+380501234567");
   rows = Array.from({ length: 61 }, (_, index) => snapshot(`attempt-${String(index).padStart(3, "0")}`, { paymentReference: `pay_unique_${index}` }));
   rows.push(snapshot("boundary-next-day", { createdAt: new Date("2026-11-15T00:00:00Z") }));
   const page1 = await service.listPaymentAttempts({ from: "2026-11-14", to: "2026-11-14", page: "1" });
@@ -147,9 +171,23 @@ async function verify() {
     const before = reads; assert.ok((await service.listPaymentAttempts(invalid)).filters.invalid); assert.equal(reads, before);
   }
   rows = []; assert.ok((await render()).includes(translations.en.admin.paymentAttempts.empty));
+  // Kyiv-local boundaries include late UTC evening in the next local day and
+  // correctly span 23/25 hours through the spring/fall clock changes.
+  for (const [day, start, end, hours] of [
+    ["2026-03-29", "2026-03-28T22:00:00.000Z", "2026-03-29T21:00:00.000Z", 23],
+    ["2026-10-25", "2026-10-24T21:00:00.000Z", "2026-10-25T22:00:00.000Z", 25],
+    ["2026-11-15", "2026-11-14T22:00:00.000Z", "2026-11-15T22:00:00.000Z", 24],
+  ] as const) {
+    const filters = diagnostics.parseAttemptFilters({ from: day, to: day });
+    assert.equal(filters.start?.toISOString(), start); assert.equal(filters.end?.toISOString(), end);
+    assert.equal((Number(filters.end) - Number(filters.start)) / 3600000, hours);
+    rows = [snapshot("before", { createdAt: new Date(Number(filters.start) - 1) }), snapshot("start", { createdAt: filters.start }), snapshot("last", { createdAt: new Date(Number(filters.end) - 1) }), snapshot("after", { createdAt: filters.end })];
+    assert.deepEqual((await service.listPaymentAttempts({ from: day, to: day })).attempts.map((row) => row.id), ["last", "start"]);
+  }
   const operational = snapshot("paid", { number: "0004", checkoutAcceptance: "ACCEPTED", paymentStatus: "PAID", paidAt: new Date() });
   assert.equal(where(operational, operationalOrderWhere as Row), true);
   assert.equal(where(snapshot("technical"), operationalOrderWhere as Row), false);
-  console.log("PASS Payment Attempts: server ADMIN-only reads; provisional/REVIEW/legacy visibility; accepted/COD exclusion; SQL-null-safe labels/filters; stable pagination/UTC date boundaries/search; UA/EN; selected DTO/HTML secret exclusion; read-only controls. No DB/network/payment effects.");
+  globalThis.fetch = originalFetch;
+  console.log("PASS Payment Attempts: server ADMIN-only reads/contacts; provisional/REVIEW/legacy visibility; accepted/COD exclusion; SQL-null-safe labels/filters; stable pagination/Kyiv date boundaries/search; UA/EN; selected DTO/HTML secret exclusion; read-only controls. No DB/network/payment effects.");
 }
 verify().catch((error) => { console.error(error); process.exitCode = 1; });

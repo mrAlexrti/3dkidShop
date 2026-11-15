@@ -7,6 +7,7 @@ import { OrderStatusSummary } from "@/components/admin/order-status-summary";
 import { formatPrice } from "@/lib/utils";
 import { getT, getLocale } from "@/lib/i18n-server";
 import { formatOrderReference } from "@/lib/order-reference";
+import { formatManagerDateTime } from "@/lib/date-time";
 
 export default async function AdminOrdersPage() {
   const t = await getT();
@@ -38,7 +39,7 @@ export default async function AdminOrdersPage() {
                   </Link>
                 </td>
                 <td className="px-4 py-3">{o.customerName}</td>
-                <td className="px-4 py-3 text-ink/50">{o.createdAt.toLocaleDateString("uk-UA")}</td>
+                <td className="px-4 py-3 text-ink/50"><time dateTime={o.createdAt.toISOString()}>{formatManagerDateTime(o.createdAt, locale)}</time></td>
                 <td className="px-4 py-3"><OrderStatusSummary order={o} locale={locale} /></td>
                 <td className="px-4 py-3 font-medium">{formatPrice(Number(o.total))}</td>
               </tr>

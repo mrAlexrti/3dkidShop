@@ -4,6 +4,8 @@ import Link from "next/link";
 import { listPaymentAttempts } from "@/lib/admin/payment-attempts";
 import { ATTEMPT_FILTERS, type AttemptSearchParams } from "@/lib/payments/attempt-diagnostics";
 import { getT, getLocale } from "@/lib/i18n-server";
+import { formatManagerDateTime } from "@/lib/date-time";
+import { phoneHref, emailHref } from "@/lib/admin/attempt-contacts";
 
 export default async function PaymentAttemptsPage({ searchParams }: { searchParams: Promise<AttemptSearchParams> }) {
   const result = await listPaymentAttempts(await searchParams);
@@ -11,8 +13,10 @@ export default async function PaymentAttemptsPage({ searchParams }: { searchPara
   const t = translations.admin.paymentAttempts;
   const locale = await getLocale();
   const { filters, page, pages, total, attempts } = result;
-  const dateFormat = new Intl.DateTimeFormat(locale === "ua" ? "uk-UA" : "en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
-  const date = (value: Date | null) => value ? <time dateTime={value.toISOString()}>{dateFormat.format(value)}</time> : t.notAvailable;
+  const date = (value: Date | null) => value ? <time dateTime={value.toISOString()}>{formatManagerDateTime(value, locale)}</time> : t.notAvailable;
+  const contact = (value: string | null, href: string | null) => href
+    ? <a href={href} className="inline-flex min-h-11 items-center text-pink-600 underline [overflow-wrap:anywhere]">{value}</a>
+    : value ?? t.notAvailable;
   const pageUrl = (target: number) => {
     const query = new URLSearchParams({ status: filters.status, page: String(target) });
     if (filters.q) query.set("q", filters.q);
@@ -39,33 +43,45 @@ export default async function PaymentAttemptsPage({ searchParams }: { searchPara
     </form>
     {filters.invalid && <p role="alert" className="mt-4 text-sm text-red-700">{t.invalid}</p>}
     <p className="mt-5 text-sm text-ink/70">{t.total}: {total}</p>
-    <div role="region" tabIndex={0} aria-label={t.table} className="glass mt-3 overflow-x-auto rounded-xl2 shadow-soft">
-      <table className="w-full min-w-[1180px] text-left text-sm">
-        <thead className="bg-pink-50/60 text-ink/60"><tr>
-          {[t.created, t.attempt, t.customer, t.amount, t.provider, t.status, t.reference, t.invoice, t.expires, t.modified, t.nextCheck, t.reason].map((label) => <th scope="col" key={label} className="px-4 py-3">{label}</th>)}
-        </tr></thead>
-        <tbody>{attempts.map((attempt) => <tr key={attempt.id} className="border-t border-pink-100 align-top">
-          <td className="px-4 py-3">{date(attempt.createdAt)}</td>
-          <td className="max-w-52 break-all px-4 py-3 font-mono text-xs">{attempt.id}</td>
-          <td className="max-w-52 break-words px-4 py-3">{attempt.customerName}</td>
-          <td className="whitespace-nowrap px-4 py-3">{new Intl.NumberFormat(locale === "ua" ? "uk-UA" : "en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(attempt.amount))} {attempt.currency ?? t.notAvailable}</td>
-          <td className="px-4 py-3">{t.providers[attempt.provider]}</td>
-          <td className="min-w-48 px-4 py-3">
-            {attempt.review && <span className="mb-2 block rounded-lg bg-amber-50 px-2 py-1 font-medium text-amber-800">{t.states.review}</span>}
-            <span>{t.states[attempt.state]}</span>
-            {attempt.state === "paid_unaccepted" && <p className="mt-2 text-xs text-amber-800">{t.paidWarning}</p>}
-          </td>
-          <td className="max-w-56 break-all px-4 py-3 font-mono text-xs">{attempt.reference ?? t.notAvailable}</td>
-          <td className="max-w-52 break-all px-4 py-3 font-mono text-xs">{attempt.invoiceId ?? t.notAvailable}</td>
-          <td className="px-4 py-3">{date(attempt.expiresAt)}</td>
-          <td className="px-4 py-3">{date(attempt.modifiedAt)}</td>
-          <td className="px-4 py-3">{attempt.nextCheckAt ? date(attempt.nextCheckAt) : t.noCheck}</td>
-          <td className="min-w-48 px-4 py-3">{t.reasons[attempt.reason]}</td>
-        </tr>)}
-        {attempts.length === 0 && <tr><td colSpan={12} className="px-4 py-6 text-center text-ink/50">{t.empty}</td></tr>}
-        </tbody>
-      </table>
-    </div>
+    <section aria-label={t.table} className="mt-3 space-y-4">
+      {attempts.map((attempt) => <article key={attempt.id} className="glass min-w-0 rounded-xl2 p-4 text-sm shadow-soft [overflow-wrap:anywhere] sm:p-6">
+        <div className="grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold">{attempt.customerName ?? t.notAvailable}</h2>
+            <dl className="mt-2">
+              <div><dt className="text-xs text-ink/60">{t.phone}</dt><dd>{contact(attempt.customerPhone, phoneHref(attempt.customerPhone))}</dd></div>
+              <div><dt className="text-xs text-ink/60">{t.email}</dt><dd>{contact(attempt.customerEmail, emailHref(attempt.customerEmail))}</dd></div>
+            </dl>
+          </div>
+          <dl className="min-w-0 space-y-3">
+            <div><dt className="text-xs text-ink/60">{t.created}</dt><dd className="mt-1">{date(attempt.createdAt)}</dd></div>
+            <div><dt className="text-xs text-ink/60">{t.amount}</dt><dd className="mt-1 text-lg font-semibold">{new Intl.NumberFormat(locale === "ua" ? "uk-UA" : "en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(attempt.amount))} {attempt.currency ?? t.notAvailable}</dd></div>
+          </dl>
+          <dl className="min-w-0 space-y-3 md:col-span-2 xl:col-span-1">
+            <div><dt className="text-xs text-ink/60">{t.status}</dt><dd className="mt-1">
+              {attempt.review && <span className="mb-2 block rounded-lg bg-amber-50 px-2 py-1 font-medium text-amber-800">{t.states.review}</span>}
+              <span className="font-medium">{t.states[attempt.state]}</span>
+              {attempt.state === "paid_unaccepted" && <p className="mt-2 text-xs text-amber-800">{t.paidWarning}</p>}
+            </dd></div>
+            <div><dt className="text-xs text-ink/60">{t.reason}</dt><dd className="mt-1">{t.reasons[attempt.reason]}</dd></div>
+          </dl>
+        </div>
+        <details className="mt-4 border-t border-pink-100 pt-2">
+          <summary className="min-h-11 cursor-pointer py-3 font-medium text-pink-600">{t.details}</summary>
+          <dl className="grid min-w-0 gap-4 py-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div><dt className="text-ink/60">{t.attempt}</dt><dd className="mt-1 break-all font-mono text-xs">{attempt.id}</dd></div>
+            <div><dt className="text-ink/60">{t.reference}</dt><dd className="mt-1 break-all font-mono text-xs">{attempt.reference ?? t.notAvailable}</dd></div>
+            <div><dt className="text-ink/60">{t.invoice}</dt><dd className="mt-1 break-all font-mono text-xs">{attempt.invoiceId ?? t.notAvailable}</dd></div>
+            <div><dt className="text-ink/60">{t.provider}</dt><dd className="mt-1">{t.providers[attempt.provider]}</dd></div>
+            <div><dt className="text-ink/60">{t.modified}</dt><dd className="mt-1">{date(attempt.modifiedAt)}</dd></div>
+            <div><dt className="text-ink/60">{t.expires}</dt><dd className="mt-1">{date(attempt.expiresAt)}</dd></div>
+            <div><dt className="text-ink/60">{t.nextCheck}</dt><dd className="mt-1">{attempt.nextCheckAt ? date(attempt.nextCheckAt) : t.noCheck}</dd></div>
+            <div><dt className="text-ink/60">{t.diagnostic}</dt><dd className="mt-1 break-all font-mono text-xs">{attempt.reason === "none" ? t.notAvailable : attempt.reason}</dd></div>
+          </dl>
+        </details>
+      </article>)}
+      {attempts.length === 0 && <p className="glass rounded-xl2 p-6 text-center text-sm text-ink/50">{t.empty}</p>}
+    </section>
     <p className="mt-4 max-w-3xl text-xs text-ink/60">{t.noCheckHelp}</p>
     <nav aria-label={t.pagination} className="mt-5 flex flex-wrap items-center gap-4 text-sm">
       {page > 1 && !filters.invalid && <Link className="inline-flex min-h-11 items-center text-pink-600" href={pageUrl(page - 1)}>{t.previous}</Link>}
