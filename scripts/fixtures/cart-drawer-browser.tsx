@@ -4,9 +4,10 @@ import { flushSync } from "react-dom";
 import { CartDrawer } from "../../src/components/cart/cart-drawer";
 import { ProductCard } from "../../src/components/product/product-card";
 import { ProductOptions } from "../../src/components/product/product-options";
+import { ProductImage } from "../../src/components/product/product-image";
 import { useCartStore } from "../../src/store/cart-store";
 import { createLangStore, LangStoreContext } from "../../src/store/lang-store";
-import { messages, navigate } from "./cart-drawer-environment";
+import { messages, navigate, configureCartLookup, resolveCartLookup } from "./cart-drawer-environment";
 
 const root = createRoot(document.getElementById("root")!);
 const state = () => useCartStore.getState();
@@ -29,6 +30,7 @@ function render(locale: "ua" | "en") {
     <div id="unavailable"><ProductCard {...product} isOrderable={false} /></div>
     <div id="detail"><ProductOptions {...product} variants={[]} /></div>
     <div id="sizes"><ProductOptions {...product} productId="qa-sizes" variants={[{ id: "small", labelUa: "S", labelEn: "Small", price: 25, noteUa: null, noteEn: null }]} /></div>
+    <div id="media-probe"><ProductImage src="/retired-media.webp" alt="Media fallback probe" width={40} height={40} /></div>
     <CartDrawer />
   </LangStoreContext.Provider></React.StrictMode>));
 }
@@ -49,6 +51,7 @@ async function open() {
   check(!messages.some((item) => item.kind === "success"), "Redundant success toast");
 }
 async function run(locale: "ua" | "en") {
+  configureCartLookup("normal");
   state().closeCart(); state().clear(); messages.length = 0;
   document.body.style.overflow = "auto";
   navigate("/catalog"); render(locale); await settle();
@@ -113,6 +116,23 @@ async function run(locale: "ua" | "en") {
   click('[role="dialog"] .border-t button:last-child'); await settle();
   check(location.pathname === "/checkout" && !state().isOpen, "Checkout link must close drawer and navigate"); await closed();
 
+  configureCartLookup("deferred", "/current-media.webp");
+  flushSync(() => { state().clear(); state().addItem({ ...product, image: "https://retired.public.blob.vercel-storage.com/old.webp", quantity: 2 }); });
+  await settle();
+  const displayedImage = () => document.querySelector('[role="dialog"] img')?.getAttribute("data-media-source");
+  check(state().verification === "loading" && displayedImage() === "/images/placeholder.svg", "Unverified cart rendered a persisted remote image");
+  resolveCartLookup(); await until(() => state().ready()); await settle();
+  check(displayedImage() === "/current-media.webp", "Verified cart did not use the authoritative replacement image");
+  configureCartLookup("offline"); await state().verifyCart(locale, true); await settle();
+  check(state().verification === "error" && !state().ready() && displayedImage() === "/images/placeholder.svg", "Offline refresh trusted old media or allowed checkout");
+  configureCartLookup("missing"); await state().verifyCart(locale, true); await settle();
+  check(state().items[0].quantity === 2 && state().issues.qa === "unavailable" && !state().ready(), "Unavailable cart lost intent or allowed checkout");
+  check(displayedImage() === "/images/placeholder.svg", "Unavailable cart retained its retired image");
+  const probe = document.querySelector<HTMLImageElement>("#media-probe img")!;
+  probe.dispatchEvent(new Event("error")); await settle();
+  check(probe.getAttribute("data-media-source") === "/images/placeholder.svg", "Image error did not render the safe local fallback");
+  configureCartLookup("normal"); flushSync(() => state().closeCart()); await closed();
+
   // Focus errors or a detached opener must never prevent scroll/listener cleanup.
   for (const detached of [false, true]) {
     const target = document.createElement("button"); document.body.append(target); target.focus();
@@ -124,7 +144,7 @@ async function run(locale: "ua" | "en") {
   flushSync(() => root.unmount());
   check(!state().isOpen && document.body.style.overflow === "auto" && !backdrop(), "Unmount did not reset cart/restore body/remove backdrop");
   check(!messages.some((item) => item.kind === "success"), "Success toast must remain absent");
-  return `${locale}: add/size feedback, single open, focus/Escape/backdrop, route/back, checkout, cleanup PASS`;
+  return `${locale}: add/size feedback, focus/route/checkout, verified media, offline/unavailable placeholders and browser image-error fallback PASS`;
 }
 
 Object.assign(window, { cartQA: { run } });

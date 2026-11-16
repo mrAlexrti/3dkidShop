@@ -8,6 +8,9 @@ import { optionalHoverGifUrl, updateMainProductImage } from "@/lib/product-media
 import { sizeInputSchema } from "@/lib/product-variants";
 import { syncProductSizes } from "@/lib/product-size-admin";
 import { productSlugSchema, type ProductSaveResult } from "@/lib/product-slug";
+import { assertMediaAttachable, enqueueSupersededMedia, lockMediaWrites, MEDIA_TRANSACTION_OPTIONS } from "@/lib/media-lifecycle";
+import { RetiredMediaError } from "@/lib/media-lifecycle-policy";
+import { scheduleProductMediaCleanup } from "@/lib/media-cleanup-after";
 
 const productSchema = z.object({
   name: z.string().min(2),
@@ -42,6 +45,8 @@ export async function createProduct(formData: FormData): Promise<ProductSaveResu
 
   try {
   await prisma.$transaction(async (tx) => {
+  await lockMediaWrites(tx);
+  await assertMediaAttachable(tx, [parsed.imageUrl, parsed.hoverGifUrl, parsed.description, parsed.descriptionEn]);
   const product = await tx.product.create({
     data: {
       name: parsed.name,
@@ -61,8 +66,9 @@ export async function createProduct(formData: FormData): Promise<ProductSaveResu
     },
   });
   await syncProductSizes(tx, product.id, parsed.variants ?? []);
-  });
+  }, MEDIA_TRANSACTION_OPTIONS);
   } catch (error) {
+    if (error instanceof RetiredMediaError) return { error: "mediaRetired" };
     if (isSlugCollision(error)) return { error: "slugDuplicate" };
     throw error;
   }
@@ -70,6 +76,7 @@ export async function createProduct(formData: FormData): Promise<ProductSaveResu
   revalidatePath("/admin/products");
   revalidatePath("/catalog");
   revalidatePath("/");
+  scheduleProductMediaCleanup();
 }
 
 export async function updateProduct(id: string, formData: FormData): Promise<ProductSaveResult> {
@@ -90,6 +97,12 @@ export async function updateProduct(id: string, formData: FormData): Promise<Pro
 
   try {
   await prisma.$transaction(async (tx) => {
+    await lockMediaWrites(tx);
+    const previous = await tx.product.findUnique({ where: { id }, select: {
+      hoverGifUrl: true, description: true, descriptionEn: true,
+      images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 1, select: { url: true } },
+    } });
+    await assertMediaAttachable(tx, [parsed.imageUrl, parsed.hoverGifUrl, parsed.description, parsed.descriptionEn]);
     await tx.product.update({
       where: { id },
       data: {
@@ -110,8 +123,11 @@ export async function updateProduct(id: string, formData: FormData): Promise<Pro
     });
     await updateMainProductImage(tx, id, parsed.imageUrl);
     if (parsed.variants !== undefined) await syncProductSizes(tx, id, parsed.variants);
-  });
+    if (previous) await enqueueSupersededMedia(tx, [previous.images[0]?.url, previous.hoverGifUrl, previous.description, previous.descriptionEn],
+      [parsed.imageUrl, parsed.hoverGifUrl, parsed.description, parsed.descriptionEn]);
+  }, MEDIA_TRANSACTION_OPTIONS);
   } catch (error) {
+    if (error instanceof RetiredMediaError) return { error: "mediaRetired" };
     if (isSlugCollision(error)) return { error: "slugDuplicate" };
     throw error;
   }
@@ -121,6 +137,7 @@ export async function updateProduct(id: string, formData: FormData): Promise<Pro
   if (existing && existing.slug !== parsed.slug) revalidatePath(`/product/${existing.slug}`);
   revalidatePath("/catalog");
   revalidatePath("/");
+  scheduleProductMediaCleanup();
 }
 
 function isSlugCollision(error: unknown) {
@@ -132,7 +149,14 @@ function isSlugCollision(error: unknown) {
 export async function deleteProduct(id: string) {
   await requireAdmin();
 
-  await prisma.product.delete({ where: { id } });
+  await prisma.$transaction(async (tx) => {
+    await lockMediaWrites(tx);
+    const previous = await tx.product.findUnique({ where: { id }, select: { images: { select: { url: true } }, hoverGifUrl: true, description: true, descriptionEn: true } });
+    if (!previous) return;
+    await tx.product.delete({ where: { id } });
+    await enqueueSupersededMedia(tx, [...previous.images.map((image) => image.url), previous.hoverGifUrl, previous.description, previous.descriptionEn]);
+  }, MEDIA_TRANSACTION_OPTIONS);
   revalidatePath("/admin/products");
   revalidatePath("/catalog");
+  scheduleProductMediaCleanup();
 }

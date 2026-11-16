@@ -63,7 +63,11 @@ export function ProductForm({
           try {
             setSlugError(null);
             const result = await action(formData);
-            if (result?.error) { setSlugError(result.error); return; }
+            if (result?.error) {
+              if (result.error === "mediaRetired") toast.error(t.admin.media.retired);
+              else setSlugError(result.error);
+              return;
+            }
             toast.success(t.admin.common.saved);
             router.push("/admin/products");
           } catch (e) {

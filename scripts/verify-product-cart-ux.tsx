@@ -48,10 +48,23 @@ let passed = 0;
 function pass(name: string) { passed++; console.log(`PASS ${name}`); }
 
 async function verify() {
+  for (const version of [0, 1]) {
+    const persisted = { ...item, id: "p1-small", quantity: 3, image: "https://oldstore.public.blob.vercel-storage.com/retired.webp", variant: { id: "small", labelUa: "S", labelEn: "Small" } };
+    storageValues.set("stikr-cart", JSON.stringify({ state: { items: [persisted], verification: "verified", verifiedRevision: 42, checkoutRevision: 42 }, version }));
+    await useCartStore.persist.rehydrate();
+    assert.deepEqual(cart().items, [{ ...persisted, image: reconciliation.CART_IMAGE_PLACEHOLDER }]);
+    assert.equal(cart().verification, "idle"); assert.equal(cart().ready(), false);
+    assert.equal(reconciliation.cartImageSource(persisted, cart()), reconciliation.CART_IMAGE_PLACEHOLDER);
+  }
+  pass("legacy/current hydration masks remote images and ignores persisted verification while preserving IDs, quantities and selected sizes");
   reset(); await useCartStore.persist.rehydrate(); assert.equal(cart().ready(), false);
   assert.equal(await cart().verifyCart("en"), true);
   assert.equal(cart().items[0].name, "Dragon"); assert.equal(cart().items[0].image, product.image);
   assert.equal(cart().items[0].quantity, 2); assert.equal(cart().items[0].id, item.id);
+  assert.equal(JSON.parse(storageValues.get("stikr-cart")!).state.items[0].image, reconciliation.CART_IMAGE_PLACEHOLDER);
+  products[0].image = "/replacement.webp"; await cart().verifyCart("en", true);
+  assert.equal(cart().items[0].image, "/replacement.webp");
+  assert.equal(reconciliation.cartImageSource(cart().items[0], cart()), "/replacement.webp");
   assert.equal(cart().total(), 20); pass("unchanged persisted selection refreshes display and preserves identity/quantity");
 
   products[0].price = 15; assert.equal(await cart().verifyCart("ua", true), false);
@@ -66,6 +79,8 @@ async function verify() {
     reset(); products = mode === "non-orderable" ? [{ ...product, isOrderable: false }] : [];
     assert.equal(await cart().verifyCart("en"), false); assert.equal(cart().items.length, 1);
     assert.equal(cart().issues[item.id], "unavailable"); assert.equal(cart().total(), 0);
+    assert.equal(cart().items[0].image, mode === "non-orderable" ? product.image : reconciliation.CART_IMAGE_PLACEHOLDER);
+    assert.equal(cart().items[0].quantity, item.quantity); assert.equal(cart().items[0].productId, item.productId);
     cart().removeItem(item.id); assert.equal(cart().items.length, 0);
     pass(`${mode} selection preserved, explained and blocked; stale price excluded`);
   }
@@ -89,17 +104,21 @@ async function verify() {
 
   reset(); lookup = async () => { throw new Error("offline"); };
   assert.equal(await cart().verifyCart("en"), false); assert.equal(cart().verification, "error");
-  assert.deepEqual(cart().items, [item]); assert.equal(cart().ready(), false);
+  assert.deepEqual(cart().items, [{ ...item, image: reconciliation.CART_IMAGE_PLACEHOLDER }]); assert.equal(cart().ready(), false);
   lookup = async () => [product]; assert.equal(await cart().verifyCart("en"), true);
+  lookup = async () => { throw new Error("offline-after-verification"); };
+  await cart().verifyCart("en", true); assert.equal(cart().items[0].image, reconciliation.CART_IMAGE_PLACEHOLDER); assert.equal(cart().ready(), false);
   pass("transient failure retains selections and blocks checkout until retry");
 
   reset(); const responses: ((value: Product[]) => void)[] = [];
   let requests = 0; lookup = () => { requests++; return new Promise((resolve) => responses.push(resolve)); };
   const old = cart().verifyCart("en"); const dedup = cart().verifyCart("en"); assert.equal(old, dedup); assert.equal(requests, 1);
   cart().updateQuantity(item.id, 4); const fresh = cart().verifyCart("en");
-  responses[1]([{ ...product, price: 30 }]); await fresh;
-  responses[0]([{ ...product, price: 1 }]); await old;
+  assert.equal(cart().items[0].image, reconciliation.CART_IMAGE_PLACEHOLDER);
+  responses[1]([{ ...product, image: "/fresh.webp", price: 30 }]); await fresh;
+  responses[0]([{ ...product, image: "/obsolete.webp", price: 1 }]); await old;
   assert.equal(cart().items[0].quantity, 4); assert.equal(cart().items[0].price, 30);
+  assert.equal(cart().items[0].image, "/fresh.webp");
   cart().reviewPrices(); assert.equal(cart().ready(), true);
   pass("requests deduplicate; out-of-order response cannot overwrite newer cart edits");
 
@@ -205,11 +224,15 @@ async function verify() {
 
   let admin = true; let collision = false; let writes = 0;
   const actions = sourceModule<typeof import("../src/lib/actions/products")>("src/lib/actions/products.ts", {
+    "@/lib/media-lifecycle": { lockMediaWrites: async () => {}, assertMediaAttachable: async () => {}, enqueueSupersededMedia: async () => {} },
+    "@/lib/media-lifecycle-policy": { RetiredMediaError: class extends Error {} },
+    "@/lib/media-cleanup-after": { scheduleProductMediaCleanup: () => {} },
     zod: { z }, "@/lib/product-slug": slugs, "@/lib/product-media": media, "@/lib/product-variants": variants,
     "@/lib/product-size-admin": { syncProductSizes: async () => {} }, "next/cache": { revalidatePath: () => {} },
     "@/lib/actions/require-admin": { requireAdmin: async () => { if (!admin) throw new Error("UNAUTHORIZED"); } },
     "@/lib/prisma": { prisma: { product: { findUnique: async () => ({ slug: "Historical_URL" }) },
       $transaction: async (callback: (tx: unknown) => Promise<void>) => callback({ product: {
+        findUnique: async () => ({ images: [], hoverGifUrl: null }),
         create: async () => { if (collision) throw { code: "P2002", meta: { target: ["slug"] } }; writes++; return { id: "p1" }; },
         update: async () => { if (collision) throw { code: "P2002", meta: { target: ["slug"] } }; writes++; },
       }, productImage: { findFirst: async () => ({ id: "i1", url: "https://res.cloudinary.com/qa/a.webp" }) } }) } },

@@ -11,7 +11,7 @@ export function generateProductSlug(name: string) {
 
 // Custom slugs are validated as approved; never transliterate/rename them on save.
 export const productSlugSchema = z.string().max(160).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
-export type ProductSaveResult = { error: "slugInvalid" | "slugDuplicate" } | void;
+export type ProductSaveResult = { error: "slugInvalid" | "slugDuplicate" | "mediaRetired" } | void;
 export function slugFromNameChange(state: { name: string; slug: string; manual: boolean }, name: string) {
   return { ...state, name, slug: state.manual ? state.slug : generateProductSlug(name) };
 }

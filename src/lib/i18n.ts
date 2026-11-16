@@ -360,6 +360,7 @@ export const translations = {
         save:         "Зберегти",
       },
       media: {
+        retired: "Цей файл уже вилучається або був вилучений. Завантажте його знову, щоб отримати новий URL.",
         chooseFile: "Обрати локальний файл", upload: "Завантажити файл", uploading: "Завантаження…", checking: "Перевіряємо доступність завантаження…",
         uploaded: "Файл завантажено. Натисніть «Зберегти», щоб застосувати URL до товару.",
         imageHelp: "Вкажіть URL зображення або завантажте файл. Зміни застосовуються лише після збереження товару.",
@@ -741,6 +742,7 @@ export const translations = {
         save:         "Save",
       },
       media: {
+        retired: "This file is being removed or has already been removed. Upload it again to obtain a new URL.",
         chooseFile: "Choose a local file", upload: "Upload file", uploading: "Uploading…", checking: "Checking upload availability…",
         uploaded: "File uploaded. Save the product to apply its URL.",
         imageHelp: "Enter an image URL or upload a file. Changes apply only after saving the product.",

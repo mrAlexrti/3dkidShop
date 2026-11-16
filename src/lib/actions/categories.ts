@@ -8,6 +8,8 @@ import { requireAdmin } from "@/lib/actions/require-admin";
 import { isFontThemeId } from "@/lib/fonts";
 import { SITE_FONT_KEY } from "@/lib/site-settings";
 import { storefrontContentSchema, STOREFRONT_CONTENT_KEYS } from "@/lib/site-content";
+import { assertMediaAttachable, enqueueSupersededMedia, lockMediaWrites, MEDIA_TRANSACTION_OPTIONS } from "@/lib/media-lifecycle";
+import { scheduleProductMediaCleanup } from "@/lib/media-cleanup-after";
 
 const categorySchema = z.object({
   name: z.string().trim().min(2),
@@ -59,6 +61,8 @@ export async function createCategory(formData: FormData) {
   const parentId = parsed.parentId || null;
 
   await prisma.$transaction(async (tx) => {
+    await lockMediaWrites(tx);
+    await assertMediaAttachable(tx, [parsed.imageUrl, parsed.description]);
     await assertValidParent(tx, parentId);
     await tx.category.create({
       data: {
@@ -71,9 +75,10 @@ export async function createCategory(formData: FormData) {
         order: parsed.order,
       },
     });
-  });
+  }, MEDIA_TRANSACTION_OPTIONS);
 
   revalidateCategoryViews();
+  scheduleProductMediaCleanup();
 }
 
 export async function updateCategory(id: string, formData: FormData) {
@@ -82,9 +87,11 @@ export async function updateCategory(id: string, formData: FormData) {
   const parentId = parsed.parentId || null;
 
   await prisma.$transaction(async (tx) => {
+    await lockMediaWrites(tx);
+    await assertMediaAttachable(tx, [parsed.imageUrl, parsed.description]);
     const current = await tx.category.findUnique({
       where: { id },
-      select: { id: true, children: { select: { id: true }, take: 1 } },
+      select: { id: true, imageUrl: true, description: true, children: { select: { id: true }, take: 1 } },
     });
     if (!current) throw new Error("Категория не существует");
     if (parentId && current.children.length > 0) {
@@ -104,27 +111,32 @@ export async function updateCategory(id: string, formData: FormData) {
         order: parsed.order,
       },
     });
-  });
+    await enqueueSupersededMedia(tx, [current.imageUrl, current.description], [parsed.imageUrl, parsed.description]);
+  }, MEDIA_TRANSACTION_OPTIONS);
 
   revalidateCategoryViews();
+  scheduleProductMediaCleanup();
 }
 
 export async function deleteCategory(id: string) {
   await requireAdmin();
 
   await prisma.$transaction(async (tx) => {
+    await lockMediaWrites(tx);
     const category = await tx.category.findUnique({
       where: { id },
-      select: { _count: { select: { products: true, children: true } } },
+      select: { imageUrl: true, description: true, _count: { select: { products: true, children: true } } },
     });
     if (!category) return;
     if (category._count.products > 0 || category._count.children > 0) {
       throw new Error("Нельзя удалить непустую категорию или категорию с подкатегориями");
     }
     await tx.category.delete({ where: { id } });
-  });
+    await enqueueSupersededMedia(tx, [category.imageUrl, category.description]);
+  }, MEDIA_TRANSACTION_OPTIONS);
 
   revalidateCategoryViews();
+  scheduleProductMediaCleanup();
 }
 
 export async function updateSiteContent(formData: FormData) {
@@ -140,16 +152,21 @@ export async function updateSiteContent(formData: FormData) {
     throw new Error("Недопустимая тема шрифта");
   }
 
-  await prisma.$transaction(
-    Object.entries(entries).map(([key, value]) =>
-      prisma.siteContent.upsert({
+  await prisma.$transaction(async (tx) => {
+    await lockMediaWrites(tx);
+    await assertMediaAttachable(tx, Object.values(entries));
+    const previous = await tx.siteContent.findMany({ where: { key: { in: Object.keys(entries) } }, select: { value: true } });
+    for (const [key, value] of Object.entries(entries)) {
+      await tx.siteContent.upsert({
         where: { key },
         update: { value },
         create: { key, value },
-      })
-    )
-  );
+      });
+    }
+    await enqueueSupersededMedia(tx, previous.map((row) => row.value), Object.values(entries));
+  }, MEDIA_TRANSACTION_OPTIONS);
 
   revalidatePath("/", "layout");
   revalidatePath("/admin/content");
+  scheduleProductMediaCleanup();
 }

@@ -5,7 +5,7 @@ import { persist } from "zustand/middleware";
 import type { CartItem } from "@/types";
 import { normalizeCartItems, cartAfterAddition } from "@/lib/cart-items";
 import { canSetQuantity, cartTotalMinor } from "@/lib/cart-limits";
-import { reconcileCart, type CartIssue } from "@/lib/cart-reconciliation";
+import { reconcileCart, withoutCartImages, type CartIssue } from "@/lib/cart-reconciliation";
 import { lookupCartProducts } from "@/lib/actions/reconcile-cart";
 import type { Locale } from "@/lib/i18n";
 
@@ -35,7 +35,7 @@ let pending: { revision: number; locale: Locale; promise: Promise<boolean> } | n
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => {
-      const mutate = (items: CartItem[], open = false) => set((state) => ({ items, ...(open ? { isOpen: true } : {}), checkoutRevision: state.checkoutRevision >= Number.MAX_SAFE_INTEGER ? 0 : state.checkoutRevision + 1,
+      const mutate = (items: CartItem[], open = false) => set((state) => ({ items: withoutCartImages(items), ...(open ? { isOpen: true } : {}), checkoutRevision: state.checkoutRevision >= Number.MAX_SAFE_INTEGER ? 0 : state.checkoutRevision + 1,
         verification: "idle", verifiedRevision: null, issues: Object.fromEntries(Object.entries(state.issues).filter(([id]) => items.some((item) => item.id === id))),
         priceChanges: state.priceChanges.filter((id) => items.some((item) => item.id === id)) }));
       return {
@@ -54,9 +54,9 @@ export const useCartStore = create<CartState>()(
         if (!force && state.verification === "verified" && state.verifiedRevision === state.checkoutRevision) return Promise.resolve(state.ready());
         if (!state.items.length) return Promise.resolve(false);
         const revision = state.checkoutRevision;
-        const items = state.items;
+        const items = withoutCartImages(state.items);
         const request = ++requestSequence;
-        set({ verification: "loading", verifiedRevision: null });
+        set({ items, verification: "loading", verifiedRevision: null });
         const current = () => request === requestSequence && get().checkoutRevision === revision && get().items === items;
         const promise = (async () => {
           try {
@@ -95,12 +95,12 @@ export const useCartStore = create<CartState>()(
     }; },
     {
       name: "stikr-cart", version: 1,
-      partialize: (state) => ({ items: state.items, checkoutRevision: state.checkoutRevision, priceChanges: state.priceChanges }),
-      migrate: (persisted) => ({ items: normalizeCartItems((persisted as { items?: unknown })?.items) }),
+      partialize: (state) => ({ items: withoutCartImages(state.items), checkoutRevision: state.checkoutRevision, priceChanges: state.priceChanges }),
+      migrate: (persisted) => ({ items: withoutCartImages(normalizeCartItems((persisted as { items?: unknown })?.items)) }),
       merge: (persisted, current) => {
         const revision = (persisted as { checkoutRevision?: unknown })?.checkoutRevision;
         const changes = (persisted as { priceChanges?: unknown })?.priceChanges;
-        const items = normalizeCartItems((persisted as { items?: unknown })?.items);
+        const items = withoutCartImages(normalizeCartItems((persisted as { items?: unknown })?.items));
         return { ...current, items, checkoutRevision: typeof revision === "number" && Number.isSafeInteger(revision) && revision >= 0 ? revision : 0, isOpen: false,
           verification: "idle", verifiedRevision: null, issues: {}, priceChanges: Array.isArray(changes) ? items.filter((item) => changes.includes(item.id)).map((item) => item.id) : [] };
       },

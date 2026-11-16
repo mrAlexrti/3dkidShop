@@ -11,9 +11,11 @@ import { useLangStore } from "@/store/lang-store";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { sizeLabel } from "@/lib/product-variants";
+import { cartImageSource } from "@/lib/cart-reconciliation";
 
 export default function CartPage() {
-  const { items, removeItem, updateQuantity, ready } = useCartStore();
+  const cart = useCartStore();
+  const { items, removeItem, updateQuantity, ready } = cart;
   const { t, locale } = useLangStore();
   const router = useRouter();
 
@@ -49,7 +51,7 @@ export default function CartPage() {
               >
                 <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-white">
                   <Image sizes="96px"
-                          src={item.image} alt={item.name} fill className="object-cover" />
+                          src={cartImageSource(item, cart)} alt={item.name} fill className="object-cover" />
                 </div>
                 <div className="flex flex-1 flex-col justify-between min-w-0">
                   <div>

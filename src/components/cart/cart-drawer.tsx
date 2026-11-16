@@ -11,6 +11,7 @@ import { useLangStore } from "@/store/lang-store";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef } from "react";
 import { sizeLabel } from "@/lib/product-variants";
+import { cartImageSource } from "@/lib/cart-reconciliation";
 
 export function CartDrawer() {
   const { isOpen, closeCart } = useCartStore();
@@ -41,7 +42,8 @@ function focusSafely(element: HTMLElement | null | undefined) {
 }
 
 function CartDrawerContents() {
-  const { items, closeCart, removeItem, updateQuantity, ready } = useCartStore();
+  const cart = useCartStore();
+  const { items, closeCart, removeItem, updateQuantity, ready } = cart;
   const isPresent = useIsPresent();
   const router = useRouter();
   const { t, locale } = useLangStore();
@@ -134,7 +136,7 @@ function CartDrawerContents() {
                       <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-white shadow-soft">
                         <Image
                           sizes="80px"
-                          src={item.image}
+                          src={cartImageSource(item, cart)}
                           alt={item.name}
                           fill
                           className="object-cover"

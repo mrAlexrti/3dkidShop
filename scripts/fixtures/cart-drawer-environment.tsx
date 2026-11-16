@@ -1,8 +1,16 @@
 // Local browser fixtures only. No Next server, providers, notifications or API calls.
 import * as React from "react";
 
+let lookupMode: "normal" | "deferred" | "missing" | "offline" = "normal";
+let lookupImage = "/placeholder.svg";
+let releaseLookup: (() => void) | undefined;
+export function configureCartLookup(mode: typeof lookupMode, image = "/placeholder.svg") { lookupMode = mode; lookupImage = image; }
+export function resolveCartLookup() { releaseLookup?.(); }
 export async function lookupCartProducts() {
-  return [{ id: "qa", name: "QA Dragon", nameEn: "QA Dragon", slug: "qa", price: 20, image: "/placeholder.svg", isOrderable: true, variants: [] },
+  if (lookupMode === "offline") throw new Error("FIXTURE_OFFLINE");
+  if (lookupMode === "missing") return [];
+  if (lookupMode === "deferred") await new Promise<void>((done) => { releaseLookup = done; });
+  return [{ id: "qa", name: "QA Dragon", nameEn: "QA Dragon", slug: "qa", price: 20, image: lookupImage, isOrderable: true, variants: [] },
     { id: "qa-sizes", name: "QA Dragon", nameEn: "QA Dragon", slug: "qa", price: 20, image: "/placeholder.svg", isOrderable: true,
     variants: [{ id: "small", labelUa: "S", labelEn: "Small", price: 25, noteUa: null, noteEn: null }] }];
 }
@@ -26,5 +34,5 @@ export function Image({ fill: _fill, sizes: _sizes, unoptimized: _unoptimized, .
   void _fill; void _sizes; void _unoptimized;
   // Keep all image traffic inside the fixture origin.
   // eslint-disable-next-line @next/next/no-img-element -- Deliberate stub of Next Image in the isolated browser fixture.
-  return <img {...props} src="/placeholder.svg" alt={props.alt ?? ""} />;
+  return <img {...props} data-media-source={props.src} src="/placeholder.svg" alt={props.alt ?? ""} />;
 }

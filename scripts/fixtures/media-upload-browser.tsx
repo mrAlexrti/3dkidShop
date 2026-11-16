@@ -38,8 +38,7 @@ async function complete(name: string, success: boolean) {
   await until(() => fixture.calls === before + 1);
   check(input(name).disabled, "URL editing must pause during upload");
   check(document.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled, "Save must pause during upload");
-  await until(() => !!wrapper(name).querySelector("progress"));
-  check(wrapper(name).querySelector<HTMLProgressElement>("progress")?.value === 50, "Progress not shown");
+  await until(() => wrapper(name).querySelector<HTMLProgressElement>("progress")?.value === 50);
   fixture.finish(success);
   await until(() => !input(name).disabled);
 }

@@ -12,10 +12,14 @@ import type { Prisma } from "@prisma/client";
 const blocked = () => { throw new Error("UNEXPECTED_EFFECT"); };
 let admin = true; let data: Record<string, unknown> = {}; let creates = 0;
 const action = sourceModule<typeof import("../src/lib/actions/products")>("src/lib/actions/products.ts", {
+  "@/lib/media-lifecycle": { lockMediaWrites: async () => {}, assertMediaAttachable: async () => {}, enqueueSupersededMedia: async () => {} },
+  "@/lib/media-lifecycle-policy": { RetiredMediaError: class extends Error {} },
+  "@/lib/media-cleanup-after": { scheduleProductMediaCleanup: () => {} },
   "@/lib/product-slug": slugs, zod: { z }, "next/cache": { revalidatePath: () => {} }, "@/lib/actions/require-admin": { requireAdmin: async () => { if (!admin) throw new Error("UNAUTHORIZED"); } },
   "@/lib/product-media": { optionalHoverGifUrl: z.string().optional(), updateMainProductImage: async () => {} },
   "@/lib/product-variants": variants, "@/lib/product-size-admin": { syncProductSizes: async () => {} },
   "@/lib/prisma": { prisma: { product: { findUnique: async () => ({ slug: "qa-product" }) }, $transaction: async (callback: (tx: unknown) => Promise<void>) => callback({ product: {
+    findUnique: async () => ({ images: [], hoverGifUrl: null }),
     create: async (input: Prisma.ProductCreateArgs) => { data = input.data; creates++; return { id: "qa" }; },
     update: async (input: Prisma.ProductUpdateArgs) => { data = input.data; },
   } }) } },

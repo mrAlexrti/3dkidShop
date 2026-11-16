@@ -30,6 +30,7 @@ import * as resolvers from "@hookform/resolvers/zod";
 import * as validation from "../src/lib/validations/checkout";
 import { heroAssets } from "../src/lib/hero-assets";
 import { sourceModule } from "./source-module";
+import * as cartReconciliation from "../src/lib/cart-reconciliation";
 
 async function verify() {
   const h = React.createElement;
@@ -73,6 +74,7 @@ async function verify() {
     "next/link": { default: link, __esModule: true }, "next/navigation": { usePathname: () => pathname,
       useSearchParams: () => params, useRouter: () => ({ push: blocked, refresh: blocked }), notFound: blocked },
     "@/lib/utils": utils, "@/lib/product-content": productContent, "@/lib/product-media": media,
+    "@/lib/cart-reconciliation": cartReconciliation,
     "@/lib/i18n": { translations },
     "@/lib/product-variants": variants, "@/lib/cart-items": cartItems, "@/lib/cart-limits": limits, "@/components/product/product-description": { ProductDescription }, "@/lib/category-name": categoryNames, "@/lib/site-content": content,
     "@/store/lang-store": language, "@/store/cart-store": { useCartStore: (selector?: (s: typeof cartState) => unknown) => {

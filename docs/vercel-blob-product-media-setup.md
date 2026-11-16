@@ -19,7 +19,7 @@ This implementation uses `upload()` and `handleUpload()` from `@vercel/blob/clie
 
 OIDC alone does **not** configure this particular flow. Vercel supports OIDC through the distinct `uploadPresigned()` / `handleUploadPresigned()` flow; adopting it would be a separate implementation change. See the [official authentication and client-upload reference](https://vercel.com/docs/vercel-blob/using-blob-sdk#authentication).
 
-No other application environment variable is required for the implemented flow. Do not enable uploads by putting a persistent storage token into client code.
+No other application environment variable is required for uploads. Batch 1.7.5A cleanup is separately disabled by default and requires both the server-only `PRODUCT_MEDIA_CLEANUP_ENABLED=true` opt-in and a matching `PRODUCT_MEDIA_CLEANUP_SCOPE` approval **after** the [safe activation checks](batch-1.7.5a-media-cleanup.md#safe-activation-in-a-future-release). A shared Production/Preview connection is not isolation evidence: do not approve or enable cleanup while another environment might reference the store. Do not enable uploads by putting a persistent storage token into client code.
 
 ## Callback reachability
 
@@ -42,9 +42,9 @@ The file input has no form field name: product Save receives URLs and ordinary t
 
 ## Lifecycle and operational limits
 
-Files use immutable collision-resistant paths under `3dkid/product-media/image/` or `3dkid/product-media/animation/`. Updating or clearing a product URL never deletes an asset, including assets referenced by other products. No expiry/automatic-deletion policy is set.
+Files use immutable collision-resistant paths under `3dkid/product-media/image/` or `3dkid/product-media/animation/`. Batch 1.7.5A adds deferred cleanup of replaced or cleared **previously saved** managed media: successful mutation, **at least 30 days** of durable retention, a fresh global reference check and a committed retirement marker are required. Reuse cancels pending retirement, and later removal starts a fresh window. Shared assets and external URLs remain protected. Current cart clients use verified images or local placeholders; indefinitely cached pages and external links may eventually lose old URLs. Permanent historical URLs would require keeping previous assets forever. See the [retention guarantee, cleanup protocol and operational limits](batch-1.7.5a-media-cleanup.md). No store-wide expiry policy is set.
 
-Unsaved uploads remain orphan files. A safe future cleanup process should list only this prefix, compare against **all** saved main/gallery/hover URLs and other content references, report old unreferenced candidates, and require operator review plus a fresh reference check before explicit deletion. Do not delete merely because one product stopped using a URL. No cleanup job or media library is implemented here.
+Unsaved uploads remain orphan files. A safe future orphan cleanup process should list only this prefix, compare against **all** saved main/gallery/hover URLs and other content references, report old unreferenced candidates, and require operator review plus the same retirement/locking protocol before explicit deletion. Do not delete merely because one product stopped using a URL. No orphan cleanup job or media library is implemented here.
 
 The first 32 bytes are checked in the browser and verified as bounded header metadata by the server before authorizing an object path. MIME and byte limits are also included in the Blob grant. This lightweight preflight is not full binary decoding, malware scanning or cryptographic attestation of bytes sent directly by a deliberately modified Admin client. No arbitrary remote URL is fetched for validation.
 

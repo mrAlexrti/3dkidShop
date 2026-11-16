@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { sizeLabel } from "@/lib/product-variants";
+import { cartImageSource } from "@/lib/cart-reconciliation";
 
 export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: boolean }) {
-  const { items } = useCartStore();
+  const cart = useCartStore();
+  const { items } = cart;
   const { t, locale } = useLangStore();
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -34,7 +36,7 @@ export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: 
           <ul className="space-y-3">
             {items.map((item) => <li key={item.id} className="sf-checkout-item flex items-center gap-3">
               <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-white shadow-soft">
-                <Image src={item.image} alt={item.name} fill sizes="56px" className="object-cover" />
+                <Image src={cartImageSource(item, cart)} alt={item.name} fill sizes="56px" className="object-cover" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-2 text-sm font-medium leading-snug">{item.name}</p>
