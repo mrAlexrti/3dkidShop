@@ -18,7 +18,7 @@ export function SizeEditor({ defaults = [], legacySizes = [] }: { defaults?: Siz
   const inputClass = "w-full rounded-xl border border-ink/15 bg-white px-3 py-2 text-sm";
   const payload = state.enabled ? state.sizes.map(({ id, labelUa, labelEn, price, noteUa, noteEn }) => ({ id, labelUa, labelEn, price, noteUa, noteEn })) : [];
 
-  return <fieldset className="space-y-4 rounded-2xl border border-ink/10 p-4">
+  return <fieldset data-field-name="variants" tabIndex={-1} className="min-w-0 space-y-4 rounded-2xl border border-ink/10 p-4">
     <legend className="px-2 font-semibold">{text.title}</legend>
     <p className="text-sm text-ink/60">{text.help}</p>
     <label className="flex items-center gap-2 text-sm">

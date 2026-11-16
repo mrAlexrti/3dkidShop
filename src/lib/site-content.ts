@@ -3,7 +3,23 @@ import { httpMediaUrl } from "@/lib/product-media";
 import { translations, type Locale } from "@/lib/i18n";
 
 const optionalUrl = z.string().trim().pipe(z.union([z.literal(""), httpMediaUrl]));
+export const ABOUT_CONTENT_LIMITS = { slogan: 500, body: 20000, meta_title: 160, meta_description: 320 } as const;
+const aboutText = (limit: number) => z.string().trim().min(1).max(limit);
+// Preserve the authored multiline body, including blank lines, in storage.
+const aboutBody = z.string().min(1).max(ABOUT_CONTENT_LIMITS.body).refine((value) => Boolean(value.trim()), { message: "required" });
+const aboutContentSchema = z.object({
+  about_slogan_ua: aboutText(ABOUT_CONTENT_LIMITS.slogan),
+  about_slogan_en: aboutText(ABOUT_CONTENT_LIMITS.slogan),
+  about_body_ua: aboutBody,
+  about_body_en: aboutBody,
+  about_meta_title_ua: aboutText(ABOUT_CONTENT_LIMITS.meta_title),
+  about_meta_title_en: aboutText(ABOUT_CONTENT_LIMITS.meta_title),
+  about_meta_description_ua: aboutText(ABOUT_CONTENT_LIMITS.meta_description),
+  about_meta_description_en: aboutText(ABOUT_CONTENT_LIMITS.meta_description),
+});
+export const ABOUT_CONTENT_KEYS = Object.keys(aboutContentSchema.shape);
 export const storefrontContentSchema = z.object({
+  ...aboutContentSchema.shape,
   hero_title_ua: z.string().trim().max(500),
   hero_title_en: z.string().trim().max(500),
   hero_subtitle_ua: z.string().trim().max(2000),
@@ -19,6 +35,20 @@ export const storefrontContentSchema = z.object({
 
 export const STOREFRONT_CONTENT_KEYS = Object.keys(storefrontContentSchema.shape);
 export type StorefrontContent = z.infer<typeof storefrontContentSchema>;
+
+export function resolveAboutCopy(content: StorefrontContent, locale: Locale) {
+  const fallback = translations[locale].pages.about;
+  const value = (field: keyof typeof ABOUT_CONTENT_LIMITS, defaultValue: string) => {
+    const saved = content[`about_${field}_${locale}`];
+    return saved?.trim() ? saved : defaultValue;
+  };
+  return {
+    slogan: value("slogan", fallback.slogan),
+    body: value("body", fallback.paragraphs.join("\n\n")),
+    metaTitle: value("meta_title", fallback.metaTitle),
+    metaDescription: value("meta_description", fallback.metaDescription),
+  };
+}
 
 export function resolveHeroCopy(content: StorefrontContent, locale: Locale) {
   return {

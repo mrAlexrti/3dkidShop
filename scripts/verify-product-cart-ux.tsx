@@ -13,6 +13,9 @@ import * as reconciliation from "../src/lib/cart-reconciliation";
 import * as variants from "../src/lib/product-variants";
 import * as media from "../src/lib/product-media";
 import * as slugs from "../src/lib/product-slug";
+import * as adminValidation from "../src/lib/admin-form-validation";
+import * as galleryAdmin from "../src/lib/product-gallery-admin";
+import * as galleryHelpers from "../src/lib/gallery";
 import * as content from "../src/lib/product-content";
 import { translations } from "../src/lib/i18n";
 import { ProductDescription } from "../src/components/product/product-description";
@@ -203,6 +206,7 @@ async function verify() {
   for (const existing of [false, true]) {
     const states: unknown[] = []; let cursor = 0;
     const { ProductForm } = sourceModule<typeof import("../src/components/admin/product-form")>("src/components/admin/product-form.tsx", {
+      "@/components/admin/admin-form": { AdminForm: "form", AdminFieldError: "div", AdminSaveButton: "button" }, "@/components/admin/gallery-editor": { GalleryEditor: "div" },
       react: { Fragment: React.Fragment, useRef: (value: unknown) => ({ current: value }), useTransition: () => [false, () => {}], useState: (value: unknown) => {
         const index = cursor++; if (!(index in states)) states[index] = value;
         return [states[index], (update: unknown) => { states[index] = typeof update === "function" ? update(states[index]) : update; }];
@@ -224,6 +228,7 @@ async function verify() {
 
   let admin = true; let collision = false; let writes = 0;
   const actions = sourceModule<typeof import("../src/lib/actions/products")>("src/lib/actions/products.ts", {
+    "@/lib/admin-form-validation": adminValidation, "@/lib/product-gallery-admin": galleryAdmin, "@/lib/gallery": galleryHelpers,
     "@/lib/media-lifecycle": { lockMediaWrites: async () => {}, assertMediaAttachable: async () => {}, enqueueSupersededMedia: async () => {} },
     "@/lib/media-lifecycle-policy": { RetiredMediaError: class extends Error {} },
     "@/lib/media-cleanup-after": { scheduleProductMediaCleanup: () => {} },

@@ -2,7 +2,9 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { updateSiteContent } from "@/lib/actions/categories";
-import { Button } from "@/components/ui/button";
+import { AdminForm, AdminFieldError, AdminSaveButton } from "@/components/admin/admin-form";
+import { AboutContentFields } from "@/components/admin/about-content-fields";
+import { ABOUT_CONTENT_KEYS } from "@/lib/site-content";
 import { MediaUrlField } from "@/components/admin/media-url-field";
 import { getT } from "@/lib/i18n-server";
 import { translations } from "@/lib/i18n";
@@ -20,6 +22,8 @@ export default async function AdminContentPage() {
 
   const content = await prisma.siteContent.findMany();
   const map = Object.fromEntries(content.map((c) => [c.key, c.value]));
+  // Only public About copy belongs in client editor props, never the private ledger.
+  const aboutContent = Object.fromEntries(content.filter((row) => ABOUT_CONTENT_KEYS.includes(row.key)).map((row) => [row.key, row.value]));
   const currentFont = resolveFontTheme(map[SITE_FONT_KEY]);
 
   const inputClass =
@@ -30,7 +34,7 @@ export default async function AdminContentPage() {
       <h1 className="font-display text-3xl">{tc.title}</h1>
       <p className="mt-2 text-ink/60">{tc.subtitle}</p>
 
-      <form action={updateSiteContent} className="glass mt-6 max-w-3xl space-y-8 rounded-xl2 p-4 shadow-soft sm:p-6">
+      <AdminForm action={updateSiteContent} className="glass mt-6 max-w-3xl space-y-8 rounded-xl2 p-4 shadow-soft sm:p-6">
         <fieldset className="space-y-4">
           <legend className="mb-4 text-lg font-semibold">{tc.heroText}</legend>
           {(["ua", "en"] as const).map((locale) => (
@@ -39,10 +43,12 @@ export default async function AdminContentPage() {
                 <label htmlFor={`hero_title_${locale}`} className="mb-1 block text-sm font-medium">{tc.heroTitle} ({locale.toUpperCase()})</label>
                 <input id={`hero_title_${locale}`} name={`hero_title_${locale}`} defaultValue={map[`hero_title_${locale}`]} maxLength={500}
                   placeholder={translations[locale].home.hero.title} className={inputClass} />
+                <AdminFieldError name={`hero_title_${locale}`} />
               </div>
               <div>
                 <label htmlFor={`hero_subtitle_${locale}`} className="mb-1 block text-sm font-medium">{tc.heroSubtitle} ({locale.toUpperCase()})</label>
                 <textarea id={`hero_subtitle_${locale}`} name={`hero_subtitle_${locale}`} defaultValue={map[`hero_subtitle_${locale}`]} maxLength={2000} rows={2} className={inputClass} />
+                <AdminFieldError name={`hero_subtitle_${locale}`} />
               </div>
             </div>
           ))}
@@ -51,14 +57,16 @@ export default async function AdminContentPage() {
         <fieldset className="space-y-5">
           <legend className="mb-4 text-lg font-semibold">{tc.heroImages}</legend>
           {heroAssets.map((asset, index) => <MediaUrlField key={asset.key} name={asset.key} label={`${tc.heroImage} ${index + 1}`}
-            help={tc.heroImageHint} defaultValue={map[asset.key]} fallback={asset.src} />)}
+            help={t.admin.media.imageHelp} defaultValue={map[asset.key]} fallback={asset.src} uploadEnabled />)}
         </fieldset>
+        <AboutContentFields content={aboutContent} />
         <fieldset className="space-y-4">
           <legend className="mb-4 text-lg font-semibold">{tc.socials}</legend>
           {(["instagram", "telegram", "tiktok", "youtube"] as const).map((network) => (
             <div key={network}>
               <label htmlFor={`social_${network}`} className="mb-1 block text-sm font-medium">{tc.socialUrl.replace("{network}", t.footer.social[network])}</label>
               <input id={`social_${network}`} name={`social_${network}`} type="url" pattern="https?://.*" defaultValue={map[`social_${network}`]} placeholder="https://…" className={inputClass} />
+              <AdminFieldError name={`social_${network}`} />
             </div>
           ))}
           <p className="text-xs text-ink/60">{tc.socialHint}</p>
@@ -72,11 +80,12 @@ export default async function AdminContentPage() {
               </option>
             ))}
           </select>
+          <AdminFieldError name={SITE_FONT_KEY} />
           <p className="mt-1 text-xs text-ink/40">{tc.fontHint}</p>
         </div>
-        <Button type="submit">{tc.save}</Button>
-      </form>
-      <form action={updateNotificationSettings} className="glass mt-6 max-w-3xl space-y-6 rounded-xl2 p-4 shadow-soft sm:p-6">
+        <AdminSaveButton>{tc.save}</AdminSaveButton>
+      </AdminForm>
+      <AdminForm action={updateNotificationSettings} className="glass mt-6 max-w-3xl space-y-6 rounded-xl2 p-4 shadow-soft sm:p-6">
         <h2 className="font-display text-xl">{t.notifications.title}</h2>
         <p className="text-sm text-ink/60">{t.notifications.description}</p>
         <div className="grid gap-6 sm:grid-cols-2">
@@ -88,8 +97,8 @@ export default async function AdminContentPage() {
             </label>)}
           </fieldset>)}
         </div>
-        <Button type="submit">{t.notifications.save}</Button>
-      </form>
+        <AdminSaveButton>{t.notifications.save}</AdminSaveButton>
+      </AdminForm>
     </div>
   );
 }

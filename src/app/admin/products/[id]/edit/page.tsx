@@ -40,6 +40,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
             isOrderable: product.isOrderable,
             categoryId: product.categoryId,
             imageUrl: product.images[0]?.url,
+            images: product.images.map(({ id, url, alt }) => ({ id, url, alt })),
             hoverGifUrl: product.hoverGifUrl,
             isFeatured: product.isFeatured,
             isNew: product.isNew,

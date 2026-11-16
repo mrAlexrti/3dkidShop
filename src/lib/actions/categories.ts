@@ -10,6 +10,8 @@ import { SITE_FONT_KEY } from "@/lib/site-settings";
 import { storefrontContentSchema, STOREFRONT_CONTENT_KEYS } from "@/lib/site-content";
 import { assertMediaAttachable, enqueueSupersededMedia, lockMediaWrites, MEDIA_TRANSACTION_OPTIONS } from "@/lib/media-lifecycle";
 import { scheduleProductMediaCleanup } from "@/lib/media-cleanup-after";
+import { AdminInputError, validationResult, isUniqueFieldError, type AdminFormResult } from "@/lib/admin-form-validation";
+import { RetiredMediaError } from "@/lib/media-lifecycle-policy";
 
 const categorySchema = z.object({
   name: z.string().trim().min(2),
@@ -26,6 +28,16 @@ function revalidateCategoryViews() {
   revalidatePath("/catalog");
   revalidatePath("/admin/categories");
 }
+function categoryError(error: unknown): AdminFormResult {
+  if (error instanceof AdminInputError) return { error: "validation", fieldErrors: { [error.field]: error.reason } };
+  if (error instanceof RetiredMediaError) return { error: "mediaRetired" };
+  if (error && typeof error === "object" && "code" in error) {
+    if (isUniqueFieldError(error, "slug")) return { error: "slugDuplicate" };
+    if (error.code === "P2003") return { error: "validation", fieldErrors: { parentId: "parentInvalid" } };
+    if (error.code === "P2025") return { error: "notFound" };
+  }
+  console.warn("admin_category_or_content_save_failed"); return { error: "saveFailed" };
+}
 
 async function assertValidParent(
   tx: Prisma.TransactionClient,
@@ -37,30 +49,32 @@ async function assertValidParent(
   let cursorId: string | null = parentId;
   let depth = 0;
   while (cursorId) {
-    if (cursorId === categoryId) throw new Error("Категория не может быть собственным предком");
+    if (cursorId === categoryId) throw new AdminInputError("parentId", "parentInvalid");
 
     const cursor: { id: string; parentId: string | null } | null = await tx.category.findUnique({
       where: { id: cursorId },
       select: { id: true, parentId: true },
     });
-    if (!cursor) throw new Error("Родительская категория не существует");
+    if (!cursor) throw new AdminInputError("parentId", "parentInvalid");
 
     if (depth === 0 && cursor.parentId !== null) {
-      throw new Error("Разрешён только один уровень подкатегорий");
+      throw new AdminInputError("parentId", "parentInvalid");
     }
 
     cursorId = cursor.parentId;
     depth += 1;
-    if (depth > 100) throw new Error("Обнаружен цикл категорий");
+    if (depth > 100) throw new AdminInputError("parentId", "parentInvalid");
   }
 }
 
-export async function createCategory(formData: FormData) {
+export async function createCategory(formData: FormData): Promise<AdminFormResult> {
   await requireAdmin();
-  const parsed = categorySchema.parse(Object.fromEntries(formData.entries()));
+  const result = categorySchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!result.success) return validationResult(result.error);
+  const parsed = result.data;
   const parentId = parsed.parentId || null;
 
-  await prisma.$transaction(async (tx) => {
+  try { await prisma.$transaction(async (tx) => {
     await lockMediaWrites(tx);
     await assertMediaAttachable(tx, [parsed.imageUrl, parsed.description]);
     await assertValidParent(tx, parentId);
@@ -75,27 +89,29 @@ export async function createCategory(formData: FormData) {
         order: parsed.order,
       },
     });
-  }, MEDIA_TRANSACTION_OPTIONS);
+  }, MEDIA_TRANSACTION_OPTIONS); } catch (error) { return categoryError(error); }
 
   revalidateCategoryViews();
   scheduleProductMediaCleanup();
 }
 
-export async function updateCategory(id: string, formData: FormData) {
+export async function updateCategory(id: string, formData: FormData): Promise<AdminFormResult> {
   await requireAdmin();
-  const parsed = categorySchema.parse(Object.fromEntries(formData.entries()));
+  const result = categorySchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!result.success) return validationResult(result.error);
+  const parsed = result.data;
   const parentId = parsed.parentId || null;
 
-  await prisma.$transaction(async (tx) => {
+  try { await prisma.$transaction(async (tx) => {
     await lockMediaWrites(tx);
     await assertMediaAttachable(tx, [parsed.imageUrl, parsed.description]);
     const current = await tx.category.findUnique({
       where: { id },
       select: { id: true, imageUrl: true, description: true, children: { select: { id: true }, take: 1 } },
     });
-    if (!current) throw new Error("Категория не существует");
+    if (!current) throw { code: "P2025" };
     if (parentId && current.children.length > 0) {
-      throw new Error("Категория с подкатегориями не может стать подкатегорией");
+      throw new AdminInputError("parentId", "parentInvalid");
     }
 
     await assertValidParent(tx, parentId, id);
@@ -112,7 +128,7 @@ export async function updateCategory(id: string, formData: FormData) {
       },
     });
     await enqueueSupersededMedia(tx, [current.imageUrl, current.description], [parsed.imageUrl, parsed.description]);
-  }, MEDIA_TRANSACTION_OPTIONS);
+  }, MEDIA_TRANSACTION_OPTIONS); } catch (error) { return categoryError(error); }
 
   revalidateCategoryViews();
   scheduleProductMediaCleanup();
@@ -139,20 +155,22 @@ export async function deleteCategory(id: string) {
   scheduleProductMediaCleanup();
 }
 
-export async function updateSiteContent(formData: FormData) {
+export async function updateSiteContent(formData: FormData): Promise<AdminFormResult> {
   await requireAdmin();
 
   const raw = Object.fromEntries(formData.entries());
-  const entries: Record<string, string> = storefrontContentSchema.parse(
+  const result = storefrontContentSchema.safeParse(
     Object.fromEntries(Object.entries(raw).filter(([key]) => STOREFRONT_CONTENT_KEYS.includes(key)))
   );
+  if (!result.success) return validationResult(result.error);
+  const entries: Record<string, string> = result.data;
   if (typeof raw[SITE_FONT_KEY] === "string") entries[SITE_FONT_KEY] = raw[SITE_FONT_KEY];
   const siteFont = entries[SITE_FONT_KEY];
   if (siteFont !== undefined && !isFontThemeId(siteFont)) {
-    throw new Error("Недопустимая тема шрифта");
+    return { error: "validation", fieldErrors: { [SITE_FONT_KEY]: "invalid" } };
   }
 
-  await prisma.$transaction(async (tx) => {
+  try { await prisma.$transaction(async (tx) => {
     await lockMediaWrites(tx);
     await assertMediaAttachable(tx, Object.values(entries));
     const previous = await tx.siteContent.findMany({ where: { key: { in: Object.keys(entries) } }, select: { value: true } });
@@ -164,9 +182,10 @@ export async function updateSiteContent(formData: FormData) {
       });
     }
     await enqueueSupersededMedia(tx, previous.map((row) => row.value), Object.values(entries));
-  }, MEDIA_TRANSACTION_OPTIONS);
+  }, MEDIA_TRANSACTION_OPTIONS); } catch (error) { return categoryError(error); }
 
   revalidatePath("/", "layout");
   revalidatePath("/admin/content");
+  revalidatePath("/about");
   scheduleProductMediaCleanup();
 }

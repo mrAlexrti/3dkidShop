@@ -93,7 +93,7 @@ export default async function ProductPage({
       id: { not: product.id },
       isActive: true,
     },
-    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 1 }, options: { select: { name: true, values: { select: { price: true } } } } },
+    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 10 }, options: { select: { name: true, values: { select: { price: true } } } } },
     take: 4,
   });
 
@@ -151,6 +151,7 @@ export default async function ProductPage({
           hoverGifUrl: p.hoverGifUrl,
           price: startingPrice(p.price, p.options),
           image: p.images[0]?.url ?? "/images/placeholder.svg",
+          images: p.images.map(({ id, url, alt }) => ({ id, url, alt })),
           isNew: p.isNew,
           hasOptions: hasConfiguredSizes(p.options),
           isOrderable: p.isOrderable,

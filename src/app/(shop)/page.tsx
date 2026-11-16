@@ -9,7 +9,7 @@ export const revalidate = 60;
 async function getHomeData() {
   return prisma.product.findMany({
     where: { isActive: true },
-    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 1 }, options: { select: { name: true, values: { select: { price: true } } } } },
+    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 10 }, options: { select: { name: true, values: { select: { price: true } } } } },
     take: 12,
     orderBy: [{ createdAt: "desc" }, { id: "asc" }],
   });
@@ -27,6 +27,7 @@ export default async function HomePage() {
     price: startingPrice(product.price, product.options),
     oldPrice: product.oldPrice ? Number(product.oldPrice) : null,
     image: product.images[0]?.url ?? "/images/placeholder.svg",
+    images: product.images.map(({ id, url, alt }) => ({ id, url, alt })),
     isNew: product.isNew,
     hasOptions: hasConfiguredSizes(product.options),
     isOrderable: product.isOrderable,

@@ -39,9 +39,23 @@ export async function assertMediaAttachable(tx: Prisma.TransactionClient, values
 
 export async function enqueueSupersededMedia(tx: Prisma.TransactionClient, previous: (string | null | undefined)[], next: (string | null | undefined)[] = []) {
   const retained = new Set(mediaReferences(next, true));
-  for (const url of mediaReferences(previous).filter((value) => !retained.has(value))) {
-    // Completed retirement is permanent; repeated mutations do not re-delete it.
+  const candidates = mediaReferences(previous).filter((value) => !retained.has(value));
+  if (!candidates.length) return;
+  let referenced: Set<string>;
+  try { referenced = await readMediaReferences(tx); }
+  catch (error) {
+    // An oversized reference inventory retains files without blocking Save.
+    if (error instanceof Error && error.message === "MEDIA_REFERENCE_SCAN_LIMIT") { log("media_cleanup_enqueue_scan_limit"); return; }
+    throw error;
+  }
+  for (const url of candidates) {
+    // Retiring/deleted markers and uncertain retries are permanent protections.
     if (await tx.siteContent.findUnique({ where: { key: retiredKey(url) }, select: { key: true } })) continue;
+    if (referenced.has(url)) {
+      await tx.siteContent.deleteMany({ where: { key: queueKey(url) } });
+      continue;
+    }
+    // Completed retirement is permanent; repeated mutations do not re-delete it.
     const job: Job = { version: 2, url, retentionStartedAt: null, attempts: 0, nextAttemptAt: 0, leaseUntil: 0, claim: null };
     // A later removal (including the last shared reference) earns a fresh full
     // retention period. Only an unclaimed candidate can be reset this way.
@@ -94,7 +108,7 @@ function parseJob(key: string, value: string): Job | null {
   } catch { return null; }
 }
 
-async function stillReferenced(tx: Prisma.TransactionClient, url: string) {
+async function readMediaReferences(tx: Prisma.TransactionClient) {
   // Bounded, conservative projections include inactive products and every gallery
   // image. A scan limit/error defers cleanup; it can never authorize deletion.
   const [images, products, categories, content, testimonials] = await Promise.all([
@@ -105,9 +119,9 @@ async function stillReferenced(tx: Prisma.TransactionClient, url: string) {
     tx.review.findMany({ select: { avatarUrl: true, text: true }, take: MAX_SCAN + 1 }),
   ]);
   if ([images, products, categories, content, testimonials].some((rows) => rows.length > MAX_SCAN)) throw new Error("MEDIA_REFERENCE_SCAN_LIMIT");
-  return mediaReferences([...images.map((row) => row.url), ...products.flatMap((row) => [row.hoverGifUrl, row.description, row.descriptionEn]),
+  return new Set(mediaReferences([...images.map((row) => row.url), ...products.flatMap((row) => [row.hoverGifUrl, row.description, row.descriptionEn]),
     ...categories.flatMap((row) => [row.imageUrl, row.description]), ...content.map((row) => row.value),
-    ...testimonials.flatMap((row) => [row.avatarUrl, row.text])], true).includes(url);
+    ...testimonials.flatMap((row) => [row.avatarUrl, row.text])], true));
 }
 
 async function claimJob(key: string, host: string): Promise<Job | null> {
@@ -124,7 +138,7 @@ async function claimJob(key: string, host: string): Promise<Job | null> {
     if (job.nextAttemptAt > now || job.leaseUntil > now) return null;
     const retired = await tx.siteContent.findUnique({ where: { key: retiredKey(job.url) } });
     if (retired && JSON.parse(retired.value).state === "deleted") { await tx.siteContent.deleteMany({ where: { key } }); return null; }
-    if (await stillReferenced(tx, job.url)) {
+    if ((await readMediaReferences(tx)).has(job.url)) {
       if (!retired) {
         // A future removal by any participating writer re-enqueues the last reference.
         await tx.siteContent.deleteMany({ where: { key } });

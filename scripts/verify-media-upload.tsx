@@ -166,6 +166,7 @@ async function verify() {
     const state: unknown[] = []; let cursor = 0; const effects: (() => void | (() => void))[] = [];
     const busyEvents: boolean[] = [];
     const { MediaUrlField } = sourceModule<typeof import("../src/components/admin/media-url-field")>("src/components/admin/media-url-field.tsx", {
+      "@/components/admin/admin-form": { AdminFieldError: () => null, useAdminForm: () => ({ pending: false, uploadStateChanged: () => {} }) },
       react: { useState: (initial: unknown) => { const index = cursor++; if (!(index in state)) state[index] = initial;
         return [state[index], (value: unknown) => { state[index] = value; }]; },
         useRef: (initial: unknown) => { const index = cursor++; if (!(index in state)) state[index] = { current: initial }; return state[index]; },
@@ -203,6 +204,7 @@ async function verify() {
   // Actual ProductForm action boundary: an upload cannot submit the product.
   let saves = 0; const state: unknown[] = []; let cursor = 0;
   const form = sourceModule<typeof import("../src/components/admin/product-form")>("src/components/admin/product-form.tsx", {
+    "@/components/admin/admin-form": { AdminForm: "safe-admin-form", AdminFieldError: "field-error", AdminSaveButton: "save-button" }, "@/components/admin/gallery-editor": { GalleryEditor: "gallery-editor" },
     react: { Fragment: React.Fragment, useTransition: () => [false, (callback: () => void) => callback()],
       useState: (initial: unknown) => { const index = cursor++; if (!(index in state)) state[index] = initial; return [state[index], (value: unknown) => { state[index] = value; }]; },
       useRef: (initial: unknown) => { const index = cursor++; if (!(index in state)) state[index] = { current: initial }; return state[index]; },
@@ -211,12 +213,10 @@ async function verify() {
     "@/components/admin/media-url-field": { MediaUrlField: "media-field" }, "@/components/admin/size-editor": { SizeEditor: "size-editor" }, "@/components/ui/button": { Button: "button" },
   });
   const renderForm = () => { cursor = 0; return elements(form.ProductForm({ categories: [], action: async () => { saves++; } })); };
-  const fields = renderForm().filter((node) => node.type === "media-field"); assert.equal(fields.length, 2);
-  const update = fields[0].props.onUploadStateChange as (name: string, busy: boolean) => void;
-  update("imageUrl", true); (renderForm()[0].props.action as (data: FormData) => void)(new FormData()); assert.equal(saves, 0);
-  update("imageUrl", false); assert.equal(saves, 0);
+  const fields = renderForm().filter((node) => node.type === "media-field"); assert.equal(fields.length, 1); assert.equal(fields[0].props.name, "hoverGifUrl");
+  assert.equal(renderForm().filter((node) => node.type === "gallery-editor").length, 1); assert.equal(saves, 0);
   (renderForm()[0].props.action as (data: FormData) => void)(new FormData()); await flush(); assert.equal(saves, 1);
-  pass("product attachment changes only on explicit Save; active upload also blocks keyboard/form action submission");
+  pass("product delegates explicit Save to the guarded Admin form; static gallery and hover animation remain separate (live browser suite covers upload submission guards)");
 
   const source = readFileSync("src/app/api/product-media/upload/route.ts", "utf8");
   assert.ok(!/prisma|\bdel\s*\(/.test(source));

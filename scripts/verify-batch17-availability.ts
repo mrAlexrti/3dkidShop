@@ -5,6 +5,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { z } from "zod";
 import * as slugs from "../src/lib/product-slug";
 import * as variants from "../src/lib/product-variants";
+import * as media from "../src/lib/product-media";
+import * as adminValidation from "../src/lib/admin-form-validation";
+import * as galleryAdmin from "../src/lib/product-gallery-admin";
+import * as galleryHelpers from "../src/lib/gallery";
 import { translations } from "../src/lib/i18n";
 import { sourceModule } from "./source-module";
 import type { Prisma } from "@prisma/client";
@@ -12,11 +16,12 @@ import type { Prisma } from "@prisma/client";
 const blocked = () => { throw new Error("UNEXPECTED_EFFECT"); };
 let admin = true; let data: Record<string, unknown> = {}; let creates = 0;
 const action = sourceModule<typeof import("../src/lib/actions/products")>("src/lib/actions/products.ts", {
+  "@/lib/admin-form-validation": adminValidation, "@/lib/product-gallery-admin": galleryAdmin, "@/lib/gallery": galleryHelpers,
   "@/lib/media-lifecycle": { lockMediaWrites: async () => {}, assertMediaAttachable: async () => {}, enqueueSupersededMedia: async () => {} },
   "@/lib/media-lifecycle-policy": { RetiredMediaError: class extends Error {} },
   "@/lib/media-cleanup-after": { scheduleProductMediaCleanup: () => {} },
   "@/lib/product-slug": slugs, zod: { z }, "next/cache": { revalidatePath: () => {} }, "@/lib/actions/require-admin": { requireAdmin: async () => { if (!admin) throw new Error("UNAUTHORIZED"); } },
-  "@/lib/product-media": { optionalHoverGifUrl: z.string().optional(), updateMainProductImage: async () => {} },
+  "@/lib/product-media": { ...media, updateMainProductImage: async () => {} },
   "@/lib/product-variants": variants, "@/lib/product-size-admin": { syncProductSizes: async () => {} },
   "@/lib/prisma": { prisma: { product: { findUnique: async () => ({ slug: "qa-product" }) }, $transaction: async (callback: (tx: unknown) => Promise<void>) => callback({ product: {
     findUnique: async () => ({ images: [], hoverGifUrl: null }),
@@ -39,6 +44,7 @@ async function verify() {
   for (const locale of ["ua", "en"] as const) {
     const t = translations[locale];
     const { ProductForm } = sourceModule<typeof import("../src/components/admin/product-form")>("src/components/admin/product-form.tsx", {
+      "@/components/admin/admin-form": { AdminForm: ({ children }: { children: React.ReactNode }) => React.createElement("form", null, children), AdminFieldError: () => null, AdminSaveButton: () => null }, "@/components/admin/gallery-editor": { GalleryEditor: () => null },
       "@/lib/product-slug": slugs, react: React, "react/jsx-runtime": jsxRuntime, "next/navigation": { useRouter: () => ({ push: blocked }) }, sonner: { toast: { success: blocked, error: blocked } },
       "@/components/ui/button": { Button: (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => React.createElement("button", props) },
       "@/store/lang-store": { useLangStore: () => ({ t, locale }) }, "@/components/admin/media-url-field": { MediaUrlField: () => null }, "@/components/admin/size-editor": { SizeEditor: () => null },

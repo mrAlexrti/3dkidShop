@@ -3,14 +3,15 @@
 import assert from "node:assert/strict";
 import * as crypto from "node:crypto";
 import { z } from "zod";
-import * as React from "react";
-import * as jsx from "react/jsx-runtime";
 import { sourceModule } from "./source-module";
 import * as policy from "../src/lib/media-lifecycle-policy";
 import * as media from "../src/lib/product-media";
 import * as slugs from "../src/lib/product-slug";
 import * as variants from "../src/lib/product-variants";
 import { translations } from "../src/lib/i18n";
+import * as adminValidation from "../src/lib/admin-form-validation";
+import * as galleryAdmin from "../src/lib/product-gallery-admin";
+import * as galleryHelpers from "../src/lib/gallery";
 
 // This small query interpreter intentionally accepts varying Prisma projections.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -50,6 +51,7 @@ function matches(row: Row, where: Row = {}): boolean {
     if (key === "OR") return (value as Row[]).some((part) => matches(row, part));
     if (value && typeof value === "object") {
       if ("in" in value) return value.in.includes(row[key]);
+      if ("notIn" in value) return !value.notIn.includes(row[key]);
       if ("startsWith" in value) return row[key]?.startsWith(value.startsWith);
       if ("contains" in value) return row[key]?.includes(value.contains);
     }
@@ -58,21 +60,23 @@ function matches(row: Row, where: Row = {}): boolean {
 }
 
 function fixture() {
-  let state: State = { product: [], productImage: [], category: [], siteContent: [], review: [] };
+  let state: State = { product: [], productImage: [], category: [], siteContent: [], review: [], orderItem: [] };
   let tail = Promise.resolve(); let active = false; let sequence = 0;
   let failOperation = ""; let failCommit: ((draft: State) => boolean) | undefined;
+  let operationError: unknown = new Error("FIXTURE_WRITE_FAILED");
   let scanError = false; let scanLimit = false; let admin = true; let variantWrites = 0;
   let databaseClock: number | undefined;
   const scheduled: (() => Promise<void>)[] = [];
   const deleted: string[] = [];
   let deleteEffect: (url: string) => Promise<void> = async () => {};
   const models = (getState: () => State, isLocked: () => boolean) => Object.fromEntries(Object.keys(state).map((name) => [name, Object.fromEntries(
-    ["findMany", "findFirst", "findUnique", "create", "update", "upsert", "delete", "deleteMany"].map((method) => [method, async (args: Row = {}) => {
+    ["findMany", "findFirst", "findUnique", "create", "update", "upsert", "delete", "deleteMany", "count"].map((method) => [method, async (args: Row = {}) => {
       assert.ok(isLocked(), `unlocked ${name}.${method}`);
-      if (`${name}.${method}` === failOperation) throw new Error("FIXTURE_WRITE_FAILED");
+      if (`${name}.${method}` === failOperation) throw operationError;
       if (method === "findMany" && name === "productImage" && scanError) throw new Error("FIXTURE_SCAN_FAILED");
       const db = getState(); const table = db[name];
       const found = table.filter((row) => matches(row, args.where));
+      if (method === "count") return found.length;
       if (args.orderBy) {
         const orders: Row[] = Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy];
         found.sort((a, b) => { for (const order of orders) for (const [key, dir] of Object.entries(order)) { if (a[key] !== b[key]) return (a[key] < b[key] ? -1 : 1) * (dir === "desc" ? -1 : 1); } return 0; });
@@ -131,7 +135,8 @@ function fixture() {
   });
   const bindings = { "@/lib/prisma": { prisma }, "next/cache": { revalidatePath: () => {} }, zod: { z },
     "@/lib/actions/require-admin": { requireAdmin: async () => { if (!admin) throw new Error("UNAUTHORIZED"); } },
-    "@/lib/media-lifecycle": lifecycle, "@/lib/media-lifecycle-policy": policy, "@/lib/media-cleanup-after": after };
+    "@/lib/media-lifecycle": lifecycle, "@/lib/media-lifecycle-policy": policy, "@/lib/media-cleanup-after": after,
+    "@/lib/admin-form-validation": adminValidation, "@/lib/product-gallery-admin": galleryAdmin, "@/lib/gallery": galleryHelpers };
   const products = sourceModule<typeof import("../src/lib/actions/products")>("src/lib/actions/products.ts", { ...bindings,
     "@/lib/product-media": media, "@/lib/product-slug": slugs, "@/lib/product-variants": variants,
     "@/lib/product-size-admin": { syncProductSizes: async () => { variantWrites++; } },
@@ -141,14 +146,14 @@ function fixture() {
     "@/lib/site-content": content, "@/lib/site-settings": { SITE_FONT_KEY: "site_font_theme" }, "@/lib/fonts": { isFontThemeId: () => true },
   });
   function seed(id = "p1", image = blob(), hover: string | null = null) {
-    state.product.push({ id, slug: id, name: "Fixture", nameEn: "Fixture", description: "Description", descriptionEn: "Description", hoverGifUrl: hover, categoryId: "c1", price: 123, variants: [{ id: "size-stable", price: 150 }] });
+    state.product.push({ id, slug: id, name: "Fixture", nameEn: "Fixture", description: "Description", descriptionEn: "Description", hoverGifUrl: hover, categoryId: "c1", price: 123, isActive: true, isOrderable: true, variants: [{ id: "size-stable", price: 150 }] });
     state.productImage.push({ id: `${id}-main`, productId: id, order: 0, url: image });
   }
   const queue = () => state.siteContent.filter((row) => row.key.startsWith(policy.CLEANUP_QUEUE_PREFIX));
   const retired = () => state.siteContent.filter((row) => row.key.startsWith(policy.RETIRED_MEDIA_PREFIX));
   return { products, categories, lifecycle, restartWorker: loadLifecycle, seed, deleted, scheduled, queue, retired, BlobNotFoundError,
     get state() { return state; }, get variantWrites() { return variantWrites; },
-    fail: (operation: string) => { failOperation = operation; }, commitFailure: (test?: (draft: State) => boolean) => { failCommit = test; },
+    fail: (operation: string, error: unknown = new Error("FIXTURE_WRITE_FAILED")) => { failOperation = operation; operationError = error; }, commitFailure: (test?: (draft: State) => boolean) => { failCommit = test; },
     scanFailure: (value: boolean) => { scanError = value; }, limit: () => { scanLimit = true; },
     unauthorized: () => { admin = false; }, scheduleFailure: () => { scheduleFails = true; },
     databaseTime: (value: number) => { databaseClock = value; },
@@ -207,7 +212,7 @@ async function verify() {
 
   const reuse = fixture(); reuse.seed(); await reuse.products.updateProduct("p1", form(blob(2))); await reuse.drain();
   const queuedBefore = structuredClone(reuse.queue());
-  reuse.fail("product.update"); await assert.rejects(reuse.products.updateProduct("p1", form(blob())));
+  reuse.fail("product.update"); assert.deepEqual(await reuse.products.updateProduct("p1", form(blob())), { error: "saveFailed" });
   assert.deepEqual(reuse.queue(), queuedBefore); reuse.fail("");
   clock += RETENTION - 1; await reuse.products.updateProduct("p1", form(blob()));
   assert.equal(reuse.queue().some((row) => JSON.parse(row.value).url === blob()), false);
@@ -239,7 +244,8 @@ async function verify() {
     if (mode === "validation") input.set("price", "-1");
     else if (mode === "commit") f.commitFailure(() => true);
     else if (mode === "unauthorized") f.unauthorized(); else f.fail(mode);
-    await assert.rejects(f.products.updateProduct("p1", input));
+    if (mode === "unauthorized") await assert.rejects(f.products.updateProduct("p1", input));
+    else assert.ok((await f.products.updateProduct("p1", input))?.error);
     assert.deepEqual(f.state, before); assert.equal(f.scheduled.length, 0); await f.lifecycle.runProductMediaCleanup(); assert.deepEqual(f.deleted, []);
   }
   pass("invalid/unauthorized Save, image/product/queue write failure and commit failure roll back without deletion");
@@ -279,8 +285,8 @@ async function verify() {
   assert.deepEqual(await concurrent.products.updateProduct("p1", form(`${blob()}?alias=1`)), { error: "mediaRetired" });
   assert.deepEqual(await concurrent.products.updateProduct("p1", form(blob().replace("https:", "http:"))), { error: "mediaRetired" });
   assert.deepEqual(await concurrent.products.createProduct(form(blob(), "", "p3")), { error: "mediaRetired" });
-  await assert.rejects(concurrent.categories.createCategory(categoryForm(blob())), policy.RetiredMediaError);
-  await assert.rejects(concurrent.categories.updateSiteContent(contentForm(blob())), policy.RetiredMediaError);
+  assert.deepEqual(await concurrent.categories.createCategory(categoryForm(blob())), { error: "mediaRetired" });
+  assert.deepEqual(await concurrent.categories.updateSiteContent(contentForm(blob())), { error: "mediaRetired" });
   assert.equal(concurrent.state.productImage[0].url, blob(2));
   await concurrent.lifecycle.runProductMediaCleanup(); assert.equal(concurrent.deleted.length, 1);
   release.resolve(); await running; await concurrent.drain(); assert.equal(concurrent.deleted.length, 1);
@@ -325,7 +331,7 @@ async function verify() {
   await removal.products.deleteProduct("p1"); await removal.products.deleteProduct("p1"); await mature(removal);
   assert.deepEqual(new Set(removal.deleted), new Set([blob(), blob(2, "animation", "gif"), blob(4)])); assert.equal(removal.state.product.length, 1);
   const failedDelete = fixture(); failedDelete.seed(); failedDelete.fail("product.delete");
-  await assert.rejects(failedDelete.products.deleteProduct("p1")); assert.equal(failedDelete.queue().length, 0); assert.equal(failedDelete.scheduled.length, 0);
+  assert.deepEqual(await failedDelete.products.deleteProduct("p1"), { error: "deleteFailed" }); assert.equal(failedDelete.queue().length, 0); assert.equal(failedDelete.scheduled.length, 0);
   pass("product deletion includes the entire gallery and hover, protects shared URLs, repeats safely and queues nothing after FK/write failure");
 
   for (const writer of ["category", "content"]) {
@@ -385,20 +391,75 @@ async function verify() {
   pass("bounded worker drains subsequent passes; ordinary content submissions cannot overwrite internal retirement state");
 
   for (const locale of ["ua", "en"] as const) {
-    const errors: string[] = []; let pending: Promise<void> | undefined;
-    const blocked = () => { throw new Error("UNEXPECTED_NAVIGATION_OR_SUCCESS"); };
-    const { ProductForm } = sourceModule<typeof import("../src/components/admin/product-form")>("src/components/admin/product-form.tsx", {
-      react: { Fragment: React.Fragment, useState: (value: unknown) => [value, () => {}], useRef: (value: unknown) => ({ current: value }),
-        useTransition: () => [false, (callback: () => Promise<void>) => { pending = callback(); }] },
-      "react/jsx-runtime": jsx, "@/lib/product-slug": slugs, "@/store/lang-store": { useLangStore: () => ({ t: translations[locale] }) },
-      "next/navigation": { useRouter: () => ({ push: blocked }) }, sonner: { toast: { success: blocked, error: (value: string) => { errors.push(value); } } },
-      "@/components/ui/button": { Button: "button" }, "@/components/admin/media-url-field": { MediaUrlField: "div" }, "@/components/admin/size-editor": { SizeEditor: "div" },
-    });
-    const element = ProductForm({ categories: [], action: async () => ({ error: "mediaRetired" }) });
-    element.props.action(form()); await pending;
-    assert.deepEqual(errors, [translations[locale].admin.media.retired]);
+    assert.ok(translations[locale].admin.media.retired.length > 20);
+    assert.ok(translations[locale].admin.validation.saveFailed.length > 20);
   }
-  pass("actual Product Save handler shows localized retirement recovery in UA/EN and stays on the unsaved form");
+  pass("UA/EN structured retirement and retry messages remain available to the shared non-resetting Admin form");
+
+  const edited = fixture(); edited.seed(); edited.state.productImage.push({ id: "second", productId: "p1", url: blob(2), order: 1, alt: "Second" });
+  const galleryForm = form(); galleryForm.set("images", JSON.stringify([{ id: "second", url: blob(2), alt: "Primary now" }, { id: "p1-main", url: blob(3), alt: "Updated" }, { url: blob(4), alt: "New" }]));
+  assert.equal(await edited.products.updateProduct("p1", galleryForm), undefined);
+  const ordered = edited.state.productImage.filter((image) => image.productId === "p1").sort((a, b) => a.order - b.order);
+  assert.deepEqual(ordered.map((image) => image.url), [blob(2), blob(3), blob(4)]); assert.equal(ordered[0].id, "second"); assert.equal(ordered[1].id, "p1-main");
+  assert.equal(ordered[0].alt, "Primary now"); assert.equal(edited.variantWrites, 0);
+  assert.equal(edited.queue().length, 1); assert.equal(JSON.parse(edited.queue()[0].value).url, blob());
+  pass("gallery reordering/primary selection and URL updates preserve existing IDs, alt text and variants; only removed URLs become candidates");
+
+  for (const shared of ["same-gallery", "product", "category", "hero"]) {
+    const f = fixture(); f.seed();
+    if (shared === "same-gallery") f.state.productImage.push({ id: "shared-copy", productId: "p1", url: blob(), order: 1 });
+    if (shared === "product") f.seed("p2", blob());
+    if (shared === "category") f.state.category.push({ id: "shared-category", imageUrl: blob() });
+    if (shared === "hero") f.state.siteContent.push({ key: "hero_image_1", value: blob() });
+    const data = form(); data.set("images", JSON.stringify(shared === "same-gallery" ? [{ id: "shared-copy", url: blob() }] : [{ id: "p1-main", url: external }]));
+    assert.equal(await f.products.updateProduct("p1", data), undefined); assert.equal(f.queue().length, 0);
+    await mature(f); assert.equal(f.deleted.length, 0);
+  }
+  pass("removing a gallery row never even schedules retirement while its URL remains in another gallery/product/category/hero reference");
+
+  for (const payload of [[], Array.from({ length: 11 }, () => ({ url: external })), [{ id: "foreign-image", url: external }], [{ id: "p1-main", url: external }, { id: "p1-main", url: external }]]) {
+    const f = fixture(); f.seed(); const before = structuredClone(f.state); const data = form(); data.set("images", JSON.stringify(payload));
+    assert.equal((await f.products.updateProduct("p1", data))?.error, "validation"); assert.deepEqual(f.state, before); assert.equal(f.scheduled.length, 0);
+  }
+  const created = fixture(); const newForm = form(); newForm.set("images", JSON.stringify([{ url: blob(1) }, { url: blob(2) }, { url: blob(3) }]));
+  assert.equal(await created.products.createProduct(newForm), undefined); assert.deepEqual(created.state.productImage.map((image) => image.order), [0, 1, 2]);
+  pass("1–10 photo limit, duplicate/foreign IDs and empty galleries rejected atomically; multiple new images saved in order");
+
+  const stale = fixture(); stale.seed(); const staleBefore = structuredClone(stale.state); const staleForm = form();
+  staleForm.set("images", JSON.stringify([{ id: "p1-main", url: external }])); staleForm.set("imagesSnapshot", "[]");
+  assert.deepEqual(await stale.products.updateProduct("p1", staleForm), { error: "validation", fieldErrors: { images: "galleryOwnership" } });
+  assert.deepEqual(stale.state, staleBefore);
+  staleForm.set("imagesSnapshot", galleryHelpers.gallerySnapshot([{ id: "p1-main", url: blob(), alt: null }]));
+  assert.equal(await stale.products.updateProduct("p1", staleForm), undefined);
+  pass("stale gallery snapshots cannot overwrite newer photos/order; the matching current snapshot saves without replacing IDs");
+
+  const invalid = fixture(); invalid.seed(); const bad = form(); bad.delete("nameEn"); bad.set("variants", "{broken");
+  const invalidResult = await invalid.products.updateProduct("p1", bad);
+  assert.equal(invalidResult?.error, "validation"); assert.ok(invalidResult?.fieldErrors?.nameEn); assert.ok(invalidResult?.fieldErrors?.variants); assert.equal(bad.get("description"), "Description");
+  invalid.fail("product.update", { code: "P2002", meta: { target: ["slug"] } }); assert.deepEqual(await invalid.products.updateProduct("p1", form()), { error: "slugDuplicate" });
+  invalid.fail("product.update", new Error("PRIVATE_DATABASE_CREDENTIAL")); assert.deepEqual(await invalid.products.updateProduct("p1", form()), { error: "saveFailed" });
+  assert.ok(!logs.join(" ").includes("PRIVATE_DATABASE_CREDENTIAL"));
+  pass("missing fields, malformed JSON, duplicate slug and unknown database errors return safe structured results without modifying submitted entries");
+
+  const history = fixture(); history.seed(); history.state.orderItem.push({ id: "historical", productId: "p1", orderId: "order-kept", price: 123 });
+  const protectedBefore = structuredClone(history.state); assert.deepEqual(await history.products.deleteProduct("p1"), { error: "orderHistory" }); assert.deepEqual(history.state, protectedBefore);
+  assert.equal(await history.products.archiveProduct("p1"), undefined); assert.equal(history.state.product[0].isActive, false); assert.equal(history.state.product[0].isOrderable, false);
+  assert.deepEqual(history.state.productImage, protectedBefore.productImage); assert.deepEqual(history.state.orderItem, protectedBefore.orderItem); assert.equal(history.state.product[0].price, 123); assert.equal(history.queue().length, 0);
+  history.unauthorized(); assert.deepEqual(await history.products.archiveProduct("p1"), { error: "forbidden" });
+  assert.deepEqual(await history.products.deleteProduct("p1"), { error: "forbidden" });
+  for (const code of ["P2003", "P2014", "UNKNOWN"]) {
+    const f = fixture(); f.seed(); f.fail("product.delete", { code, message: "SECRET" }); const before = structuredClone(f.state);
+    assert.deepEqual(await f.products.deleteProduct("p1"), { error: code === "UNKNOWN" ? "deleteFailed" : "referenced" }); assert.deepEqual(f.state, before); assert.equal(f.scheduled.length, 0);
+  }
+  pass("protected order history blocks physical deletion; explicit archival changes only availability; racing FK and unknown errors preserve all records and media");
+
+  const analogous = fixture(); const badCategory = categoryForm(external); badCategory.delete("nameEn");
+  assert.ok((await analogous.categories.createCategory(badCategory))?.fieldErrors?.nameEn);
+  analogous.fail("category.create", { code: "P2002", meta: { target: ["slug"] } });
+  assert.deepEqual(await analogous.categories.createCategory(categoryForm(external)), { error: "slugDuplicate" });
+  const badHero = contentForm("javascript:alert(1)"); assert.ok((await analogous.categories.updateSiteContent(badHero))?.fieldErrors?.hero_image_1);
+  assert.equal(analogous.state.category.length, 0); assert.equal(analogous.state.siteContent.length, 0); assert.equal(analogous.scheduled.length, 0);
+  pass("category and hero validation/duplicate errors are structured and leave records, uploaded URL strings and retirement state unchanged");
   console.log(`PASS media lifecycle: ${passed} isolated groups. No live DB, storage, uploads or deletions.`);
 }
 

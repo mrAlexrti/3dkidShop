@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DeleteButton } from "@/components/admin/delete-button";
-import { deleteProduct } from "@/lib/actions/products";
+import { deleteProduct, archiveProduct } from "@/lib/actions/products";
 import { getT } from "@/lib/i18n-server";
 import { Plus, Pencil } from "lucide-react";
 
@@ -66,7 +66,7 @@ export default async function AdminProductsPage() {
                     <Link href={`/admin/products/${p.id}/edit`} className="rounded-full p-2 hover:bg-pink-50">
                       <Pencil size={16} />
                     </Link>
-                    <DeleteButton action={deleteProduct.bind(null, p.id)} />
+                    <DeleteButton action={deleteProduct.bind(null, p.id)} archiveAction={archiveProduct.bind(null, p.id)} />
                   </div>
                 </td>
               </tr>

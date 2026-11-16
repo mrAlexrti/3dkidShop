@@ -92,6 +92,7 @@ export const translations = {
     // Товар
     product: {
       viewImage: "Переглянути зображення",
+      gallery: { previous: "Попереднє фото", next: "Наступне фото", open: "Збільшити фото", close: "Закрити перегляд фото", zoomIn: "Збільшити масштаб", zoomOut: "Зменшити масштаб", position: "Фото {current} з {total}", hint: "Стрілки — змінити фото, Escape — закрити. Збільшене фото можна прокручувати." },
       optionLabels: { "Розмір": "Розмір", "Маленький": "Маленький", "Середній": "Середній", "Великий": "Великий" },
       addToCart:       "Додати до кошика",
       characteristics:"Характеристики",
@@ -346,6 +347,10 @@ export const translations = {
         title:        "Контент сайту",
         subtitle:     "Тексти й зображення головної та посилання на соцмережі",
         heroText: "Тексти головної",
+        about: "Про нас", aboutSlogan: "Головний слоган", aboutBody: "Основний текст", aboutMetaTitle: "SEO-заголовок сторінки", aboutMetaDescription: "SEO-опис сторінки",
+        aboutHelp: "UA та EN редагуються незалежно. Спочатку показано чинний текст сторінки. Усі поля обов’язкові; зміни з’являться після збереження.",
+        aboutBodyHelp: "Звичайний текст без HTML. Порожній рядок розділяє абзаци; один перенос рядка зберігається всередині абзацу.",
+        aboutLimit: "Максимум {max} символів.",
         heroTextHint: "Порожній заголовок використовує стандартний слоган відповідною мовою. Підзаголовок необов'язковий. UA та EN налаштовуються незалежно.",
         heroImages: "Три зображення головної",
         heroImage: "URL зображення",
@@ -362,8 +367,8 @@ export const translations = {
       media: {
         retired: "Цей файл уже вилучається або був вилучений. Завантажте його знову, щоб отримати новий URL.",
         chooseFile: "Обрати локальний файл", upload: "Завантажити файл", uploading: "Завантаження…", checking: "Перевіряємо доступність завантаження…",
-        uploaded: "Файл завантажено. Натисніть «Зберегти», щоб застосувати URL до товару.",
-        imageHelp: "Вкажіть URL зображення або завантажте файл. Зміни застосовуються лише після збереження товару.",
+        uploaded: "Файл завантажено. Натисніть «Зберегти», щоб застосувати URL.",
+        imageHelp: "Вкажіть URL зображення або завантажте файл. Зміни застосовуються лише після збереження форми.",
         imageLimit: "JPG, PNG або WebP, до 5 MB.", animationLimit: "GIF або анімований WebP, до 12 MB.",
         uploadErrors: {
           unsupported: "Цей формат не підтримується. Оберіть файл у форматі, вказаному під полем.",
@@ -376,6 +381,28 @@ export const translations = {
         clear: "Прибрати",
         invalidUrl: "Вкажіть пряме посилання HTTP або HTTPS без облікових даних або залиште поле порожнім.",
         previewError: "Не вдалося завантажити прев'ю. Перевірте посилання.",
+      },
+      validation: {
+        tooLong: "Текст перевищує максимальну довжину, вказану під полем.",
+        summary: "Перевірте позначені поля. Введені дані збережено", required: "Заповніть обов’язкове поле.",
+        invalid: "Перевірте формат, довжину або допустиме значення поля.", slugInvalid: "Slug: малі латинські літери, цифри й одинарні дефіси, до 160 символів.",
+        slugDuplicate: "Цей slug уже використовується. Оберіть інший.", galleryLimit: "Дозволено від 1 до 10 фотографій.",
+        galleryOwnership: "Список фото змінився або містить чуже фото. Перезавантажте товар після збереження своїх URL.",
+        parentInvalid: "Оберіть коректну батьківську категорію без циклів і зайвих рівнів.",
+        saveFailed: "Не вдалося зберегти. Дані залишилися у формі. Перевірте з’єднання та повторіть спробу.",
+        notFound: "Запис уже видалено. Скопіюйте введені дані перед перезавантаженням.",
+      },
+      gallery: {
+        title: "Фотографії товару", photo: "Фото", add: "Додати URL фото", choose: "Обрати кілька фото", upload: "Завантажити обрані фото",
+        limit: "Від 1 до 10 фотографій. Перша — головна. JPG, PNG або WebP до 5 MB кожна. Зміни застосовуються після збереження товару.",
+        primary: "Головне фото", makePrimary: "Зробити головним", up: "Перемістити вище", down: "Перемістити нижче", remove: "Прибрати фото", alt: "Опис фото для доступності (необов’язково)",
+      },
+      deletion: {
+        forbidden: "Для цієї дії потрібен доступ адміністратора. Увійдіть знову та повторіть спробу.",
+        orderHistory: "Товар пов’язаний з історією замовлень. Фізичне видалення заблоковано; можна приховати товар без зміни історії.",
+        referenced: "На товар посилаються захищені записи. Їх не видалено. Можна приховати товар.",
+        deleteFailed: "Не вдалося видалити товар. Оновіть список і повторіть спробу.", notFound: "Товар уже відсутній. Оновіть список.",
+        archive: "Приховати товар", confirmArchive: "Приховати товар і вимкнути замовлення? Дані та історія залишаться збереженими.", archived: "Товар приховано; історію збережено.",
       },
       product: {
         nameUa:      "Назва українською",
@@ -488,6 +515,7 @@ export const translations = {
     },
     product: {
       viewImage: "View image",
+      gallery: { previous: "Previous photo", next: "Next photo", open: "Enlarge photo", close: "Close photo viewer", zoomIn: "Zoom in", zoomOut: "Zoom out", position: "Photo {current} of {total}", hint: "Arrow keys change photos; Escape closes. Scroll or pan a zoomed photo." },
       optionLabels: { "Розмір": "Size", "Маленький": "Small", "Середній": "Medium", "Великий": "Large" },
       addToCart:       "Add to Cart",
       characteristics: "Specifications",
@@ -728,6 +756,10 @@ export const translations = {
         title:        "Site content",
         subtitle:     "Homepage copy, images, and social links",
         heroText: "Homepage copy",
+        about: "About Us", aboutSlogan: "Main slogan", aboutBody: "Main body text", aboutMetaTitle: "SEO page title", aboutMetaDescription: "SEO meta description",
+        aboutHelp: "UA and EN are edited independently. The current page text is shown initially. All fields are required; changes appear after saving.",
+        aboutBodyHelp: "Plain text without HTML. A blank line separates paragraphs; a single line break is preserved within a paragraph.",
+        aboutLimit: "Maximum {max} characters.",
         heroTextHint: "An empty title uses the default slogan in that language. Subtitles are optional. UA and EN are configured independently.",
         heroImages: "Three homepage images",
         heroImage: "Image URL",
@@ -744,8 +776,8 @@ export const translations = {
       media: {
         retired: "This file is being removed or has already been removed. Upload it again to obtain a new URL.",
         chooseFile: "Choose a local file", upload: "Upload file", uploading: "Uploading…", checking: "Checking upload availability…",
-        uploaded: "File uploaded. Save the product to apply its URL.",
-        imageHelp: "Enter an image URL or upload a file. Changes apply only after saving the product.",
+        uploaded: "File uploaded. Save the form to apply its URL.",
+        imageHelp: "Enter an image URL or upload a file. Changes apply only after saving the form.",
         imageLimit: "JPG, PNG or WebP, up to 5 MB.", animationLimit: "GIF or animated WebP, up to 12 MB.",
         uploadErrors: {
           unsupported: "Unsupported format. Choose a file in one of the formats listed below the field.",
@@ -758,6 +790,28 @@ export const translations = {
         clear: "Remove",
         invalidUrl: "Enter a direct HTTP or HTTPS URL without credentials, or leave this field empty.",
         previewError: "Could not load the preview. Check the URL.",
+      },
+      validation: {
+        tooLong: "The text exceeds the maximum length shown below the field.",
+        summary: "Check the marked fields. Your entries are preserved", required: "Complete this required field.",
+        invalid: "Check the field format, length or allowed value.", slugInvalid: "Slug: lowercase Latin letters, numbers and single hyphens, up to 160 characters.",
+        slugDuplicate: "This slug is already in use. Choose another.", galleryLimit: "Use between 1 and 10 photographs.",
+        galleryOwnership: "The photo list changed or includes a photo from another product. Keep your URLs before reloading.",
+        parentInvalid: "Choose a valid parent category without cycles or additional nesting.",
+        saveFailed: "Could not save. Your entries remain in the form. Check your connection and try again.",
+        notFound: "This record was deleted. Copy your entries before reloading.",
+      },
+      gallery: {
+        title: "Product photographs", photo: "Photo", add: "Add photo URL", choose: "Choose multiple photos", upload: "Upload selected photos",
+        limit: "1–10 photographs. The first is primary. JPG, PNG or WebP, up to 5 MB each. Changes apply only after saving the product.",
+        primary: "Primary photo", makePrimary: "Make primary", up: "Move up", down: "Move down", remove: "Remove photo", alt: "Accessible photo description (optional)",
+      },
+      deletion: {
+        forbidden: "This action requires administrator access. Sign in again and retry.",
+        orderHistory: "This product is linked to order history. Physical deletion is blocked; you can hide it without changing history.",
+        referenced: "Protected records reference this product. They were preserved. You can hide the product.",
+        deleteFailed: "Could not delete the product. Refresh the list and try again.", notFound: "The product is already absent. Refresh the list.",
+        archive: "Hide product", confirmArchive: "Hide the product and disable ordering? Product data and history will be preserved.", archived: "Product hidden; history preserved.",
       },
       product: {
         nameUa:      "Name in Ukrainian",

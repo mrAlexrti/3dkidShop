@@ -6,12 +6,15 @@ import { httpMediaUrl } from "@/lib/product-media";
 import { useLangStore } from "@/store/lang-store";
 import { inspectMediaFile, MEDIA_TYPES, uploadErrorCode, type UploadErrorCode } from "@/lib/media-upload";
 import { mediaUploadsAvailable, uploadProductMedia } from "@/lib/media-upload-client";
+import { AdminFieldError, useAdminForm } from "@/components/admin/admin-form";
 
-export function MediaUrlField({ name, label, help, defaultValue = "", fallback, animated = false, required = false, disabled = false, uploadEnabled = false, onUploadStateChange }: {
+export function MediaUrlField({ name, label, help, defaultValue = "", value: controlledValue, onValueChange, fallback, animated = false, required = false, disabled = false, uploadEnabled = false, onUploadStateChange }: {
   name: string;
   label: string;
   help: string;
   defaultValue?: string;
+  value?: string;
+  onValueChange?: (value: string) => void;
   fallback?: string;
   animated?: boolean;
   required?: boolean;
@@ -21,7 +24,12 @@ export function MediaUrlField({ name, label, help, defaultValue = "", fallback, 
 }) {
   const { t, locale } = useLangStore();
   const text = t.admin.media;
-  const [value, setValue] = useState(defaultValue);
+  const [localValue, setLocalValue] = useState(defaultValue);
+  const value = controlledValue ?? localValue;
+  const setValue = (next: string) => { setLocalValue(next); onValueChange?.(next); };
+  const form = useAdminForm();
+  const register = form.uploadStateChanged;
+  const locked = disabled || form.pending;
   const [failedUrl, setFailedUrl] = useState("");
   const [availability, setAvailability] = useState<"checking" | "available" | "unavailable">("checking");
   const [selected, setSelected] = useState<File | null>(null);
@@ -35,8 +43,8 @@ export function MediaUrlField({ name, label, help, defaultValue = "", fallback, 
   const controller = useRef<AbortController | null>(null);
   const active = useRef(false);
   const selection = useRef(0);
-  const notify = useRef(onUploadStateChange);
-  useEffect(() => { notify.current = onUploadStateChange; }, [onUploadStateChange]);
+  const notify = useRef<(name: string, busy: boolean) => void>((field, busy) => { register(field, busy); onUploadStateChange?.(field, busy); });
+  useEffect(() => { notify.current = (field, busy) => { register(field, busy); onUploadStateChange?.(field, busy); }; }, [onUploadStateChange, register]);
   useEffect(() => {
     if (!uploadEnabled) return;
     const check = new AbortController();
@@ -56,7 +64,7 @@ export function MediaUrlField({ name, label, help, defaultValue = "", fallback, 
     catch (failure) { if (selection.current === version) setError(uploadErrorCode(failure)); }
   }
   async function startUpload() {
-    if (!uploadEnabled || active.current || !selected || !fileReady || disabled || availability !== "available") return;
+    if (!uploadEnabled || active.current || !selected || !fileReady || locked || availability !== "available") return;
     active.current = true; notify.current?.(name, true); setBusy(true); setProgress(0); setError(null); setUploaded(false);
     const request = new AbortController(); controller.current = request;
     try {
@@ -75,8 +83,8 @@ export function MediaUrlField({ name, label, help, defaultValue = "", fallback, 
   const preview = valid ? trimmed : !trimmed ? fallback : undefined;
   return (
     <div>
-      <label htmlFor={name} className="mb-1 block text-sm font-medium">{label}</label>
-      <input ref={urlInput} id={name} name={name} type="url" required={required} disabled={disabled || busy} value={value} onChange={(event) => {
+      <label htmlFor={name} className="mb-1 block text-sm font-medium">{label}{required ? " *" : ""}</label>
+      <input ref={urlInput} id={name} name={name} type="url" required={required} disabled={locked || busy} value={value} onChange={(event) => {
         setValue(event.target.value);
         setUploaded(false);
         event.target.setCustomValidity(event.target.value.trim() && !httpMediaUrl.safeParse(event.target.value).success ? t.admin.media.invalidUrl : "");
@@ -84,12 +92,13 @@ export function MediaUrlField({ name, label, help, defaultValue = "", fallback, 
         aria-describedby={`${name}-help`} placeholder="https://…"
         className="w-full rounded-xl border border-ink/10 bg-white px-4 py-2.5 text-sm outline-none focus:border-pink-400" />
       <p id={`${name}-help`} className="mt-2 text-xs leading-relaxed text-ink/60">{help}</p>
+      <AdminFieldError name={name} />
       {uploadEnabled && <><div className="mt-3 flex flex-wrap items-center gap-2">
-        <input ref={fileInput} id={`${name}-file`} type="file" hidden accept={MEDIA_TYPES[kind].join(",")} disabled={disabled || busy || availability !== "available"}
+        <input ref={fileInput} id={`${name}-file`} type="file" hidden accept={MEDIA_TYPES[kind].join(",")} disabled={locked || busy || availability !== "available"}
           onChange={(event) => { void selectFile(event.target.files?.[0] ?? null); event.target.value = ""; }} />
-        <button type="button" aria-label={`${text.chooseFile}: ${label}`} aria-controls={`${name}-file`} aria-describedby={`${name}-upload-help`} disabled={disabled || busy || availability !== "available"}
+        <button type="button" aria-label={`${text.chooseFile}: ${label}`} aria-controls={`${name}-file`} aria-describedby={`${name}-upload-help`} disabled={locked || busy || availability !== "available"}
           className="min-h-11 rounded-full border border-ink/15 px-4 py-2 text-sm disabled:opacity-50" onClick={() => fileInput.current?.click()}>{text.chooseFile}</button>
-        <button type="button" aria-label={`${busy ? text.uploading : text.upload}: ${label}`} disabled={disabled || busy || !fileReady || availability !== "available"}
+        <button type="button" aria-label={`${busy ? text.uploading : text.upload}: ${label}`} disabled={locked || busy || !fileReady || availability !== "available"}
           className="min-h-11 rounded-full bg-pink-500 px-4 py-2 text-sm text-white disabled:opacity-50" onClick={() => void startUpload()}>{busy ? text.uploading : text.upload}</button>
       </div>
       <p id={`${name}-upload-help`} className="mt-2 text-xs text-ink/60">{animated ? text.animationLimit : text.imageLimit}</p>
@@ -101,7 +110,7 @@ export function MediaUrlField({ name, label, help, defaultValue = "", fallback, 
         {error && <p role="alert">{text.uploadErrors[error]}</p>}
         {uploaded && <p>{text.uploaded}</p>}
       </div></>}
-      {value && <button type="button" aria-label={`${text.clear}: ${label}`} disabled={disabled || busy} className="mt-2 min-h-11 text-sm underline disabled:opacity-50" onClick={() => {
+      {value && <button type="button" aria-label={`${text.clear}: ${label}`} disabled={locked || busy} className="mt-2 min-h-11 text-sm underline disabled:opacity-50" onClick={() => {
         setValue("");
         setUploaded(false); setFailedUrl("");
         urlInput.current?.setCustomValidity("");

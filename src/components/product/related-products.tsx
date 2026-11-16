@@ -8,6 +8,7 @@ type Product = {
   nameEn?: string | null;
   price: number;
   image: string;
+  images?: import("@/lib/gallery").ProductPhoto[];
   hoverGifUrl?: string | null;
   isNew?: boolean;
   hasOptions?: boolean;

@@ -63,7 +63,7 @@ export default async function CatalogPage({
     prisma.product.findMany({
       where,
       orderBy,
-      include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 1 }, options: { select: { name: true, values: { select: { price: true } } } } },
+      include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 10 }, options: { select: { name: true, values: { select: { price: true } } } } },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
@@ -117,6 +117,7 @@ export default async function CatalogPage({
           price:    startingPrice(p.price, p.options),
           oldPrice: p.oldPrice ? Number(p.oldPrice) : null,
           image:    p.images[0]?.url ?? "/images/placeholder.svg",
+          images: p.images.map(({ id, url, alt }) => ({ id, url, alt })),
           isNew:    p.isNew,
           hasOptions: hasConfiguredSizes(p.options),
           isOrderable: p.isOrderable,

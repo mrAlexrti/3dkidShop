@@ -31,8 +31,10 @@ import * as validation from "../src/lib/validations/checkout";
 import { heroAssets } from "../src/lib/hero-assets";
 import { sourceModule } from "./source-module";
 import * as cartReconciliation from "../src/lib/cart-reconciliation";
+import * as galleryHelpers from "../src/lib/gallery";
 
 async function verify() {
+  const aboutOnly = process.argv.includes("--about");
   const h = React.createElement;
   const output = resolve(".next/cache/responsive-qa");
   mkdirSync(output, { recursive: true });
@@ -58,6 +60,7 @@ async function verify() {
     nameEn: i === 0 ? "Extraordinarilylongunbrokenproductnameforwrapping" : "Dragon with moving wings",
     price: 1234, oldPrice: 1450, quantity: 2, isOrderable: i !== 0, isNew: true, hasOptions: i === 1,
     image: "/hero/dragon-v1.webp", variant: sizes[0],
+    images: Array.from({ length: 3 }, (_, index) => ({ id: `photo-${index}`, url: "/hero/dragon-v1.webp", alt: "Product photograph" })),
   }));
 
   let pathname = "/catalog";
@@ -75,6 +78,7 @@ async function verify() {
       useSearchParams: () => params, useRouter: () => ({ push: blocked, refresh: blocked }), notFound: blocked },
     "@/lib/utils": utils, "@/lib/product-content": productContent, "@/lib/product-media": media,
     "@/lib/cart-reconciliation": cartReconciliation,
+    "@/lib/gallery": galleryHelpers,
     "@/lib/i18n": { translations },
     "@/lib/product-variants": variants, "@/lib/cart-items": cartItems, "@/lib/cart-limits": limits, "@/components/product/product-description": { ProductDescription }, "@/lib/category-name": categoryNames, "@/lib/site-content": content,
     "@/store/lang-store": language, "@/store/cart-store": { useCartStore: (selector?: (s: typeof cartState) => unknown) => {
@@ -140,17 +144,26 @@ async function verify() {
   });
   const asyncComponent = async (component: React.ElementType, props: object = {}) =>
     await (component as (props: object) => Promise<React.ReactNode>)(props);
+  let customAbout = false;
+  const aboutPage = load("src/app/(shop)/about/page.tsx", { ...serverBindings,
+    "@/lib/prisma": { prisma: { siteContent: { findMany: async () => customAbout ? [
+      { key: `about_slogan_${locale}`, value: (locale === "ua" ? "Довгийслоганбезпробілів" : "Longunbrokenslogan").repeat(20) },
+      { key: `about_body_${locale}`, value: (locale === "ua" ? "Перший абзац\nНовий рядок\n\nДругий абзац. " : "First paragraph\nNew line\n\nSecond paragraph. ").repeat(20) },
+    ] : [] } } },
+  });
 
   const pages = new Map<string, string>();
   for (locale of ["ua", "en"] as const) {
     const t = language.createLangStore(locale).getState().t;
-    for (const page of ["home", "catalog", "product", "product-long", "cart", "drawer", "checkout", "locker", "courier"]) {
+    for (const page of aboutOnly ? ["about", "about-custom"] : ["home", "catalog", "product", "product-long", "cart", "drawer", "checkout", "locker", "courier"]) {
       pathname = page === "home" ? "/" : `/${page}`; cartOpen = page === "drawer";
       delivery = page === "courier" ? "np_courier" : page === "locker" ? "np_parcel_locker" : "np_warehouse";
       params = new URLSearchParams("category=child-0&q=toy");
       stressProduct = page === "product-long";
+      customAbout = page === "about-custom";
       let body: React.ReactNode;
-      if (page === "home") body = h(React.Fragment, null, await asyncComponent(hero.Hero), await asyncComponent(featured.FeaturedProducts, { products }), await asyncComponent(benefits.Benefits));
+      if (page.startsWith("about")) body = await asyncComponent(aboutPage.default);
+      else if (page === "home") body = h(React.Fragment, null, await asyncComponent(hero.Hero), await asyncComponent(featured.FeaturedProducts, { products }), await asyncComponent(benefits.Benefits));
       else if (page === "catalog") body = h("section", { className: "sf-shell sf-home-panel sf-catalog" },
         h(filters.CatalogFilters, { categories }), h("div", { className: "sf-product-grid" }, products.map((p) => h(card.ProductCard, { ...p, key: p.id }))));
       else if (page.startsWith("product")) body = await asyncComponent(productPage.default, { params: Promise.resolve({ slug: "fixture" }) });
@@ -269,7 +282,7 @@ async function verify() {
       }
     }
     writeFileSync(resolve(output, "results.json"), JSON.stringify(results, null, 2));
-    console.log(`PASS ${results.length} viewport renders; UA/EN; home/catalog/product/cart/drawer/checkout/locker/courier; no horizontal overflow; 2/4 product columns; wrapped home categories; bounded mobile menu. Desktop CSS screenshots identical at 1280/1440. Artifacts: ${output}`);
+    console.log(aboutOnly ? `PASS ${results.length} About viewport renders; UA/EN default and long multiline overrides; no horizontal overflow; bounded mobile menu. Desktop CSS screenshots identical at 1280/1440. Artifacts: ${output}` : `PASS ${results.length} viewport renders; UA/EN; home/catalog/product/cart/drawer/checkout/locker/courier; no horizontal overflow; 2/4 product columns; wrapped home categories; bounded mobile menu. Desktop CSS screenshots identical at 1280/1440. Artifacts: ${output}`);
     console.log("Isolated SSR fixtures: interactions covered by existing UI scripts; native keyboards, touch, and live carrier data still need device review.");
   } finally {
     socket?.close(); browser.kill(); server.closeAllConnections(); server.close();

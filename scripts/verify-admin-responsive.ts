@@ -36,11 +36,14 @@ import * as contacts from "../src/lib/admin/attempt-contacts";
 import * as attemptDiagnostics from "../src/lib/payments/attempt-diagnostics";
 import { heroAssets } from "../src/lib/hero-assets";
 import { sourceModule } from "./source-module";
+import * as gallery from "../src/lib/gallery";
+import * as siteContent from "../src/lib/site-content";
 
 async function verify() {
   const batch174b = process.argv.includes("--batch174b");
   // Added slug controls intentionally change product-form geometry.
-  const batch175 = process.argv.includes("--batch175");
+  const galleryBatch = process.argv.includes("--batch175b");
+  const batch175 = process.argv.includes("--batch175") || galleryBatch;
   const accepted = "9741b1107e75350f82065d33777d71b16d9f66ba";
   const output = resolve(".next/cache/admin-responsive-qa");
   mkdirSync(output, { recursive: true });
@@ -52,7 +55,7 @@ async function verify() {
     imageUrl: null, description: "Category description", order: 0, children: [], parent: null, _count: { products: 1 } };
   const product = { id: "p1", name: "Дракон з рухливими крилами", nameEn: "Dragon with moving wings", slug: "dragon", description: "Description", descriptionEn: "English description",
     price: 1234, oldPrice: 1500, isOrderable: true, categoryId: category.id, category, isActive: true, isNew: true, isFeatured: true,
-    images: [{ id: "i1", url: "/images/placeholder.svg", order: 0 }], hoverGifUrl: null,
+    images: Array.from({ length: galleryBatch ? 10 : 1 }, (_, index) => ({ id: `i${index + 1}`, url: "/images/placeholder.svg", order: index, alt: "Accessible photo description" })), hoverGifUrl: null,
     options: [{ name: "Size", values: [{ id: "s1", value: "Компактний розмір з довгою назвою", valueEn: "Compact size with a long name", price: 1234, note: "Примітка", noteEn: "Note" }] }] };
   const order = { id: "o1", number: "3DK-12345678", status: "PROCESSING", paymentStatus: "PENDING", paymentProvider: null, paidAt: null,
     createdAt: new Date("2026-01-01T12:00:00Z"), customerName: "Покупець з довгим ім’ям", customerPhone: "+380000000000", customerEmail: "customer@example.invalid",
@@ -81,14 +84,14 @@ async function verify() {
       return h("img", { ...props, ...(fill ? { style: { position: "absolute", inset: 0, width: "100%", height: "100%" } } : {}) }); }, __esModule: true },
     "next/navigation": { usePathname: () => pathname, useRouter: () => ({ push: blocked, refresh: blocked }), notFound: blocked },
     "next-auth/react": { signOut: blocked }, sonner: { toast: { success: blocked, error: blocked } },
-    "@/store/lang-store": language, "@/lib/i18n": { translations }, "@/lib/product-variants": variants, "@/lib/product-slug": slugs, "@/lib/product-media": media, "@/lib/media-upload": mediaUpload, "@/lib/media-upload-client": { mediaUploadsAvailable: blocked, uploadProductMedia: blocked },
+    "@/store/lang-store": language, "@/lib/i18n": { translations }, "@/lib/site-content": siteContent, "@/lib/product-variants": variants, "@/lib/product-slug": slugs, "@/lib/product-media": media, "@/lib/media-upload": mediaUpload, "@/lib/media-upload-client": { mediaUploadsAvailable: blocked, uploadProductMedia: blocked },
     "@/lib/status": status, "@/lib/order-status": orderStatus, "@/lib/fonts": fonts, "@/lib/hero-assets": { heroAssets },
     "@/lib/i18n-server": { getT: async () => translations[locale], getLocale: async () => locale },
     "@/lib/server-env": { isTestModeEnabled: () => true }, "./admin.css": {},
     "@/lib/site-settings": { SITE_FONT_KEY: "site_font" }, "@/lib/categories": { getCategoryTree: async () => [category] },
     "@/lib/notifications/events": events, "@/lib/notifications/settings": { getNotificationSettings: async () => events.defaultNotificationSettings() },
     "@/lib/actions/categories": { createCategory: blocked, updateCategory: blocked, deleteCategory: blocked, updateSiteContent: blocked },
-    "@/lib/actions/products": { createProduct: blocked, updateProduct: blocked, deleteProduct: blocked },
+    "@/lib/actions/products": { createProduct: blocked, updateProduct: blocked, deleteProduct: blocked, archiveProduct: blocked },
     "@/lib/actions/orders": { updateOrderStatus: blocked, takeOrderIntoWorkAction: blocked }, "@/lib/actions/notification-settings": { updateNotificationSettings: blocked },
     "@/lib/prisma": { prisma: {
       product: { count: async () => 1, findMany: async () => [product], findUnique: async () => product },
@@ -108,7 +111,7 @@ async function verify() {
     const bindings: Record<string, unknown> = { ...common };
     const load = (file: string): Components => {
       let source = file;
-      if (version === "accepted") {
+      if (version === "accepted" && !["src/components/admin/admin-form.tsx", "src/components/admin/gallery-editor.tsx", "src/components/admin/about-content-fields.tsx"].includes(file)) {
         source = resolve(output, "accepted", file);
         mkdirSync(resolve(source, ".."), { recursive: true });
         let baseline = execFileSync("git", ["show", `${accepted}:${file}`], { encoding: "utf8" });
@@ -139,7 +142,8 @@ async function verify() {
       }
       return sourceModule(source, bindings);
     };
-    for (const name of ["ui/button", "layout/lang-switcher", "category/category-image", "admin/media-url-field", "admin/size-editor", "admin/product-form",
+    bindings["@/lib/gallery"] = gallery;
+    for (const name of ["ui/button", "layout/lang-switcher", "category/category-image", "admin/admin-form", "admin/about-content-fields", "admin/media-url-field", "admin/gallery-editor", "admin/size-editor", "admin/product-form",
       "admin/category-form", "admin/delete-button", "admin/order-status-summary", "admin/order-status-select", "admin/create-ttn-button", "admin/admin-sidebar"]) {
       bindings[`@/components/${name}`] = load(`src/components/${name}.tsx`);
     }
@@ -150,7 +154,7 @@ async function verify() {
     const Layout = load("src/app/admin/layout.tsx").default as (props: object) => Promise<React.ReactElement>;
     for (locale of ["ua", "en"] as const) {
       for (const [key, file] of Object.entries(pageFiles)) {
-        if (batch175 && !["dashboard", "orders", "product-new", "product-edit"].includes(key)) continue;
+        if (batch175 && !(galleryBatch ? ["dashboard", "orders", "products", "product-new", "product-edit", "category-edit", "content"] : ["dashboard", "orders", "product-new", "product-edit"]).includes(key)) continue;
         if (batch174b && !["dashboard", "orders", "detail", "payment-attempts"].includes(key)) continue;
         if (version === "accepted" && key === "payment-attempts") continue; // New page has no historical screenshot oracle.
         pathname = key === "dashboard" ? "/admin" : `/admin/${key.startsWith("product-") ? "products" : key === "category-edit" ? "categories" : key === "detail" ? "orders/o1" : key}`;

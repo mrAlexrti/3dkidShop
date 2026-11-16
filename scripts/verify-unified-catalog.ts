@@ -10,6 +10,7 @@ import * as content from "../src/lib/product-content";
 import * as categoryNames from "../src/lib/category-name";
 import { translations } from "../src/lib/i18n";
 import { sourceModule } from "./source-module";
+import * as gallery from "../src/lib/gallery";
 import type { ProductCard as Card } from "../src/components/product/product-card";
 import type { CatalogFilters as Filters } from "../src/components/catalog/catalog-filters";
 import type { Pagination as Pages } from "../src/components/catalog/pagination";
@@ -32,12 +33,13 @@ for (const locale of ["ua", "en"] as const) {
   let cursor = 0;
   let animationAllowed = true;
   const { ProductCard } = sourceModule<{ ProductCard: typeof Card }>("src/components/product/product-card.tsx", {
+    "@/lib/gallery": gallery,
     "react/jsx-runtime": jsxRuntime,
     react: { useState: (initial: unknown) => {
       const index = cursor++;
       if (!(index in state)) state[index] = initial;
       return [state[index], (value: unknown) => { state[index] = value; }];
-    }, useSyncExternalStore: () => animationAllowed },
+    }, useSyncExternalStore: () => animationAllowed, useRef: (value: unknown) => ({ current: value }) },
     "@/components/product/product-image": { ProductImage: Image }, "next/image": Image, "next/link": Link,
     "next/navigation": { useRouter: () => ({ push: (path: string) => pushes.push(path) }) },
     "lucide-react": icons, "@/lib/utils": utils, "@/lib/product-media": media,
