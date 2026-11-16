@@ -20,7 +20,10 @@ import { translations } from "../src/lib/i18n";
 import * as content from "../src/lib/site-content";
 import * as productContent from "../src/lib/product-content";
 import * as categoryNames from "../src/lib/category-name";
+import * as cartItems from "../src/lib/cart-items";
 import * as variants from "../src/lib/product-variants";
+import * as limits from "../src/lib/cart-limits";
+import { ProductDescription } from "../src/components/product/product-description";
 import * as media from "../src/lib/product-media";
 import * as hookForm from "react-hook-form";
 import * as resolvers from "@hookform/resolvers/zod";
@@ -63,14 +66,15 @@ async function verify() {
   let locale: "ua" | "en" = "ua";
   let stressProduct = false;
   const cartState = { items: products, isOpen: false, closeCart: blocked, removeItem: blocked, updateQuantity: blocked,
-    openCart: blocked, addItem: blocked, clear: blocked, count: () => 8, total: () => 9872 };
-  const common = {
+    openCart: blocked, addItem: blocked, clear: blocked, issues: { p0: "unavailable", p1: "sizeUnavailable" }, verification: "verified", verifiedRevision: 0, checkoutRevision: 0,
+    priceChanges: ["p2"], ready: () => false, verifyCart: async () => true, reviewPrices: blocked, count: () => 8, total: () => 4936 };
+  const common: Record<string, unknown> = {
     react: React, "react/jsx-runtime": jsxRuntime, "lucide-react": icons, "next/image": { default: image, __esModule: true },
     "next/link": { default: link, __esModule: true }, "next/navigation": { usePathname: () => pathname,
       useSearchParams: () => params, useRouter: () => ({ push: blocked, refresh: blocked }), notFound: blocked },
     "@/lib/utils": utils, "@/lib/product-content": productContent, "@/lib/product-media": media,
     "@/lib/i18n": { translations },
-    "@/lib/product-variants": variants, "@/lib/category-name": categoryNames, "@/lib/site-content": content,
+    "@/lib/product-variants": variants, "@/lib/cart-items": cartItems, "@/lib/cart-limits": limits, "@/components/product/product-description": { ProductDescription }, "@/lib/category-name": categoryNames, "@/lib/site-content": content,
     "@/store/lang-store": language, "@/store/cart-store": { useCartStore: (selector?: (s: typeof cartState) => unknown) => {
       const state = { ...cartState, isOpen: cartOpen }; return selector ? selector(state) : state;
     } },
@@ -81,6 +85,8 @@ async function verify() {
   function load(file: string, bindings: Record<string, unknown> = {}): Record<string, React.ElementType> {
     return sourceModule(file, { ...common, ...bindings });
   }
+  common["@/components/product/product-image"] = load("src/components/product/product-image.tsx");
+  common["@/components/cart/cart-readiness"] = load("src/components/cart/cart-readiness.tsx");
   const button = load("src/components/ui/button.tsx");
   const categoryNav = load("src/components/layout/category-nav.tsx");
   const langSwitcher = load("src/components/layout/lang-switcher.tsx");

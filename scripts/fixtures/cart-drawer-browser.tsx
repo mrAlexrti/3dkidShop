@@ -28,7 +28,7 @@ function render(locale: "ua" | "en") {
     <div id="choose"><ProductCard {...product} hasOptions /></div>
     <div id="unavailable"><ProductCard {...product} isOrderable={false} /></div>
     <div id="detail"><ProductOptions {...product} variants={[]} /></div>
-    <div id="sizes"><ProductOptions {...product} variants={[{ id: "small", labelUa: "S", labelEn: "Small", price: 25, noteUa: null, noteEn: null }]} /></div>
+    <div id="sizes"><ProductOptions {...product} productId="qa-sizes" variants={[{ id: "small", labelUa: "S", labelEn: "Small", price: 25, noteUa: null, noteEn: null }]} /></div>
     <CartDrawer />
   </LangStoreContext.Provider></React.StrictMode>));
 }
@@ -39,7 +39,7 @@ async function closed() {
 }
 async function open() {
   let changes = 0;
-  const unsubscribe = useCartStore.subscribe(() => changes++);
+  const unsubscribe = useCartStore.subscribe((next, previous) => { if (next.isOpen && !previous.isOpen) changes++; });
   click("#quick .sf-product-add"); await settle(); unsubscribe();
   check(changes === 1, "Quick add must open cart once");
   check(state().isOpen && backdrop(), "Adding a product must open drawer/backdrop");
@@ -64,7 +64,7 @@ async function run(locale: "ua" | "en") {
   flushSync(() => navigate("/catalog")); await settle();
 
   let changes = 0;
-  const unsubscribe = useCartStore.subscribe(() => changes++);
+  const unsubscribe = useCartStore.subscribe((next, previous) => { if (next.isOpen && !previous.isOpen) changes++; });
   click("#detail .sf-product-options > button"); await settle(); unsubscribe();
   check(changes === 1 && state().isOpen, "Detail add must open cart once, with no redundant openCart");
   check(!messages.some((item) => item.kind === "success"), "Detail add showed success toast");
@@ -109,7 +109,8 @@ async function run(locale: "ua" | "en") {
   flushSync(() => navigate("/catalog")); await settle();
   check(!backdrop() && !document.querySelector('[role="dialog"]'), "Route change retained an exiting animation layer");
 
-  await open(); click('[role="dialog"] a[href="/checkout"]'); await settle();
+  await open(); await until(() => state().ready());
+  click('[role="dialog"] .border-t button:last-child'); await settle();
   check(location.pathname === "/checkout" && !state().isOpen, "Checkout link must close drawer and navigate"); await closed();
 
   // Focus errors or a detached opener must never prevent scroll/listener cleanup.

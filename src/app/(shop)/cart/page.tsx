@@ -1,19 +1,21 @@
 "use client";
 
-import Image from "next/image";
+import { ProductImage as Image } from "@/components/product/product-image";
+import { CartReadiness, CartLineStatus, CartAmount } from "@/components/cart/cart-readiness";
+import { canSetQuantity } from "@/lib/cart-limits";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
-import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { sizeLabel } from "@/lib/product-variants";
 
 export default function CartPage() {
-  const { items, removeItem, updateQuantity, total } = useCartStore();
+  const { items, removeItem, updateQuantity, ready } = useCartStore();
   const { t, locale } = useLangStore();
-  const currency = "UAH";
+  const router = useRouter();
 
   if (items.length === 0) {
     return (
@@ -57,6 +59,7 @@ export default function CartPage() {
                     >
                       {item.name}
                     </Link>
+                    <CartLineStatus id={item.id} />
                     {item.variant && (
                       <p className="text-xs text-ink/40 mt-0.5">
                         {`${t.product.size}: ${sizeLabel(item.variant, locale)}`}
@@ -75,12 +78,12 @@ export default function CartPage() {
                       </button>
                       <span className="w-5 text-center text-sm tabular-nums">{item.quantity}</span>
                       <button onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                              aria-label={`${t.cart.increase}: ${item.name}`}>
+                              disabled={!canSetQuantity(items, item.id, item.quantity + 1)} aria-label={`${t.cart.increase}: ${item.name}`}>
                         <Plus size={14} />
                       </button>
                     </div>
                     <span className="font-semibold text-pink-600">
-                      {formatPrice(item.price * item.quantity, currency)}
+                      <CartAmount id={item.id} />
                     </span>
                   </div>
                 </div>
@@ -102,7 +105,7 @@ export default function CartPage() {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between text-ink/60">
               <span>{t.cart.subtotal}</span>
-              <span>{formatPrice(total(), currency)}</span>
+              <span><CartAmount /></span>
             </div>
             <div className="flex justify-between text-ink/60">
               <span>{t.cart.shipping}</span>
@@ -111,13 +114,12 @@ export default function CartPage() {
           </div>
           <div className="mt-4 flex justify-between border-t border-pink-100 pt-4 text-lg font-semibold">
             <span>{t.cart.total}</span>
-            <span className="text-pink-600">{formatPrice(total(), currency)}</span>
+            <span className="text-pink-600"><CartAmount /></span>
           </div>
-          <Link href="/checkout">
-            <Button size="lg" className="mt-5 w-full">
-              {t.cart.checkout}
-            </Button>
-          </Link>
+          <CartReadiness />
+          <Button disabled={!ready()} onClick={() => { if (ready()) router.push("/checkout"); }} size="lg" className="mt-5 w-full">
+            {t.cart.checkout}
+          </Button>
         </div>
       </div>
     </div>

@@ -14,6 +14,17 @@ export const httpMediaUrl = z.string().trim().url().refine((value) => {
 export const optionalHoverGifUrl = z.string().trim().pipe(z.union([z.literal(""), httpMediaUrl]))
   .optional().transform((value) => value || null);
 
+export function storefrontImage(value: string | null | undefined) {
+  if (value?.startsWith("/") && !value.startsWith("//") && !value.includes("\\")) return value;
+  try {
+    const url = new URL(value ?? "");
+    if (url.protocol === "https:" && !url.username && !url.password &&
+      (url.hostname === "images.unsplash.com" || url.hostname === "res.cloudinary.com" || url.hostname.endsWith(".supabase.co") ||
+        /^[a-z0-9-]+\.public\.blob\.vercel-storage\.com$/.test(url.hostname))) return url.href;
+  } catch { /* No network validation: invalid/unsupported image sources use the local fallback. */ }
+  return "/images/placeholder.svg";
+}
+
 // Edit the same first image shown by the storefront; preserve gallery records and IDs.
 export async function updateMainProductImage(tx: Prisma.TransactionClient, productId: string, url: string) {
   const main = await tx.productImage.findFirst({

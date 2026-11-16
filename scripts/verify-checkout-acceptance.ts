@@ -107,6 +107,17 @@ function paid(patch: Row = {}) {
 const post = (snapshot: Row, signature = "qa-verified") => webhook.POST(new Request("https://shop.example.invalid/webhook", { method: "POST", headers: { "x-sign": signature }, body: JSON.stringify(snapshot) }));
 const runOutbox = () => outbox.recoverNotificationOutbox(new Date(Date.now() + 10000));
 async function verify() {
+  // A new storefront quote must not create an order/invoice if pricing changed
+  // between browser reconciliation and the locked transaction. Legacy clients
+  // below still exercise authoritative server pricing and Mono replay behavior.
+  for (const method of ["cash_on_delivery", "card_online"]) {
+    reset();
+    const rejected = await action.createOrder({ ...data, paymentMethod: method }, items, "en", crypto.randomUUID(), undefined, true);
+    assert.deepEqual(rejected, { success: false, error: translations.en.checkout.errors.priceChanged });
+    assert.equal(db.orders.length, 0); assert.equal(creates, 0);
+    assert.equal(telegramSends.length + emailSends, 0);
+  }
+  reset();
   // Execute real Admin data paths, including dashboard revenue. A predicate-only
   // test would miss a query that accidentally omits the acceptance restriction.
   let adminQueries = 0;

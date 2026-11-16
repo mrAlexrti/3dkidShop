@@ -5,13 +5,13 @@ import type { Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { getCheckoutSchema, type CheckoutInput } from "@/lib/validations/checkout";
 import { Button } from "@/components/ui/button";
+import { CartAmount } from "@/components/cart/cart-readiness";
 import { useCartStore } from "@/store/cart-store";
 import { createOrder } from "@/lib/actions/create-order";
 import { onlineCheckoutKey, rememberCheckoutResult, checkoutRetrySource } from "@/lib/payments/checkout-session";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useState, useMemo } from "react";
-import { formatPrice } from "@/lib/utils";
+import { useState, useMemo, useRef } from "react";
 import { MapPin, Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -84,8 +84,9 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
   const { t, locale } = useLangStore();
   const c = t.checkout;
   const schema = useMemo(() => getCheckoutSchema(locale), [locale]);
-  const { items, total, clear, checkoutRevision } = useCartStore();
+  const { clear, ready, verifyCart } = useCartStore();
   const router = useRouter();
+  const submitLock = useRef(false);
   const [submitting, setSubmitting] = useState(false);
 
   const citySearch = useCitySearch();
@@ -147,10 +148,17 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
   }
 
   const onSubmit = async (data: CheckoutInput) => {
+    if (submitLock.current || !useCartStore.getState().ready()) return;
+    submitLock.current = true;
     setSubmitting(true);
     try {
+      if (!await verifyCart(locale, true)) return;
+      const snapshot = useCartStore.getState();
+      const items = snapshot.items;
+      const checkoutRevision = snapshot.checkoutRevision;
       const retryKey = data.paymentMethod === "card_online" ? await onlineCheckoutKey(data, items, checkoutRevision) : undefined;
-      const result = await createOrder(data, items, locale, retryKey, checkoutRetrySource(retryKey));
+      if (!useCartStore.getState().ready() || useCartStore.getState().checkoutRevision !== checkoutRevision || useCartStore.getState().items !== items) return;
+      const result = await createOrder(data, items, locale, retryKey, checkoutRetrySource(retryKey), true);
       if (result.success) {
         if (retryKey) rememberCheckoutResult(retryKey, result.resultUrl);
         if (result.payment) {
@@ -159,15 +167,17 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
           return;
         }
         if (retryKey) { router.push(result.resultUrl); return; }
-        clear();
+        if (useCartStore.getState().checkoutRevision === checkoutRevision && useCartStore.getState().items === items) clear();
         toast.success(result.emailSent ? c.feedback.emailed : c.feedback.created);
         router.push(result.resultUrl);
       } else {
         toast.error(result.error);
+        void verifyCart(locale, true);
       }
     } catch {
       toast.error(c.feedback.failed);
     } finally {
+      submitLock.current = false;
       setSubmitting(false);
     }
   };
@@ -394,11 +404,11 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
         />
       </section>
 
-      <Button type="submit" size="lg" className="w-full text-base" disabled={submitting}>
+      <Button type="submit" size="lg" className="w-full text-base" disabled={submitting || !ready()}>
         {submitting ? (
           <><Loader2 size={18} className="animate-spin" /> {c.submitting}</>
         ) : (
-          <>{c.submit} — {formatPrice(total())}</>
+          <>{c.submit} — <CartAmount /></>
         )}
       </Button>
     </form>

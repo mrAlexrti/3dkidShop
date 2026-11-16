@@ -37,7 +37,7 @@ type PricedOrderItem = {
 
 class CheckoutInputError extends Error {}
 
-async function priceOrderItems(tx: Prisma.TransactionClient, items: CartItem[], errors: (typeof translations)[Locale]["checkout"]["errors"]) {
+async function priceOrderItems(tx: Prisma.TransactionClient, items: CartItem[], errors: (typeof translations)[Locale]["checkout"]["errors"], requirePriceMatch: boolean) {
   const rawProductIds = items.map((item) => item.productId);
   const productIds = [...new Set(rawProductIds.filter(Boolean))];
 
@@ -86,6 +86,10 @@ async function priceOrderItems(tx: Prisma.TransactionClient, items: CartItem[], 
     const storedSize = size ? product.options.flatMap((option) => option.values).find((value) => value.id === size.id) : undefined;
     const priceMinor = moneyMinorUnits((storedSize?.price ?? product.price).toString());
     if (priceMinor === null || priceMinor <= 0) return { success: false as const, error: errors.unavailable };
+    // New storefront clients ask to reject a quote changed since review. The price
+    // is still calculated exclusively from locked server records. Legacy callers
+    // retain authoritative repricing; existing Mono retries are replayed above it.
+    if (requirePriceMatch && (!Number.isFinite(item.price) || Math.abs(item.price - priceMinor / 100) > 0.000001)) return { success: false as const, error: errors.priceChanged };
     subtotalMinor += priceMinor * item.quantity;
     if (!Number.isSafeInteger(subtotalMinor) || subtotalMinor > 9999999999) return { success: false as const, error: errors.quantity };
     pricedItems.push({
@@ -105,7 +109,8 @@ export async function createOrder(
   items: CartItem[],
   locale: Locale = "ua",
   retryKey?: string,
-  retrySource?: PaymentRetrySource
+  retrySource?: PaymentRetrySource,
+  requirePriceMatch = false
 ): Promise<CreateOrderResult> {
   const errors = translations[locale === "en" ? "en" : "ua"].checkout.errors;
   const parsed = getCheckoutSchema(locale === "en" ? "en" : "ua").safeParse(data);
@@ -168,7 +173,7 @@ export async function createOrder(
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       order = await prisma.$transaction(async (tx) => {
-        const priced = await priceOrderItems(tx, items, errors);
+        const priced = await priceOrderItems(tx, items, errors, requirePriceMatch);
         if (!priced.success) throw new CheckoutInputError(priced.error);
         orderNumber = onlineConfig ? null : await allocateOrderNumber(tx);
         resultUrl = reference ? getAttemptResultPath(reference) : getOrderResultPath(orderNumber!);
@@ -223,7 +228,7 @@ export async function createOrder(
     } catch (error) {
       if (error instanceof CheckoutInputError) return { success: false, error: error.message };
       if (identity && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" && Array.isArray(error.meta?.target) && error.meta.target.includes("checkoutKeyHash")) {
-        return createOrder(data, items, locale, retryKey, retrySource);
+        return createOrder(data, items, locale, retryKey, retrySource, requirePriceMatch);
       }
       if (isOrderNumberCollision(error) && attempt < 4) continue;
       throw error;

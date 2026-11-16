@@ -12,12 +12,14 @@ const directory = resolve(".next/cache/image-hosts-qa"); mkdirSync(directory, { 
 const baselineFile = resolve(directory, "next-before.ts");
 writeFileSync(baselineFile, execFileSync("git", ["show", "550b4449c9f5632bf59cb0fde919bfe26fdf92c9:next.config.ts"], { encoding: "utf8" }));
 const previous = sourceModule<{ default: NextConfig }>(baselineFile, {}).default;
+const publicBlob = { protocol: "https", hostname: "*.public.blob.vercel-storage.com" };
 const cloudinary = { protocol: "https", hostname: "res.cloudinary.com" };
-assert.deepEqual(config, { ...previous, images: { ...previous.images, remotePatterns: [...(previous.images?.remotePatterns ?? []), cloudinary] } }, "Only the exact Cloudinary pattern may be added");
+assert.deepEqual(config, { ...previous, images: { ...previous.images, remotePatterns: [...(previous.images?.remotePatterns ?? []), cloudinary, publicBlob] } }, "Only the Cloudinary and public Blob patterns may be added");
 const patterns = config.images!.remotePatterns!;
 const allowed = (url: string) => hasRemoteMatch(config.images?.domains ?? [], patterns, new URL(url));
 assert.equal(allowed("https://res.cloudinary.com/w82zyjr9/image/upload/f_auto,q_auto/IMG_7882"), true);
 assert.equal(allowed("https://images.unsplash.com/photo-fixture"), true);
+assert.equal(allowed("https://store123.public.blob.vercel-storage.com/3dkid/product-media/image/a.webp"), true);
 assert.equal(allowed("https://qa-project.supabase.co/storage/v1/object/public/products/qa.webp"), true);
 for (const url of [
   "http://res.cloudinary.com/qa/image/upload/qa.webp",
@@ -26,7 +28,10 @@ for (const url of [
   "https://www.res.cloudinary.com/qa.webp",
   "https://res.cloudinary.com.evil.example/qa.webp",
   "https://example.invalid/qa.webp",
+  "https://store123.private.blob.vercel-storage.com/a.webp",
+  "http://store123.public.blob.vercel-storage.com/a.webp",
+  "https://store123.public.blob.vercel-storage.com.evil.invalid/a.webp",
 ]) assert.equal(allowed(url), false, "Untrusted image host/protocol must remain rejected");
 assert.ok(patterns.every((pattern) => pattern.hostname !== "**"));
 assert.equal(patterns.filter((pattern) => pattern.hostname === "res.cloudinary.com").length, 1);
-console.log("PASS Next image allowlist: representative Cloudinary upload URL accepted by installed Next matcher; existing Unsplash/Supabase preserved; HTTP/lookalikes/arbitrary hosts rejected; config differs from Production by one exact HTTPS Cloudinary entry only. No network/upload/DB.");
+console.log("PASS Next image allowlist: Cloudinary and public Blob URLs accepted by installed Next matcher; existing Unsplash/Supabase preserved; HTTP/private Blob/lookalikes/arbitrary hosts rejected. No network/upload/DB.");

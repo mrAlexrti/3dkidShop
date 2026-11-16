@@ -21,7 +21,9 @@ import tailwindConfig from "../tailwind.config";
 import * as utils from "../src/lib/utils";
 import * as language from "../src/store/lang-store";
 import { translations } from "../src/lib/i18n";
+import * as slugs from "../src/lib/product-slug";
 import * as variants from "../src/lib/product-variants";
+import * as mediaUpload from "../src/lib/media-upload";
 import * as media from "../src/lib/product-media";
 import * as status from "../src/lib/status";
 import * as orderStatus from "../src/lib/order-status";
@@ -37,6 +39,8 @@ import { sourceModule } from "./source-module";
 
 async function verify() {
   const batch174b = process.argv.includes("--batch174b");
+  // Added slug controls intentionally change product-form geometry.
+  const batch175 = process.argv.includes("--batch175");
   const accepted = "9741b1107e75350f82065d33777d71b16d9f66ba";
   const output = resolve(".next/cache/admin-responsive-qa");
   mkdirSync(output, { recursive: true });
@@ -77,7 +81,7 @@ async function verify() {
       return h("img", { ...props, ...(fill ? { style: { position: "absolute", inset: 0, width: "100%", height: "100%" } } : {}) }); }, __esModule: true },
     "next/navigation": { usePathname: () => pathname, useRouter: () => ({ push: blocked, refresh: blocked }), notFound: blocked },
     "next-auth/react": { signOut: blocked }, sonner: { toast: { success: blocked, error: blocked } },
-    "@/store/lang-store": language, "@/lib/i18n": { translations }, "@/lib/product-variants": variants, "@/lib/product-media": media,
+    "@/store/lang-store": language, "@/lib/i18n": { translations }, "@/lib/product-variants": variants, "@/lib/product-slug": slugs, "@/lib/product-media": media, "@/lib/media-upload": mediaUpload, "@/lib/media-upload-client": { mediaUploadsAvailable: blocked, uploadProductMedia: blocked },
     "@/lib/status": status, "@/lib/order-status": orderStatus, "@/lib/fonts": fonts, "@/lib/hero-assets": { heroAssets },
     "@/lib/i18n-server": { getT: async () => translations[locale], getLocale: async () => locale },
     "@/lib/server-env": { isTestModeEnabled: () => true }, "./admin.css": {},
@@ -100,7 +104,7 @@ async function verify() {
     detail: "orders/[id]/page.tsx", "product-new": "products/new/page.tsx", "product-edit": "products/[id]/edit/page.tsx",
     "category-edit": "categories/[id]/edit/page.tsx", content: "content/page.tsx" };
   for (const version of ["current", "accepted"] as const) {
-    if (batch174b && version === "accepted") continue;
+    if ((batch174b || batch175) && version === "accepted") continue;
     const bindings: Record<string, unknown> = { ...common };
     const load = (file: string): Components => {
       let source = file;
@@ -146,6 +150,7 @@ async function verify() {
     const Layout = load("src/app/admin/layout.tsx").default as (props: object) => Promise<React.ReactElement>;
     for (locale of ["ua", "en"] as const) {
       for (const [key, file] of Object.entries(pageFiles)) {
+        if (batch175 && !["dashboard", "orders", "product-new", "product-edit"].includes(key)) continue;
         if (batch174b && !["dashboard", "orders", "detail", "payment-attempts"].includes(key)) continue;
         if (version === "accepted" && key === "payment-attempts") continue; // New page has no historical screenshot oracle.
         pathname = key === "dashboard" ? "/admin" : `/admin/${key.startsWith("product-") ? "products" : key === "category-edit" ? "categories" : key === "detail" ? "orders/o1" : key}`;
@@ -315,7 +320,7 @@ async function verify() {
     }
     // Compare accepted/current desktop screenshots on identical fixtures and global CSS.
     for (const width of [1280, 1440]) {
-      if (batch174b) break;
+      if (batch174b || batch175) break;
       await send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: false });
       for (const key of pages.keys()) {
         if (!key.startsWith("/current/") || key.includes("detail-long") || key.includes("payment-attempts")) continue;
@@ -346,10 +351,10 @@ async function verify() {
     assert.equal(await evaluate("!document.querySelector('[role=dialog]') && !document.querySelector('#admin-content').inert && document.body.style.position!== 'fixed' && !!document.querySelector('aside').getClientRects().length"), true);
     writeFileSync(resolve(output, "results.json"), JSON.stringify(results, null, 2));
     writeFileSync(resolve(output, "desktop-results.json"), JSON.stringify(desktopResults, null, 2));
-    if (results.length) console.log(batch174b
+    if (results.length) console.log(batch175 ? `PASS ${results.length} Batch 1.7.5 Admin viewport renders: UA/EN; create/edit product forms and slug controls; no overflow; keyboard drawer behavior. Artifacts: ${output}` : batch174b
       ? `PASS ${results.length} Batch 1.7.4B manager viewport renders: UA/EN; contact links, long contacts/diagnostics, keyboard disclosure; stored creation times; no page overflow; drawer behavior. Artifacts: ${output}`
       : `PASS ${results.length} Admin viewport renders; UA/EN; five contained tables; create/edit forms, content/notifications, long diagnostics, TTN states; drawer close/Escape/backdrop/navigation, focus trap/restore, language and short-height scroll.`);
-    if (!batch174b) console.log(`PASS ${desktopResults.length} desktop comparisons at 1280/1440: identical geometry; screenshot differences within 0.1% raster tolerance; drawer resize cleanup. Artifacts: ${output}`);
+    if (!batch174b && !batch175) console.log(`PASS ${desktopResults.length} desktop comparisons at 1280/1440: identical geometry; screenshot differences within 0.1% raster tolerance; drawer resize cleanup. Artifacts: ${output}`);
   } finally { socket?.close(); browser.kill(); server.closeAllConnections(); server.close(); }
 }
 void verify().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -7,11 +7,12 @@ import { requireAdmin } from "@/lib/actions/require-admin";
 import { optionalHoverGifUrl, updateMainProductImage } from "@/lib/product-media";
 import { sizeInputSchema } from "@/lib/product-variants";
 import { syncProductSizes } from "@/lib/product-size-admin";
+import { productSlugSchema, type ProductSaveResult } from "@/lib/product-slug";
 
 const productSchema = z.object({
   name: z.string().min(2),
   nameEn: z.string().trim().min(2),
-  slug: z.string().min(2),
+  slug: productSlugSchema,
   description: z.string().min(5),
   descriptionEn: z.string().trim().min(5),
   price: z.coerce.number().positive(),
@@ -26,10 +27,11 @@ const productSchema = z.object({
   isActive: z.coerce.boolean().optional(),
 });
 
-export async function createProduct(formData: FormData) {
+export async function createProduct(formData: FormData): Promise<ProductSaveResult> {
   await requireAdmin();
 
   const raw = Object.fromEntries(formData.entries());
+  if (!productSlugSchema.safeParse(raw.slug).success) return { error: "slugInvalid" };
   const parsed = productSchema.parse({
     ...raw,
     isFeatured: raw.isFeatured === "on",
@@ -38,6 +40,7 @@ export async function createProduct(formData: FormData) {
     isOrderable: raw.isOrderable === "on",
   });
 
+  try {
   await prisma.$transaction(async (tx) => {
   const product = await tx.product.create({
     data: {
@@ -59,17 +62,25 @@ export async function createProduct(formData: FormData) {
   });
   await syncProductSizes(tx, product.id, parsed.variants ?? []);
   });
+  } catch (error) {
+    if (isSlugCollision(error)) return { error: "slugDuplicate" };
+    throw error;
+  }
 
   revalidatePath("/admin/products");
   revalidatePath("/catalog");
   revalidatePath("/");
 }
 
-export async function updateProduct(id: string, formData: FormData) {
+export async function updateProduct(id: string, formData: FormData): Promise<ProductSaveResult> {
   await requireAdmin();
 
   const raw = Object.fromEntries(formData.entries());
-  const parsed = productSchema.parse({
+  // Existing historical URLs remain valid when unchanged, including pre-normalization slugs.
+  const existing = await prisma.product.findUnique({ where: { id }, select: { slug: true } });
+  const unchangedSlug = existing?.slug === raw.slug;
+  if (!unchangedSlug && !productSlugSchema.safeParse(raw.slug).success) return { error: "slugInvalid" };
+  const parsed = productSchema.extend({ slug: unchangedSlug ? z.literal(existing!.slug) : productSlugSchema }).parse({
     ...raw,
     isFeatured: raw.isFeatured === "on",
     isNew: raw.isNew === "on",
@@ -77,6 +88,7 @@ export async function updateProduct(id: string, formData: FormData) {
     isOrderable: raw.isOrderable === "on",
   });
 
+  try {
   await prisma.$transaction(async (tx) => {
     await tx.product.update({
       where: { id },
@@ -99,11 +111,22 @@ export async function updateProduct(id: string, formData: FormData) {
     await updateMainProductImage(tx, id, parsed.imageUrl);
     if (parsed.variants !== undefined) await syncProductSizes(tx, id, parsed.variants);
   });
+  } catch (error) {
+    if (isSlugCollision(error)) return { error: "slugDuplicate" };
+    throw error;
+  }
 
   revalidatePath("/admin/products");
   revalidatePath(`/product/${parsed.slug}`);
+  if (existing && existing.slug !== parsed.slug) revalidatePath(`/product/${existing.slug}`);
   revalidatePath("/catalog");
   revalidatePath("/");
+}
+
+function isSlugCollision(error: unknown) {
+  if (!error || typeof error !== "object" || !("code" in error) || error.code !== "P2002") return false;
+  const target = "meta" in error ? (error.meta as { target?: unknown } | undefined)?.target : undefined;
+  return Array.isArray(target) ? target.includes("slug") : typeof target === "string" && /slug/i.test(target);
 }
 
 export async function deleteProduct(id: string) {

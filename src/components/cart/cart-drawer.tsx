@@ -1,13 +1,13 @@
 "use client";
 
 import { AnimatePresence, motion, useIsPresent } from "framer-motion";
-import Image from "next/image";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { ProductImage as Image } from "@/components/product/product-image";
+import { CartReadiness, CartLineStatus, CartAmount } from "@/components/cart/cart-readiness";
+import { canSetQuantity } from "@/lib/cart-limits";
+import { usePathname, useRouter } from "next/navigation";
 import { X, Minus, Plus, Trash2 } from "lucide-react";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
-import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef } from "react";
 import { sizeLabel } from "@/lib/product-variants";
@@ -41,10 +41,10 @@ function focusSafely(element: HTMLElement | null | undefined) {
 }
 
 function CartDrawerContents() {
-  const { items, closeCart, removeItem, updateQuantity, total } = useCartStore();
+  const { items, closeCart, removeItem, updateQuantity, ready } = useCartStore();
   const isPresent = useIsPresent();
+  const router = useRouter();
   const { t, locale } = useLangStore();
-  const currency = "UAH";
   const panel = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -142,13 +142,14 @@ function CartDrawerContents() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium line-clamp-2 leading-snug">{item.name}</p>
-                        {item.variant && (
+                        <CartLineStatus id={item.id} />
+                    {item.variant && (
                           <p className="mt-0.5 text-xs text-ink/40">
                             {`${t.product.size}: ${sizeLabel(item.variant, locale)}`}
                           </p>
                         )}
                         <p className="mt-1 text-sm font-semibold text-pink-600">
-                          {formatPrice(item.price, currency)}
+                          <CartAmount id={item.id} />
                         </p>
                         <div className="sf-cart-item-controls mt-2 flex items-center gap-2">
                           <div className="sf-quantity-control flex items-center gap-2 rounded-full border border-ink/10 px-2 py-0.5">
@@ -163,7 +164,7 @@ function CartDrawerContents() {
                             <span className="w-5 text-center text-sm tabular-nums">{item.quantity}</span>
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                              aria-label={`${t.cart.increase}: ${item.name}`}
+                              disabled={!canSetQuantity(items, item.id, item.quantity + 1)} aria-label={`${t.cart.increase}: ${item.name}`}
                               className="rounded-full p-0.5 hover:bg-pink-50 transition-colors"
                             >
                               <Plus size={13} />
@@ -189,17 +190,16 @@ function CartDrawerContents() {
               <div className="border-t border-pink-100 p-5 space-y-3">
                 <div className="flex items-center justify-between text-sm text-ink/60">
                   <span>{t.cart.subtotal}</span>
-                  <span>{formatPrice(total(), currency)}</span>
+                  <span><CartAmount /></span>
                 </div>
                 <div className="flex items-center justify-between font-semibold text-base">
                   <span>{t.cart.total}</span>
-                  <span className="text-pink-600">{formatPrice(total(), currency)}</span>
+                  <span className="text-pink-600"><CartAmount /></span>
                 </div>
-                <Link href="/checkout" onClick={closeCart}>
-                  <Button className="w-full mt-1" size="lg">
-                    {t.cart.checkout}
-                  </Button>
-                </Link>
+                <CartReadiness />
+                <Button disabled={!ready()} onClick={() => { if (ready()) { closeCart(); router.push("/checkout"); } }} className="w-full mt-1" size="lg">
+                  {t.cart.checkout}
+                </Button>
               </div>
             )}
           </motion.aside>

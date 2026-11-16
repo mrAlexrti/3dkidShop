@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ProductGallery } from "@/components/product/product-gallery";
+import { ProductDescription } from "@/components/product/product-description";
 import { ProductOptions } from "@/components/product/product-options";
 import { RelatedProducts } from "@/components/product/related-products";
 import { AnimatedSection } from "@/components/shared/animated-section";
@@ -109,9 +110,7 @@ export default async function ProductPage({
           </p>
           <h1 className="mt-2 font-display text-3xl text-ink">{productName}</h1>
 
-          <p className="mt-5 text-sm leading-relaxed text-ink/70">
-            {productDescription}
-          </p>
+          <ProductDescription text={productDescription} />
 
           <ProductOptions
             productId={product.id}

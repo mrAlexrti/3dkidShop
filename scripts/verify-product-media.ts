@@ -4,9 +4,12 @@ import { createHash } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
 import { PrismaClient } from "@prisma/client";
 import { optionalHoverGifUrl, updateMainProductImage } from "../src/lib/product-media";
+import { verifyIsolatedMedia } from "./product-media-fixtures";
 
-loadEnvConfig(process.cwd());
-const db = new PrismaClient();
+// Default to isolated fixtures. Historical rollback checks require an explicit opt-in.
+const isolated = !process.argv.includes("--database-rollback");
+if (!isolated) loadEnvConfig(process.cwd());
+const db = isolated ? null as unknown as PrismaClient : new PrismaClient();
 
 async function inventory() {
   const products = await db.product.findMany({ select: { id: true }, orderBy: { id: "asc" } });
@@ -63,4 +66,4 @@ async function verify() {
   console.log(JSON.stringify({ ...before, nullGifProducts: await db.product.count({ where: { hoverGifUrl: null } }) }, null, 2));
 }
 
-void verify().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => db.$disconnect());
+void (isolated ? verifyIsolatedMedia() : verify()).catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => { if (!isolated) return db.$disconnect(); });

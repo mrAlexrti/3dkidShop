@@ -3,13 +3,15 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { useCartStore as CartStore } from "../src/store/cart-store";
 import { sourceModule } from "./source-module";
+import * as limits from "../src/lib/cart-limits";
+import * as reconciliation from "../src/lib/cart-reconciliation";
 import * as cartItems from "../src/lib/cart-items";
 
 const values = new Map<string, string>();
 const storage = createJSONStorage(() => ({ getItem: (name) => values.get(name) ?? null, setItem: (name, value) => { values.set(name, value); }, removeItem: (name) => { values.delete(name); } }));
 const { useCartStore } = sourceModule<{ useCartStore: typeof CartStore }>("src/store/cart-store.ts", {
   zustand: { create }, "zustand/middleware": { persist: (config: Parameters<typeof persist>[0], options: Parameters<typeof persist>[1]) => persist(config, { ...options, storage }) },
-  "@/lib/cart-items": cartItems,
+  "@/lib/cart-items": cartItems, "@/lib/cart-limits": limits, "@/lib/cart-reconciliation": reconciliation, "@/lib/actions/reconcile-cart": { lookupCartProducts: async () => [] },
 });
 const cart = () => useCartStore.getState();
 const item = { id: "qa-product", productId: "qa-product", name: "QA", slug: "qa", price: 12.5, image: "/images/placeholder.svg", quantity: 1 };
@@ -19,7 +21,7 @@ assert.equal(cart().items.length, 1); assert.equal(cart().count(), 2); assert.eq
 cart().addItem({ ...item, id: "qa-product-small", price: 20, variant: { id: "small", labelUa: "Маленький", labelEn: "Small" } });
 assert.equal(cart().items.length, 2); assert.equal(cart().total(), 45);
 cart().updateQuantity(item.id, 3); assert.equal(cart().total(), 57.5);
-cart().updateQuantity(item.id, 0); assert.equal(cart().items[0].quantity, 1);
+cart().updateQuantity(item.id, 0); assert.equal(cart().items[0].quantity, 3);
 cart().removeItem(item.id); assert.equal(cart().total(), 20);
 cart().closeCart(); assert.equal(cart().isOpen, false); cart().openCart(); assert.equal(cart().isOpen, true);
 cart().clear(); assert.equal(cart().count(), 0); assert.equal(cart().total(), 0);

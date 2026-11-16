@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useTransition } from "react";
+import { generateProductSlug, slugFromNameChange, type ProductSaveResult } from "@/lib/product-slug";
+import { Fragment, useTransition, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -36,12 +37,20 @@ export function ProductForm({
 }: {
   categories: CategoryTreeNode[];
   defaults?: ProductDefaults;
-  action: (formData: FormData) => Promise<void>;
+  action: (formData: FormData) => Promise<ProductSaveResult>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { t } = useLangStore();
   const tp = t.admin.product;
+  const [slugState, setSlugState] = useState({ name: defaults?.name ?? "", slug: defaults?.slug ?? "", manual: Boolean(defaults) });
+  const [slugError, setSlugError] = useState<"slugInvalid" | "slugDuplicate" | null>(null);
+  const activeUploads = useRef(new Set<string>());
+  const [uploading, setUploading] = useState(false);
+  const uploadStateChanged = (name: string, busy: boolean) => {
+    if (busy) activeUploads.current.add(name); else activeUploads.current.delete(name);
+    setUploading(activeUploads.current.size > 0);
+  };
 
   const inputClass =
     "w-full rounded-xl border border-ink/10 bg-white px-4 py-2.5 text-sm outline-none focus:border-pink-400";
@@ -49,9 +58,12 @@ export function ProductForm({
   return (
     <form
       action={(formData) => {
+        if (activeUploads.current.size) return;
         startTransition(async () => {
           try {
-            await action(formData);
+            setSlugError(null);
+            const result = await action(formData);
+            if (result?.error) { setSlugError(result.error); return; }
             toast.success(t.admin.common.saved);
             router.push("/admin/products");
           } catch (e) {
@@ -63,8 +75,8 @@ export function ProductForm({
       className="glass max-w-2xl space-y-5 rounded-xl2 p-4 shadow-soft sm:p-6"
     >
       <div>
-        <label className="mb-1 block text-sm font-medium">{tp.nameUa}</label>
-        <input name="name" defaultValue={defaults?.name} required className={inputClass} />
+        <label htmlFor="product-name-ua" className="mb-1 block text-sm font-medium">{tp.nameUa}</label>
+        <input id="product-name-ua" name="name" value={slugState.name} onChange={(event) => setSlugState((state) => slugFromNameChange(state, event.target.value))} required className={inputClass} />
       </div>
 
       <div>
@@ -73,8 +85,11 @@ export function ProductForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium">{tp.slug}</label>
-        <input name="slug" defaultValue={defaults?.slug} required className={inputClass} />
+        <label htmlFor="product-slug" className="mb-1 block text-sm font-medium">{tp.slug}</label>
+        <input id="product-slug" name="slug" value={slugState.slug} onChange={(event) => { setSlugState((state) => ({ ...state, slug: event.target.value, manual: true })); setSlugError(null); }} maxLength={160} required aria-describedby="product-slug-help product-slug-error" aria-invalid={Boolean(slugError)} className={inputClass} />
+        <p id="product-slug-help" className="mt-1 text-xs text-ink/60">{tp.slugHelp}</p>
+        <button type="button" className="min-h-11 text-sm underline" onClick={() => { setSlugState((state) => ({ ...state, slug: generateProductSlug(state.name), manual: false })); setSlugError(null); }}>{tp.slugRegenerate}</button>
+        <p id="product-slug-error" role="alert" className="text-sm text-red-700">{slugError ? tp[slugError] : ""}</p>
       </div>
 
       <div>
@@ -122,12 +137,8 @@ export function ProductForm({
         </div>
       </div>
 
-      <div>
-        <label className="mb-1 block text-sm font-medium">{tp.imageUrl}</label>
-        <input name="imageUrl" type="url" defaultValue={defaults?.imageUrl} required className={inputClass} />
-      </div>
-
-      <MediaUrlField name="hoverGifUrl" label={tp.hoverGif} help={tp.hoverGifHelp} defaultValue={defaults?.hoverGifUrl ?? ""} animated />
+      <MediaUrlField name="imageUrl" label={tp.imageUrl} help={t.admin.media.imageHelp} defaultValue={defaults?.imageUrl ?? ""} uploadEnabled required disabled={isPending} onUploadStateChange={uploadStateChanged} />
+      <MediaUrlField name="hoverGifUrl" label={tp.hoverGif} help={tp.hoverGifHelp} defaultValue={defaults?.hoverGifUrl ?? ""} uploadEnabled animated disabled={isPending} onUploadStateChange={uploadStateChanged} />
       <SizeEditor defaults={defaults?.variants} legacySizes={defaults?.legacySizes} />
 
       <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
@@ -142,7 +153,7 @@ export function ProductForm({
         </label>
       </div>
 
-      <Button type="submit" size="lg" disabled={isPending}>
+      <Button type="submit" size="lg" disabled={isPending || uploading}>
         {isPending ? t.admin.common.saving : t.admin.common.save}
       </Button>
     </form>

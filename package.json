@@ -17,6 +17,7 @@
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
     "@prisma/client": "^5.20.0",
+    "@vercel/blob": "2.9.0",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "framer-motion": "^11.11.17",
@@ -29,6 +30,9 @@
     "sonner": "^1.7.0",
     "zod": "^3.23.8",
     "zustand": "^5.0.1"
+  },
+  "overrides": {
+    "@vercel/cli-config": { "zod": "4.6.7" }
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

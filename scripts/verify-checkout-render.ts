@@ -13,22 +13,29 @@ import * as utils from "../src/lib/utils";
 import * as lookups from "../src/components/checkout/use-np-lookups";
 import type { CheckoutForm as Form } from "../src/components/checkout/checkout-form";
 import { sourceModule } from "./source-module";
+import * as limits from "../src/lib/cart-limits";
+import * as cartItems from "../src/lib/cart-items";
 import * as variants from "../src/lib/product-variants";
 import type { ProductOptions as Options } from "../src/components/product/product-options";
 
 const blocked = () => { throw new Error("NO_SIDE_EFFECTS_DURING_RENDER_QA"); };
+const readiness = sourceModule("src/components/cart/cart-readiness.tsx", {
+  react: React, "react/jsx-runtime": jsxRuntime, "next/link": { default: "a", __esModule: true },
+  "@/store/cart-store": cart, "@/store/lang-store": language, "@/lib/cart-limits": limits, "@/lib/utils": utils,
+});
 const button = sourceModule("src/components/ui/button.tsx", { react: React, "react/jsx-runtime": jsxRuntime, "@/lib/utils": utils });
-function purchaseComponent(selectedSize: string | null = null) {
+function purchaseComponent(selectedSize: string | null = null, quantity = 1) {
   // Seed a selected-size render using real React hooks. This checks rendered states,
   // not pointer/keyboard interaction, and adds no testing prop to production code.
   return sourceModule<{ ProductOptions: typeof Options }>("src/components/product/product-options.tsx", {
-    react: { ...React, useState: (initial: unknown) => React.useState(initial === null ? selectedSize : initial) },
+    react: { ...React, useState: (initial: unknown) => React.useState(initial === null ? selectedSize : initial === 1 ? quantity : initial) },
     "react/jsx-runtime": jsxRuntime, "lucide-react": icons, "@/lib/utils": utils,
     "@/components/ui/button": button, "@/store/cart-store": cart, "@/store/lang-store": language,
-    "@/lib/product-variants": variants, sonner: { toast: { error: blocked, success: blocked } },
+    "@/lib/product-variants": variants, "@/lib/cart-items": cartItems, "@/lib/cart-limits": limits, sonner: { toast: { error: blocked, success: blocked } },
   }).ProductOptions;
 }
 const { CheckoutForm } = sourceModule<{ CheckoutForm: typeof Form }>("src/components/checkout/checkout-form.tsx", {
+  "@/components/cart/cart-readiness": readiness,
   "@/lib/payments/checkout-session": { onlineCheckoutKey: blocked, rememberCheckoutResult: blocked },
   react: React, "react/jsx-runtime": jsxRuntime, "react-hook-form": hookForm,
   "@hookform/resolvers/zod": resolvers, "lucide-react": icons,
@@ -45,8 +52,8 @@ for (const locale of ["ua", "en"] as const) {
     { id: "large", labelUa: "Великий", labelEn: "Large", price: 25, noteUa: "Збільшений", noteEn: "Larger" },
   ];
   const original = JSON.stringify(sizes);
-  const renderPurchase = (configuredSizes: variants.SizeVariant[], selectedId: string | null = null, isOrderable = true) => renderToStaticMarkup(
-    React.createElement(language.LangStoreContext.Provider, { value: store }, React.createElement(purchaseComponent(selectedId), {
+  const renderPurchase = (configuredSizes: variants.SizeVariant[], selectedId: string | null = null, isOrderable = true, quantity = 1) => renderToStaticMarkup(
+    React.createElement(language.LangStoreContext.Provider, { value: store }, React.createElement(purchaseComponent(selectedId, quantity), {
       productId: "qa", name: "QA", slug: "qa", basePrice: 10, image: "/images/placeholder.svg", isOrderable, variants: configuredSizes,
     })));
   const addButton = (html: string) => html.match(/<button\b[^>]*>[\s\S]*?<\/button>/g)?.at(-1) ?? "";
@@ -71,6 +78,11 @@ for (const locale of ["ua", "en"] as const) {
   assert.ok(addButton(renderPurchase(sizes, "missing-size")).includes("disabled="));
   assert.ok(addButton(renderPurchase(sizes, "small", false)).includes("disabled="));
   assert.ok(addButton(renderPurchase([{ ...sizes[0], price: null }], "small")).includes("disabled="));
+  const excessive = renderPurchase([], null, true, limits.MAX_QUANTITY);
+  assert.ok(addButton(excessive).includes("disabled="));
+  assert.ok(excessive.includes(store.getState().t.cart.reconciliation.limit));
+  const increaseButton = excessive.match(/<button\b[^>]*>/g)?.find((button) => button.includes(`aria-label="${store.getState().t.cart.increase}"`));
+  assert.ok(increaseButton?.includes('disabled=""'), "The quantity increment must be disabled at the supported limit.");
   assert.equal(JSON.stringify(sizes), original, "Rendering must not mutate variant IDs, labels, notes or prices.");
   assert.equal(variants.productLineId("qa"), "qa");
   assert.equal(variants.productLineId("qa", "small"), "qa-small");

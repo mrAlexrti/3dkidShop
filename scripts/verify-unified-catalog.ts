@@ -1,3 +1,4 @@
+import * as cartItems from "../src/lib/cart-items";
 // Actual components with fail-closed, in-memory boundaries. No DB or external calls.
 import assert from "node:assert/strict";
 import * as React from "react";
@@ -37,12 +38,12 @@ for (const locale of ["ua", "en"] as const) {
       if (!(index in state)) state[index] = initial;
       return [state[index], (value: unknown) => { state[index] = value; }];
     }, useSyncExternalStore: () => animationAllowed },
-    "next/image": Image, "next/link": Link,
+    "@/components/product/product-image": { ProductImage: Image }, "next/image": Image, "next/link": Link,
     "next/navigation": { useRouter: () => ({ push: (path: string) => pushes.push(path) }) },
     "lucide-react": icons, "@/lib/utils": utils, "@/lib/product-media": media,
-    "@/lib/product-content": content,
+    "@/lib/product-content": content, "@/lib/cart-items": cartItems,
     "@/store/lang-store": { useLangStore: () => ({ locale, t }) },
-    "@/store/cart-store": { useCartStore: (selector: (store: unknown) => unknown) => selector({ addItem: (item: unknown) => cart.push(item) }) },
+    "@/store/cart-store": { useCartStore: (selector: (store: unknown) => unknown) => selector({ items: [], addItem: (item: unknown) => { cart.push(item); return true; } }) },
     sonner: { toast: { error: (text: string) => errors.push(text), message: () => {}, success: () => {} } },
   });
   const base = { id: "fixture", slug: "fixture", name: "Тест", nameEn: "Test", price: 123, image: "/images/placeholder.svg", isOrderable: true, hoverGifUrl: "https://example.invalid/hover.gif" };

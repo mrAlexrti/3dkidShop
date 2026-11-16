@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { ProductImage as Image } from "@/components/product/product-image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ShoppingBag } from "lucide-react";
@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { getProductName } from "@/lib/product-content";
 import { useState, useSyncExternalStore } from "react";
 import { httpMediaUrl } from "@/lib/product-media";
+import { cartAfterAddition } from "@/lib/cart-items";
 
 const animationQuery = "(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)";
 function subscribeAnimationPreference(callback: () => void) {
@@ -38,9 +39,12 @@ type Props = {
 export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, hoverGifUrl, isNew, hasOptions = false, isOrderable }: Props) {
   const router = useRouter();
   const addItem  = useCartStore((s) => s.addItem);
+  const items = useCartStore((s) => s.items);
   const { locale, t } = useLangStore();
   const localizedName = getProductName({ name, nameEn }, locale);
   const currency = "UAH";
+  const candidate = { id, productId: id, name: localizedName, slug, price, image, quantity: 1 };
+  const atLimit = !hasOptions && cartAfterAddition(items, candidate) === null;
   const animationAllowed = useSyncExternalStore(subscribeAnimationPreference, canAnimate, staticOnServer);
   const [pointed, setPointed] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -75,7 +79,7 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, ho
       router.push(`/product/${slug}`);
       return;
     }
-    addItem({ id, productId: id, name: localizedName, slug, price, image, quantity: 1 });
+    if (!addItem(candidate)) toast.error(t.cart.reconciliation.limit);
   };
 
   return (
@@ -88,12 +92,13 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, ho
       <div className="sf-product-body">
         <h3><Link href={`/product/${slug}`}>{localizedName}</Link></h3>
         {!isOrderable && <p className="mt-2 text-xs text-ink/60">{t.product.unavailable}</p>}
+        {isOrderable && atLimit && <p className="mt-2 text-xs text-ink/60">{t.cart.reconciliation.limit}</p>}
         <div className="sf-product-bottom">
           <div className="sf-product-price">
             <span>{hasOptions && `${t.product.from} `}{formatPrice(price, currency)}</span>
             {oldPrice && <del>{formatPrice(oldPrice, currency)}</del>}
           </div>
-          <button type="button" className="sf-product-add disabled:opacity-50" disabled={!isOrderable} onClick={handleQuickAdd} aria-label={`${!isOrderable ? t.product.unavailable : hasOptions ? t.product.chooseSize : t.product.addToCart}: ${localizedName}`} aria-disabled={!isOrderable}>
+          <button type="button" className="sf-product-add disabled:opacity-50" disabled={!isOrderable || atLimit} onClick={handleQuickAdd} aria-label={`${!isOrderable ? t.product.unavailable : atLimit ? t.cart.reconciliation.limit : hasOptions ? t.product.chooseSize : t.product.addToCart}: ${localizedName}`} aria-disabled={!isOrderable || atLimit}>
             <ShoppingBag size={20} aria-hidden="true" />
           </button>
         </div>

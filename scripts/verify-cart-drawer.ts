@@ -9,11 +9,12 @@ import { setTimeout as pause } from "node:timers/promises";
 import { build } from "esbuild";
 
 async function verify() {
-  const fixture = resolve("scripts/fixtures/cart-drawer-environment.tsx");
-  const modules: Record<string, string> = { "next/image": "Image as default", "next/link": "Link as default", "next/navigation": "usePathname, useRouter", sonner: "toast" };
-  const bundle = await build({ entryPoints: ["scripts/fixtures/cart-drawer-browser.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
+  const mediaUploads = process.argv.includes("--media-upload");
+  const fixture = resolve(mediaUploads ? "scripts/fixtures/media-upload-environment.tsx" : "scripts/fixtures/cart-drawer-environment.tsx");
+  const modules: Record<string, string> = { "next/image": "Image as default", "next/link": "Link as default", "next/navigation": "usePathname, useRouter", sonner: "toast", "@/lib/actions/reconcile-cart": "lookupCartProducts", "@vercel/blob/client": "upload" };
+  const bundle = await build({ entryPoints: [mediaUploads ? "scripts/fixtures/media-upload-browser.tsx" : "scripts/fixtures/cart-drawer-browser.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
     define: { "process.env.NODE_ENV": '"development"' }, plugins: [{ name: "isolated-next-and-toast", setup(api) {
-      api.onResolve({ filter: /^(next\/image|next\/link|next\/navigation|sonner)$/ }, ({ path }) => ({ path, namespace: "qa" }));
+      api.onResolve({ filter: /^(next\/image|next\/link|next\/navigation|sonner|@\/lib\/actions\/reconcile-cart|@vercel\/blob\/client)$/ }, ({ path }) => ({ path, namespace: "qa" }));
       api.onLoad({ filter: /.*/, namespace: "qa" }, ({ path }) => ({ contents: `export { ${modules[path]} } from ${JSON.stringify(fixture)};`, resolveDir: process.cwd() }));
     } }],
   });
@@ -57,16 +58,23 @@ async function verify() {
       assert.ok(!result.exceptionDetails, JSON.stringify(result.exceptionDetails));
       return (result.result as { value: unknown }).value;
     };
-    for (const width of [390, 1280]) for (const locale of ["ua", "en"]) {
+    const qa = mediaUploads ? "mediaUploadQA" : "cartQA";
+    for (const width of mediaUploads ? [320, 390, 1280] : [390, 1280]) for (const locale of ["ua", "en"]) {
       await send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
       await send("Page.navigate", { url: `${origin}/catalog` });
       let loaded = false;
-      for (let attempt = 0; attempt < 100; attempt++) { if (await evaluate("document.readyState === 'complete' && !!window.cartQA")) { loaded = true; break; } await pause(50); }
+      for (let attempt = 0; attempt < 100; attempt++) { if (await evaluate(`document.readyState === 'complete' && !!window.${qa}`)) { loaded = true; break; } await pause(50); }
       assert.ok(loaded, "Local cart fixture failed to load");
-      console.log(`PASS ${width}px ${await evaluate(`window.cartQA.run(${JSON.stringify(locale)})`)}`);
+      if (mediaUploads) {
+        await evaluate(`window.${qa}.setup(${JSON.stringify(locale)})`);
+        await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r", unmodifiedText: "\r" });
+        await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+      }
+      console.log(`PASS ${width}px ${await evaluate(`window.${qa}.run(${JSON.stringify(locale)})`)}`);
     }
     assert.deepEqual(exceptions, [], "Unhandled browser exceptions");
-    console.log("PASS real drawer lifecycle: UA/EN desktop/mobile, actual React StrictMode/Framer/Zustand, no external requests or production data.");
+    console.log(mediaUploads ? "PASS real Admin media uploads: UA/EN desktop/mobile, native keyboard activation, actual React StrictMode/product form, mocked Blob SDK, no external requests or production data."
+      : "PASS real drawer lifecycle: UA/EN desktop/mobile, actual React StrictMode/Framer/Zustand, no external requests or production data.");
   } finally { socket?.close(); browser.kill(); server.closeAllConnections(); server.close(); }
 }
 verify().catch((error) => { console.error(error); process.exitCode = 1; });

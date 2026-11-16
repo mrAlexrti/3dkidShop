@@ -37,7 +37,7 @@ Module._load = function(name, parent, main) {
 };
 globalThis.fetch = async () => forbidden();
 `);
-const env = { ...process.env, NEXT_TELEMETRY_DISABLED: "1", DATABASE_URL: "", MONO_ACQUIRING_TOKEN: "", LIQPAY_PRIVATE_KEY: "", LIQPAY_PUBLIC_KEY: "", NP_API_KEY: "", RESEND_API_KEY: "", TELEGRAM_BOT_TOKEN: "", ONLINE_PAYMENT_MODE: "disabled" };
+const env = { ...process.env, NEXT_TELEMETRY_DISABLED: "1", BLOB_READ_WRITE_TOKEN: "", BLOB_STORE_ID: "", VERCEL_OIDC_TOKEN: "", BLOB_WEBHOOK_PUBLIC_KEY: "", DATABASE_URL: "", MONO_ACQUIRING_TOKEN: "", LIQPAY_PRIVATE_KEY: "", LIQPAY_PUBLIC_KEY: "", NP_API_KEY: "", RESEND_API_KEY: "", TELEGRAM_BOT_TOKEN: "", ONLINE_PAYMENT_MODE: "disabled" };
 env.NODE_OPTIONS = `${env.NODE_OPTIONS || ""} --use-system-ca --require=${JSON.stringify(preload)}`.trim();
 console.log("Isolated production build: empty Prisma read fixtures; DB writes/connections and provider fetch blocked. Ignored QA output/tsconfig paths; no environment files changed.");
 const child = spawn(process.execPath, [resolve("node_modules/next/dist/bin/next"), "build"], { env, stdio: "inherit", windowsHide: true });

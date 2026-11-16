@@ -1,6 +1,12 @@
 // Local browser fixtures only. No Next server, providers, notifications or API calls.
 import * as React from "react";
 
+export async function lookupCartProducts() {
+  return [{ id: "qa", name: "QA Dragon", nameEn: "QA Dragon", slug: "qa", price: 20, image: "/placeholder.svg", isOrderable: true, variants: [] },
+    { id: "qa-sizes", name: "QA Dragon", nameEn: "QA Dragon", slug: "qa", price: 20, image: "/placeholder.svg", isOrderable: true,
+    variants: [{ id: "small", labelUa: "S", labelEn: "Small", price: 25, noteUa: null, noteEn: null }] }];
+}
+
 const listeners = new Set<() => void>();
 export function navigate(path: string) {
   history.pushState(null, "", path);

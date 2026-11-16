@@ -1,17 +1,17 @@
 "use client";
 
-import Image from "next/image";
+import { ProductImage as Image } from "@/components/product/product-image";
+import { CartReadiness, CartLineStatus, CartAmount } from "@/components/cart/cart-readiness";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CheckoutForm } from "@/components/checkout/checkout-form";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
-import { formatPrice } from "@/lib/utils";
 import { sizeLabel } from "@/lib/product-variants";
 
 export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: boolean }) {
-  const { items, total } = useCartStore();
+  const { items } = useCartStore();
   const { t, locale } = useLangStore();
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -25,6 +25,7 @@ export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: 
 
   return <div className="sf-checkout-page container-shop py-10">
     <h1 className="font-display text-3xl">{t.checkout.title}</h1>
+    <CartReadiness />
     <div className="mt-8 grid gap-10 lg:grid-cols-3">
       <div className="lg:col-span-2"><CheckoutForm onlineCardEnabled={onlineCardEnabled} /></div>
       <aside className="h-fit">
@@ -37,14 +38,15 @@ export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: 
               </div>
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-2 text-sm font-medium leading-snug">{item.name}</p>
+                <CartLineStatus id={item.id} />
                 {item.variant && <p className="text-xs text-ink/60">{`${t.product.size}: ${sizeLabel(item.variant, locale)}`}</p>}
                 <p className="text-xs text-ink/40">× {item.quantity}</p>
               </div>
-              <span className="shrink-0 text-sm font-semibold">{formatPrice(item.price * item.quantity, "UAH")}</span>
+              <span className="shrink-0 text-sm font-semibold"><CartAmount id={item.id} /></span>
             </li>)}
           </ul>
           <div className="mt-5 flex justify-between border-t border-pink-100 pt-4 font-semibold">
-            <span>{t.cart.total}</span><span className="text-pink-600">{formatPrice(total(), "UAH")}</span>
+            <span>{t.cart.total}</span><span className="text-pink-600"><CartAmount /></span>
           </div>
         </div>
       </aside>

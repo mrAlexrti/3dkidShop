@@ -1,5 +1,7 @@
 "use client";
 
+import { cartAfterAddition } from "@/lib/cart-items";
+import { cartTotalMinor } from "@/lib/cart-limits";
 import { useState } from "react";
 import { Minus, Plus, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,15 +16,19 @@ export function ProductOptions({ productId, name, slug, basePrice, image, isOrde
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const addItem = useCartStore((state) => state.addItem);
+  const items = useCartStore((state) => state.items);
   const { t, locale } = useLangStore();
   const selected = variants.find((variant) => variant.id === selectedId);
   const validPrices = variants.flatMap((variant) => variant.price == null ? [] : [variant.price]);
   const unitPrice = variants.length ? selected?.price ?? (validPrices.length ? Math.min(...validPrices) : null) : basePrice;
-  const ready = isOrderable && (!variants.length || (selected != null && selected.price != null));
+  const candidate = (count: number) => ({ id: productLineId(productId, selected?.id), productId, name, slug, price: unitPrice ?? 0, image, quantity: count,
+    ...(selected ? { variant: { id: selected.id, labelUa: selected.labelUa, labelEn: selected.labelEn } } : {}) });
+  const withinLimits = (count: number) => unitPrice != null && cartAfterAddition(items, candidate(count)) !== null;
+  const ready = withinLimits(quantity) && isOrderable && (!variants.length || (selected != null && selected.price != null));
+  const lineMinor = unitPrice == null ? null : cartTotalMinor([{ price: unitPrice, quantity }]);
   function add() {
     if (!ready || unitPrice == null) return;
-    addItem({ id: productLineId(productId, selected?.id), productId, name, slug, price: unitPrice, image, quantity,
-      ...(selected ? { variant: { id: selected.id, labelUa: selected.labelUa, labelEn: selected.labelEn } } : {}) });
+    addItem(candidate(quantity));
   }
   const note = selected && (locale === "en" ? selected.noteEn || selected.noteUa : selected.noteUa);
   return <div className="sf-product-options mt-6 space-y-5">
@@ -40,13 +46,14 @@ export function ProductOptions({ productId, name, slug, basePrice, image, isOrde
       <div className="sf-quantity-control flex items-center gap-3 rounded-full border border-ink/15 px-4 py-2">
         <button type="button" aria-label={t.cart.decrease} disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}><Minus size={16} /></button>
         <span className="w-6 text-center tabular-nums">{quantity}</span>
-        <button type="button" aria-label={t.cart.increase} disabled={!Number.isSafeInteger(quantity + 1)} onClick={() => setQuantity((value) => value + 1)}><Plus size={16} /></button>
+        <button type="button" aria-label={t.cart.increase} disabled={!withinLimits(quantity + 1)} onClick={() => { if (withinLimits(quantity + 1)) setQuantity((value) => value + 1); }}><Plus size={16} /></button>
       </div>
       <p className="text-2xl text-pink-600" aria-live="polite" aria-atomic="true">
         {variants.length > 0 && !selected && unitPrice != null && <span className="mr-2 text-sm">{t.product.from}</span>}
-        {unitPrice == null ? t.product.sizeUnavailable : formatPrice(unitPrice * quantity, "UAH")}
+        {unitPrice == null ? t.product.sizeUnavailable : lineMinor == null ? "—" : formatPrice(lineMinor / 100, "UAH")}
       </p>
     </div>
+    {!withinLimits(quantity) && <p role="status" className="text-sm text-ink/70">{t.cart.reconciliation.limit}</p>}
     <Button type="button" size="lg" className="w-full text-base" onClick={add} disabled={!ready}>
       <ShoppingBag size={18} />{!isOrderable ? t.product.unavailable : variants.length && !selected ? t.product.chooseSize : t.product.addToCart}
     </Button>

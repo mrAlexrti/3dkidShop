@@ -1,43 +1,48 @@
 "use client";
 
-import Image from "next/image";
+import { ProductImage as Image } from "@/components/product/product-image";
+import { useLangStore } from "@/store/lang-store";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-export function ProductGallery({ images, name }: { images: { id: string; url: string }[]; name: string }) {
+export function ProductGallery({ images, name }: { images: { id: string; url: string; alt?: string | null }[]; name: string }) {
   const [active, setActive] = useState(0);
   const list = images.length > 0 ? images : [{ id: "placeholder", url: "/images/placeholder.svg" }];
+
+  const selected = list[active] ?? list[0];
+  const { t } = useLangStore();
 
   return (
     <div className="sf-product-gallery">
       <div className="relative aspect-square overflow-hidden rounded-xl2 bg-white shadow-soft">
         <AnimatePresence mode="wait">
           <motion.div
-            key={list[active].id}
+            key={selected.id}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
             className="absolute inset-0"
           >
-            <Image src={list[active].url} alt={name} fill priority className="object-cover" />
+            <Image src={selected.url} alt={selected.alt || name} fill sizes="(max-width: 767px) 100vw, 50vw" priority className="object-cover" />
           </motion.div>
         </AnimatePresence>
       </div>
 
       {list.length > 1 && (
-        <div className="sf-gallery-thumbnails mt-4 flex gap-3">
+        <div className="sf-gallery-thumbnails mt-4 flex gap-3 overflow-x-auto pb-2">
           {list.map((img, i) => (
             <button
               key={img.id}
+              type="button" aria-pressed={selected.id === img.id} aria-label={`${t.product.viewImage} ${i + 1}: ${name}`}
               onClick={() => setActive(i)}
               className={cn(
-                "relative h-20 w-20 overflow-hidden rounded-lg border-2 transition-colors",
+                "relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-colors",
                 active === i ? "border-pink-500" : "border-transparent"
               )}
             >
-              <Image src={img.url} alt={`${name} ${i + 1}`} fill className="object-cover" />
+              <Image src={img.url} alt={img.alt || `${name} ${i + 1}`} sizes="80px" fill className="object-cover" />
             </button>
           ))}
         </div>
