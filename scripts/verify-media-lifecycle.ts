@@ -405,17 +405,19 @@ async function verify() {
   assert.equal(edited.queue().length, 1); assert.equal(JSON.parse(edited.queue()[0].value).url, blob());
   pass("gallery reordering/primary selection and URL updates preserve existing IDs, alt text and variants; only removed URLs become candidates");
 
-  for (const shared of ["same-gallery", "product", "category", "hero"]) {
+  for (const shared of ["same-gallery", "product", "category", "hero", "about", "review"]) {
     const f = fixture(); f.seed();
     if (shared === "same-gallery") f.state.productImage.push({ id: "shared-copy", productId: "p1", url: blob(), order: 1 });
     if (shared === "product") f.seed("p2", blob());
     if (shared === "category") f.state.category.push({ id: "shared-category", imageUrl: blob() });
     if (shared === "hero") f.state.siteContent.push({ key: "hero_image_1", value: blob() });
+    if (shared === "about") f.state.siteContent.push({ key: "about_body_en", value: `About paragraph\n\n${encodeURIComponent(blob())}` });
+    if (shared === "review") f.state.review.push({ id: "shared-review", text: "Review fixture", avatarUrl: blob() });
     const data = form(); data.set("images", JSON.stringify(shared === "same-gallery" ? [{ id: "shared-copy", url: blob() }] : [{ id: "p1-main", url: external }]));
     assert.equal(await f.products.updateProduct("p1", data), undefined); assert.equal(f.queue().length, 0);
     await mature(f); assert.equal(f.deleted.length, 0);
   }
-  pass("removing a gallery row never even schedules retirement while its URL remains in another gallery/product/category/hero reference");
+  pass("removing a gallery row never even schedules retirement while its URL remains in another gallery/product/category/hero/About/Review reference");
 
   for (const payload of [[], Array.from({ length: 11 }, () => ({ url: external })), [{ id: "foreign-image", url: external }], [{ id: "p1-main", url: external }, { id: "p1-main", url: external }]]) {
     const f = fixture(); f.seed(); const before = structuredClone(f.state); const data = form(); data.set("images", JSON.stringify(payload));
