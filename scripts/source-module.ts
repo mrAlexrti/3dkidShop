@@ -14,6 +14,8 @@ import * as rollout from "../src/lib/variant-rollout";
 import * as materials from "../src/lib/product-materials";
 import * as confirmations from "../src/components/admin/confirm-button";
 import { ProductMaterials } from "../src/components/product/product-materials";
+import { initialConfigurationDraft } from "../src/components/admin/variant-editor";
+import { ProductSelectionProvider } from "../src/components/product/product-selection";
 
 export function sourceModule<T>(file: string, bindings: Record<string, unknown>): T {
   const filename = resolve(file);
@@ -34,7 +36,8 @@ export function sourceModule<T>(file: string, bindings: Record<string, unknown>)
     "@/lib/variant-rollout": rollout,
     "@/lib/product-configuration-admin": configurationAdmin, "@/lib/cart-persistence": cartPersistence,
     "@/lib/variant-transaction": { lockProductConfiguration: async () => {}, flushVariantConstraints: async () => {} },
-    "./native-product-options": { NativeProductOptions: () => null }, "./variant-editor": { VariantEditor: () => null },
+    "./native-product-options": { NativeProductOptions: () => null }, "./variant-editor": { VariantEditor: () => null, initialConfigurationDraft },
+    "@/components/product/product-selection": { ProductSelectionProvider },
   };
   const requireBound = (name: string) => {
     if (name === "zustand/middleware" && name in bindings) return { createJSONStorage, ...(bindings[name] as object) };

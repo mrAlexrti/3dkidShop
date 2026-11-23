@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ProductGallery } from "@/components/product/product-gallery";
+import { ProductSelectionProvider } from "@/components/product/product-selection";
 import { ProductMaterials } from "@/components/product/product-materials";
 import { ProductDescription } from "@/components/product/product-description";
 import { ProductOptions } from "@/components/product/product-options";
@@ -87,6 +88,9 @@ export default async function ProductPage({
   const productName = getProductName(product, locale);
   const productDescription = getProductDescription(product, locale);
   const t = translations[locale];
+  const configuration = publicConfiguration(product);
+  // Retired/unused color links stay in Admin and the DB, outside the public gallery.
+  const images = product.images.filter((image) => !image.colorValueId || configuration.values.some((value) => value.kind === "COLOR" && value.id === image.colorValueId));
 
   const related = await prisma.$transaction((tx) => tx.product.findMany({
     where: {
@@ -100,9 +104,10 @@ export default async function ProductPage({
 
   return (
     <div className="sf-product-page container-shop py-10">
+      <ProductSelectionProvider key={product.id} images={images}>
       <div className="grid gap-10 md:grid-cols-2">
         <AnimatedSection>
-          <ProductGallery images={product.images} name={productName} />
+          <ProductGallery images={images} name={productName} />
         </AnimatedSection>
 
         <AnimatedSection delay={0.1}>
@@ -119,10 +124,10 @@ export default async function ProductPage({
             name={productName}
             slug={product.slug}
             basePrice={Number(product.price)}
-            image={product.images[0]?.url ?? "/images/placeholder.svg"}
+            image={images[0]?.url ?? "/images/placeholder.svg"}
             isOrderable={product.isOrderable}
             variants={(product.optionMode ?? "LEGACY") === "LEGACY" ? getSizeVariants(product.options) : []}
-            configuration={publicConfiguration(product)}
+            configuration={configuration}
           />
 
           {product.attributes.length > 0 && (
@@ -143,7 +148,7 @@ export default async function ProductPage({
           )}
         </AnimatedSection>
       </div>
-
+      </ProductSelectionProvider>
       <RelatedProducts
         title={t.product.related}
         products={related.map((p) => ({

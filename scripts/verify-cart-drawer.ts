@@ -16,21 +16,22 @@ async function verify() {
   const galleryAdmin = process.argv.includes("--gallery-admin");
   const variants = process.argv.includes("--variants");
   const addendum = process.argv.includes("--addendum");
-  const fixture = resolve(galleryAdmin || variants || addendum ? "scripts/fixtures/gallery-admin-environment.tsx" : mediaUploads ? "scripts/fixtures/media-upload-environment.tsx" : "scripts/fixtures/cart-drawer-environment.tsx");
+  const colorImages = process.argv.includes("--color-images");
+  const fixture = resolve(galleryAdmin || variants || addendum || colorImages ? "scripts/fixtures/gallery-admin-environment.tsx" : mediaUploads ? "scripts/fixtures/media-upload-environment.tsx" : "scripts/fixtures/cart-drawer-environment.tsx");
   const modules: Record<string, string> = { "next/image": "Image as default", "next/link": "Link as default", "next/navigation": "usePathname, useRouter", sonner: "toast", "@/lib/actions/reconcile-cart": "lookupCartProducts", "@vercel/blob/client": "upload" };
-  const bundle = await build({ entryPoints: [addendum ? "scripts/fixtures/addendum-browser.tsx" : variants ? "scripts/fixtures/variants-browser.tsx" : galleryAdmin ? "scripts/fixtures/gallery-admin-browser.tsx" : mediaUploads ? "scripts/fixtures/media-upload-browser.tsx" : "scripts/fixtures/cart-drawer-browser.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
+  const bundle = await build({ entryPoints: [colorImages ? "scripts/fixtures/batch18a-browser.tsx" : addendum ? "scripts/fixtures/addendum-browser.tsx" : variants ? "scripts/fixtures/variants-browser.tsx" : galleryAdmin ? "scripts/fixtures/gallery-admin-browser.tsx" : mediaUploads ? "scripts/fixtures/media-upload-browser.tsx" : "scripts/fixtures/cart-drawer-browser.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
     define: { "process.env.NODE_ENV": '"development"' }, plugins: [{ name: "isolated-next-and-toast", setup(api) {
       api.onResolve({ filter: /^(next\/image|next\/link|next\/navigation|sonner|@\/lib\/actions\/reconcile-cart|@vercel\/blob\/client)$/ }, ({ path }) => ({ path, namespace: "qa" }));
       api.onLoad({ filter: /.*/, namespace: "qa" }, ({ path }) => ({ contents: `export { ${modules[path]} } from ${JSON.stringify(fixture)};`, resolveDir: process.cwd() }));
     } }],
   });
-  const actualStyles = galleryAdmin || variants || addendum ? (await postcss([tailwindcss(tailwindConfig)]).process(readFileSync("src/app/globals.css", "utf8"), { from: "src/app/globals.css" })).css + readFileSync("src/app/(shop)/storefront.css", "utf8") : "";
+  const actualStyles = galleryAdmin || variants || addendum || colorImages ? (await postcss([tailwindcss(tailwindConfig)]).process(readFileSync("src/app/globals.css", "utf8"), { from: "src/app/globals.css" })).css + readFileSync("src/app/(shop)/storefront.css", "utf8") : "";
   const server = createServer((request, response) => {
     response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; connect-src 'none'; img-src 'self'; style-src 'unsafe-inline'");
     if (request.url === "/qa.js") { response.setHeader("Content-Type", "text/javascript"); response.end(bundle.outputFiles[0].contents); }
     else if (request.url === "/placeholder.svg") { response.setHeader("Content-Type", "image/svg+xml"); response.end('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"/>'); }
     else { response.setHeader("Content-Type", "text/html"); response.end(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-      ${galleryAdmin || addendum || variants ? actualStyles : `body{margin:0} #root>div:not(:last-child){margin:4px} img{width:40px;height:40px} button{min-height:24px}
+      ${galleryAdmin || addendum || variants || colorImages ? actualStyles : `body{margin:0} #root>div:not(:last-child){margin:4px} img{width:40px;height:40px} button{min-height:24px}
       .fixed{position:fixed}.inset-0{inset:0}[class*="z-[60]"]{z-index:60;background:#0005}
       aside[role=dialog]{right:0;top:0;width:min(100%,384px);height:100%;z-index:70;background:white}
       aside img,aside svg{width:20px;height:20px}`}
@@ -66,8 +67,8 @@ async function verify() {
       assert.ok(!result.exceptionDetails, JSON.stringify(result.exceptionDetails));
       return (result.result as { value: unknown }).value;
     };
-    const qa = addendum ? "addendumQA" : variants ? "variantsQA" : galleryAdmin ? "galleryAdminQA" : mediaUploads ? "mediaUploadQA" : "cartQA";
-    for (const width of mediaUploads || galleryAdmin || variants || addendum ? [320, 390, 1280] : [390, 1280]) for (const locale of ["ua", "en"]) {
+    const qa = colorImages ? "colorImagesQA" : addendum ? "addendumQA" : variants ? "variantsQA" : galleryAdmin ? "galleryAdminQA" : mediaUploads ? "mediaUploadQA" : "cartQA";
+    for (const width of mediaUploads || galleryAdmin || variants || addendum || colorImages ? [320, 390, 1280] : [390, 1280]) for (const locale of ["ua", "en"]) {
       await send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
       if (addendum) {
         await send("Emulation.setTouchEmulationEnabled", { enabled: width < 700, maxTouchPoints: 1 });
@@ -83,6 +84,10 @@ async function verify() {
         await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
       }
       console.log(`PASS ${width}px ${await evaluate(`window.${qa}.run(${JSON.stringify(locale)})`)}`);
+      if (colorImages) {
+        const capture = await send("Page.captureScreenshot", { captureBeyondViewport: true });
+        writeFileSync(resolve(output, `batch18a-${locale}-${width}.png`), Buffer.from(capture.data as string, "base64"));
+      }
       if (addendum) {
         await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
         assert.equal(await evaluate("window.addendumQA.reduced()"), true);
@@ -96,7 +101,7 @@ async function verify() {
       }
     }
     assert.deepEqual(exceptions, [], "Unhandled browser exceptions");
-    console.log(addendum ? "PASS addendum: actual React/DOM at 320/390/1280, UA/EN, Unicode divider, coarse-pointer autoplay, keyboard confirmations, reduced motion and simulated visibility; no live services." : variants ? "PASS native variants: actual React/DOM, sparse choices and Admin preservation, UA/EN mobile/desktop, no live services." : galleryAdmin ? "PASS gallery/Admin reliability: real React/DOM and native dialogs, UA/EN mobile/desktop, mocked Blob and actions, no live services." : mediaUploads ? "PASS real Admin media uploads: UA/EN desktop/mobile, native keyboard activation, actual React StrictMode/product form, mocked Blob SDK, no external requests or production data."
+    console.log(colorImages ? "PASS Batch 1.8A: color galleries, selected prices, cart candidate, native lightbox/zoom/keyboard/swipes and admin error retention; UA/EN 320/390/1280. Synthetic data, no live services." : addendum ? "PASS addendum: actual React/DOM at 320/390/1280, UA/EN, Unicode divider, coarse-pointer autoplay, keyboard confirmations, reduced motion and simulated visibility; no live services." : variants ? "PASS native variants: actual React/DOM, sparse choices and Admin preservation, UA/EN mobile/desktop, no live services." : galleryAdmin ? "PASS gallery/Admin reliability: real React/DOM and native dialogs, UA/EN mobile/desktop, mocked Blob and actions, no live services." : mediaUploads ? "PASS real Admin media uploads: UA/EN desktop/mobile, native keyboard activation, actual React StrictMode/product form, mocked Blob SDK, no external requests or production data."
       : "PASS real drawer lifecycle: UA/EN desktop/mobile, actual React StrictMode/Framer/Zustand, no external requests or production data.");
   } finally { socket?.close(); browser.kill(); server.closeAllConnections(); server.close(); }
 }

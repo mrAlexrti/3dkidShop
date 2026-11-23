@@ -9,9 +9,10 @@ import { inspectMediaFile, uploadErrorCode, type UploadErrorCode } from "@/lib/m
 import { mediaUploadsAvailable, uploadProductMedia } from "@/lib/media-upload-client";
 import { EditorRemoveButton } from "./confirm-button";
 
-type Draft = { key: string; id?: string; url: string; alt: string };
-export function GalleryEditor({ images, imageUrl = "" }: { images?: ProductPhoto[]; imageUrl?: string }) {
-  const { t } = useLangStore(); const text = t.admin.gallery; const form = useAdminForm();
+type Draft = { key: string; id?: string; url: string; alt: string; colorValueId?: string | null; colorKey?: string };
+type Color = { key: string; id?: string; labelUa: string; labelEn: string; retired: boolean };
+export function GalleryEditor({ images, imageUrl = "", colors = [] }: { images?: ProductPhoto[]; imageUrl?: string; colors?: Color[] }) {
+  const { t, locale } = useLangStore(); const text = t.admin.gallery; const form = useAdminForm();
   const [photos, setPhotos] = useState<Draft[]>(() => images?.length ? images.map((image) => ({ ...image, key: image.id, alt: image.alt ?? "" })) : [{ key: "new-0", url: imageUrl, alt: "" }]);
   const [files, setFiles] = useState<File[]>([]); const [busy, setBusy] = useState(false); const [progress, setProgress] = useState(0);
   const [available, setAvailable] = useState(false); const [error, setError] = useState<UploadErrorCode | "galleryLimit" | null>(null);
@@ -48,16 +49,28 @@ export function GalleryEditor({ images, imageUrl = "" }: { images?: ProductPhoto
   }
   return <fieldset data-field-name="images" tabIndex={-1} className="min-w-0 space-y-4 rounded-xl border border-ink/10 p-4">
     <legend className="px-2 font-semibold">{text.title}</legend>
-    <p className="text-xs text-ink/60">{text.limit}</p><AdminFieldError name="images" />
-    <input type="hidden" name="images" value={JSON.stringify(photos.map(({ id, url, alt }) => ({ id, url, alt })))} />
+    <p className="text-xs text-ink/60">{text.limit}</p><p className="text-xs text-ink/60">{text.colorHelp}</p><AdminFieldError name="images" />
+    <input type="hidden" name="images" value={JSON.stringify(photos.map(({ id, url, alt, colorValueId, colorKey }) => ({ id, url, alt, colorValueId, colorKey })))} />
     <input type="hidden" name="imagesSnapshot" value={original.current} />
     {photos.map((photo, index) => <div key={photo.key} className="space-y-2 rounded-xl border border-ink/10 p-3">
-      <p className="text-sm font-semibold">{text.photo} {index + 1}{index === 0 ? ` · ${text.primary}` : ""}</p>
+      <p className="text-sm font-semibold">{text.photo} {index + 1}{index === 0 ? ` · ${text.primary}` : ""}{(photo.colorKey || photo.colorValueId) && photos.findIndex((image) => (image.colorKey || image.colorValueId) === (photo.colorKey || photo.colorValueId)) === index ? ` · ${text.colorPrimary}` : ""}</p>
+      <label className="block text-xs">{text.color}
+        <select className="mt-1 min-h-11 w-full min-w-0 rounded-lg border border-ink/10 p-2 text-sm" value={photo.colorKey || photo.colorValueId || ""} disabled={locked}
+          onChange={(event) => {
+            const color = colors.find((value) => value.key === event.target.value);
+            setPhotos((current) => current.map((image) => image.key === photo.key ? { ...image, colorKey: color?.id ? undefined : color?.key, colorValueId: color?.id ?? null } : image));
+          }}>
+          <option value="">{text.allColors}</option>
+          {colors.filter((value) => !value.retired || value.id === photo.colorValueId).map((value) => <option key={value.key} value={value.key} disabled={value.retired}>{(locale === "en" ? value.labelEn || value.labelUa : value.labelUa) || t.variantConfig.choose}{value.retired ? ` · ${t.variantConfig.retired}` : ""}</option>)}
+          {(photo.colorKey || photo.colorValueId) && !colors.some((value) => value.key === (photo.colorKey || photo.colorValueId)) && <option value={photo.colorKey || photo.colorValueId || ""} disabled>{text.unlistedColor}</option>}
+        </select>
+      </label>
       <MediaUrlField name={index === 0 ? "imageUrl" : `gallery-${photo.key}`} label={`${text.photo} ${index + 1}`} help={t.admin.media.imageHelp} value={photo.url}
         onValueChange={(url) => setPhotos((current) => current.map((image) => image.key === photo.key ? { ...image, url } : image))} uploadEnabled required disabled={busy || form.pending} />
       <label className="block text-xs">{text.alt}<input className="mt-1 w-full rounded-lg border border-ink/10 p-2 text-sm" maxLength={300} value={photo.alt} disabled={locked}
         onChange={(event) => setPhotos((current) => current.map((image) => image.key === photo.key ? { ...image, alt: event.target.value } : image))} /></label>
       <div className="flex flex-wrap gap-2 text-xs">
+        {(photo.colorKey || photo.colorValueId) && <button type="button" className="min-h-11 rounded-full border px-3" aria-label={`${text.makeColorPrimary}: ${index + 1}`} disabled={locked || photos.findIndex((image) => (image.colorKey || image.colorValueId) === (photo.colorKey || photo.colorValueId)) === index} onClick={() => move(index, photos.findIndex((image) => (image.colorKey || image.colorValueId) === (photo.colorKey || photo.colorValueId)))}>{text.makeColorPrimary}</button>}
         <button type="button" className="min-h-11 rounded-full border px-3" disabled={locked || index === 0} onClick={() => move(index, 0)} aria-label={`${text.makePrimary}: ${index + 1}`}>{text.makePrimary}</button>
         <button type="button" className="min-h-11 rounded-full border px-3" disabled={locked || index === 0} onClick={() => move(index, index - 1)} aria-label={`${text.up}: ${index + 1}`}>↑</button>
         <button type="button" className="min-h-11 rounded-full border px-3" disabled={locked || index === photos.length - 1} onClick={() => move(index, index + 1)} aria-label={`${text.down}: ${index + 1}`}>↓</button>

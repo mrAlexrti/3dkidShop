@@ -87,4 +87,5 @@ export async function syncProductConfiguration(tx: Prisma.TransactionClient, pro
   if (newSelections.length) await tx.productVariantSelection.createMany({ data: newSelections });
   await tx.productVariant.updateMany({ where: { productId, retiredAt: null, id: { notIn: retainedVariants } }, data: { retiredAt: new Date() } });
   await tx.product.update({ where: { id: productId }, data: { optionMode: input.mode } });
+  return valueIds;
 }

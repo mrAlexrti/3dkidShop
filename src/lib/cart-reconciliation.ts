@@ -5,8 +5,9 @@ import type { Locale } from "@/lib/i18n";
 import type { SizeVariant } from "@/lib/product-variants";
 import { priceMinor } from "@/lib/cart-limits";
 import { nativeMode, selectedCombination, type OptionMode, type ProductConfiguration } from "./product-configuration";
+import { colorGallery } from "./gallery";
 
-export type CartProduct = { id: string; name: string; nameEn: string | null; slug: string; image: string; price: number; isOrderable: boolean; variants: SizeVariant[]; optionMode?: OptionMode; configuration?: ProductConfiguration };
+export type CartProduct = { id: string; name: string; nameEn: string | null; slug: string; image: string; images?: { url: string; colorValueId?: string | null }[]; price: number; isOrderable: boolean; variants: SizeVariant[]; optionMode?: OptionMode; configuration?: ProductConfiguration };
 export type CartIssue = "unavailable" | "sizeUnavailable" | "variantUnavailable";
 export const CART_IMAGE_PLACEHOLDER = "/images/placeholder.svg";
 
@@ -29,6 +30,9 @@ export function reconcileCart(items: CartItem[], products: CartProduct[], locale
     const product = byId.get(item.productId);
     // Inactive/deleted products deliberately have the same public response.
     if (!product) { issues[item.id] = "unavailable"; return { ...item, image: CART_IMAGE_PLACEHOLDER }; }
+    // Without a verified color, only universal photos are an authoritative fallback.
+    // Keep the old projection contract for callers that do not supply a gallery.
+    const fallbackImage = product.images ? product.images.find((image) => !image.colorValueId)?.url ?? CART_IMAGE_PLACEHOLDER : product.image;
     const sizeId = requestedSizeId(item);
     if (nativeMode(product.optionMode)) {
       const config = product.configuration;
@@ -39,18 +43,19 @@ export function reconcileCart(items: CartItem[], products: CartProduct[], locale
       if (price !== null && price !== item.price) changed.push(item.id);
       const label = (kind: "COLOR" | "SIZE") => config?.values.find((v) => v.kind === kind && v.id === row?.values[kind]);
       const color = label("COLOR"), size = label("SIZE");
-      return { ...item, name: getProductName(product, locale), slug: product.slug, image: product.image,
+      const image = color && product.images ? colorGallery(product.images, color.id)[0]?.url ?? CART_IMAGE_PLACEHOLDER : fallbackImage;
+      return { ...item, name: getProductName(product, locale), slug: product.slug, image,
         ...(price !== null ? { price } : {}),
         ...(size && !item.selection ? { variant: { id: size.id, labelUa: size.labelUa, labelEn: size.labelEn } } : {}),
         ...(color ? { selectionLabels: { COLOR: { labelUa: color.labelUa, labelEn: color.labelEn }, ...(size ? { SIZE: { labelUa: size.labelUa, labelEn: size.labelEn } } : {}) } } : {}) };
     }
-    if (item.selection) { issues[item.id] = "variantUnavailable"; return { ...item, image: product.image }; }
+    if (item.selection) { issues[item.id] = "variantUnavailable"; return { ...item, image: fallbackImage }; }
     const size = product.variants.find((variant) => variant.id === sizeId);
     const price = sizeId ? size?.price : product.variants.length ? null : product.price;
     if (!product.isOrderable) issues[item.id] = "unavailable";
     else if (price == null || priceMinor(price) === null || price <= 0) issues[item.id] = "sizeUnavailable";
     if (price != null && priceMinor(price) !== null && price !== item.price) changed.push(item.id);
-    return { ...item, name: getProductName(product, locale), slug: product.slug, image: product.image,
+    return { ...item, name: getProductName(product, locale), slug: product.slug, image: fallbackImage,
       ...(price != null && priceMinor(price) !== null ? { price } : {}),
       ...(size ? { variant: { id: size.id, labelUa: size.labelUa, labelEn: size.labelEn } } : {}) };
   });

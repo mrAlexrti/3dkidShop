@@ -10,21 +10,26 @@ import { cartAfterAddition } from "@/lib/cart-items";
 import { cartTotalMinor } from "@/lib/cart-limits";
 import { needsColor, needsSize, usableCombination, type ProductConfiguration, type OptionValue } from "@/lib/product-configuration";
 import type { CartItem } from "@/types";
+import { useProductSelection } from "./product-selection";
 
 export function NativeProductOptions({ productId, name, slug, image, isOrderable, configuration: config }: {
   productId: string; name: string; slug: string; image: string; isOrderable: boolean; configuration: ProductConfiguration;
 }) {
-  const [color, setColor] = useState(""); const [size, setSize] = useState(""); const [quantity, setQuantity] = useState(1); const [notice, setNotice] = useState(false);
+  const selection = useProductSelection();
+  const [localColor, setLocalColor] = useState("");
+  const color = selection?.color ?? localColor, setColor = selection?.setColor ?? setLocalColor;
+  const [size, setSize] = useState(""); const [quantity, setQuantity] = useState(1); const [notice, setNotice] = useState(false);
   const items = useCartStore((s) => s.items), addItem = useCartStore((s) => s.addItem);
   const { t, locale } = useLangStore(); const text = t.variantConfig;
   const available = config.combinations.filter((row) => usableCombination(config, row));
   const complete = (!needsColor(config.mode) || Boolean(color)) && (!needsSize(config.mode) || Boolean(size));
   const row = complete ? available.find((v) => (v.values.COLOR ?? "") === color && (v.values.SIZE ?? "") === size) : undefined;
-  const price = row ? Number(row.price) : complete ? null : available.length ? Math.min(...available.map((v) => Number(v.price))) : null;
+  const matching = available.filter((v) => (!color || v.values.COLOR === color) && (!size || v.values.SIZE === size));
+  const price = row ? Number(row.price) : complete ? null : matching.length ? Math.min(...matching.map((v) => Number(v.price))) : null;
   const value = (id: string) => config.values.find((v) => v.id === id);
   const colorValue = value(color), sizeValue = value(size);
   function candidate(count: number): CartItem {
-    const base = { productId, name, slug, image, quantity: count, price: price ?? 0 };
+    const base = { productId, name, slug, image: selection ? selection.images[0]?.url ?? "/images/placeholder.svg" : image, quantity: count, price: price ?? 0 };
     if (needsColor(config.mode) && row && colorValue) return { ...base, id: `${productId}:variant:${row.id}`, selection: { version: 2, variantId: row.id, values: { COLOR: color, ...(size ? { SIZE: size } : {}) } },
       selectionLabels: { COLOR: { labelUa: colorValue.labelUa, labelEn: colorValue.labelEn }, ...(sizeValue ? { SIZE: { labelUa: sizeValue.labelUa, labelEn: sizeValue.labelEn } } : {}) } };
     return { ...base, id: productLineId(productId, size || undefined), ...(sizeValue ? { variant: { id: sizeValue.id, labelUa: sizeValue.labelUa, labelEn: sizeValue.labelEn } } : {}) };

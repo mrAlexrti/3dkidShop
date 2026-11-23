@@ -49,7 +49,7 @@ export default async function EditProductPage({ params, searchParams }: { params
             isOrderable: product.isOrderable,
             categoryId: product.categoryId,
             imageUrl: product.images[0]?.url,
-            images: product.images.map(({ id, url, alt }) => ({ id, url, alt })),
+            images: product.images.map(({ id, url, alt, colorValueId }) => ({ id, url, alt, colorValueId })),
             hoverGifUrl: product.hoverGifUrl,
             isFeatured: product.isFeatured,
             isNew: product.isNew,

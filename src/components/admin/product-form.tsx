@@ -11,7 +11,7 @@ import { AdminForm, AdminFieldError, AdminSaveButton } from "@/components/admin/
 import { GalleryEditor } from "@/components/admin/gallery-editor";
 import type { ProductPhoto } from "@/lib/product-gallery-admin";
 import type { LegacySize, SizeVariant } from "@/lib/product-variants";
-import { VariantEditor } from "./variant-editor";
+import { VariantEditor, initialConfigurationDraft } from "./variant-editor";
 import type { ProductConfiguration, OptionMode } from "@/lib/product-configuration";
 
 type ProductDefaults = {
@@ -56,6 +56,7 @@ export function ProductForm({
   const tp = t.admin.product;
   const legacy = Boolean(defaults) && (!defaults?.optionMode || defaults.optionMode === "LEGACY");
   const [nativeEditing, setNativeEditing] = useState(!legacy && (Boolean(defaults) || allowNative));
+  const [configurationDraft, setConfigurationDraft] = useState(() => initialConfigurationDraft(defaults?.configuration, defaults?.variants));
   const [slugState, setSlugState] = useState({ name: defaults?.name ?? "", slug: defaults?.slug ?? "", manual: Boolean(defaults) });
 
   const inputClass =
@@ -133,9 +134,9 @@ export function ProductForm({
         </div>
       </div>
 
-      <GalleryEditor images={defaults?.images} imageUrl={defaults?.imageUrl} />
+      <GalleryEditor images={defaults?.images} imageUrl={defaults?.imageUrl} colors={nativeEditing ? configurationDraft.values.filter((value) => value.kind === "COLOR") : []} />
       <MediaUrlField name="hoverGifUrl" label={tp.hoverGif} help={tp.hoverGifHelp} defaultValue={defaults?.hoverGifUrl ?? ""} uploadEnabled animated />
-      <VariantEditor configuration={defaults?.configuration} legacySizes={defaults?.variants} enabled={nativeEditing} onEnabled={setNativeEditing} legacy={legacy} history={defaults?.history} allowNative={allowNative} />
+      <VariantEditor draft={configurationDraft} setDraft={setConfigurationDraft} enabled={nativeEditing} onEnabled={setNativeEditing} legacy={legacy} history={defaults?.history} allowNative={allowNative} />
       <fieldset disabled={nativeEditing} hidden={nativeEditing}><SizeEditor defaults={defaults?.variants} legacySizes={defaults?.legacySizes} /><AdminFieldError name="variants" /></fieldset>
 
       <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">

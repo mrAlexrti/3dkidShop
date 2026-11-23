@@ -78,9 +78,10 @@ export async function createProduct(formData: FormData): Promise<ProductSaveResu
     await prisma.$transaction(async (tx) => {
       await lockMediaWrites(tx);
       await assertMediaAttachable(tx, [...photos.map((image) => image.url), data.hoverGifUrl, data.description, data.descriptionEn, data.materials, data.materialsEn]);
-      const product = await tx.product.create({ data: { ...data, images: { create: photos.map((image, order) => ({ url: image.url, alt: image.alt || null, order })) } } });
-      if (configuration) await syncProductConfiguration(tx, product.id, configuration);
-      else await syncProductSizes(tx, product.id, variants ?? []);
+      const product = await tx.product.create({ data });
+      const valueIds = configuration ? await syncProductConfiguration(tx, product.id, configuration) : undefined;
+      if (!configuration) await syncProductSizes(tx, product.id, variants ?? []);
+      await syncProductGallery(tx, product.id, photos, valueIds);
       await flushVariantConstraints(tx);
     }, configuration ? { ...MEDIA_TRANSACTION_OPTIONS, maxWait: 10000, timeout: 30000 } : MEDIA_TRANSACTION_OPTIONS);
   } catch (error) { return saveError(error); }
@@ -98,7 +99,7 @@ export async function updateProduct(id: string, formData: FormData): Promise<Pro
     await prisma.$transaction(async (tx) => {
       await lockMediaWrites(tx);
       await lockProductConfiguration(tx, id);
-      const previous = await tx.product.findUnique({ where: { id }, select: { optionMode: true, variantRevision: true, images: { orderBy: [{ order: "asc" }, { id: "asc" }], select: { id: true, url: true, alt: true } }, hoverGifUrl: true, description: true, descriptionEn: true, materials: true, materialsEn: true } });
+      const previous = await tx.product.findUnique({ where: { id }, select: { optionMode: true, variantRevision: true, images: { orderBy: [{ order: "asc" }, { id: "asc" }], select: { id: true, url: true, alt: true, colorValueId: true } }, hoverGifUrl: true, description: true, descriptionEn: true, materials: true, materialsEn: true } });
       if (!previous) throw { code: "P2025" };
       if ((previous.optionMode && previous.optionMode !== "LEGACY" || configuration || variantRevision !== undefined) && variantRevision !== previous.variantRevision) throw new AdminInputError("configuration", "stale");
       if (previous.optionMode && previous.optionMode !== "LEGACY" && variants !== undefined) throw new AdminInputError("configuration", "invalid");
@@ -107,10 +108,10 @@ export async function updateProduct(id: string, formData: FormData): Promise<Pro
       const nextUrls = images?.map((image) => image.url) ?? [imageUrl!, ...previous.images.slice(1).map((image) => image.url)];
       await assertMediaAttachable(tx, [...nextUrls, data.hoverGifUrl, data.description, data.descriptionEn, data.materials, data.materialsEn]);
       await tx.product.update({ where: { id }, data });
-      if (images) await syncProductGallery(tx, id, images);
+      const valueIds = configuration ? await syncProductConfiguration(tx, id, configuration) : undefined;
+      if (!configuration && variants !== undefined) await syncProductSizes(tx, id, variants);
+      if (images) await syncProductGallery(tx, id, images, valueIds);
       else await updateMainProductImage(tx, id, imageUrl!);
-      if (configuration) await syncProductConfiguration(tx, id, configuration);
-      else if (variants !== undefined) await syncProductSizes(tx, id, variants);
       await enqueueSupersededMedia(tx, [...previous.images.map((image) => image.url), previous.hoverGifUrl, previous.description, previous.descriptionEn, previous.materials, previous.materialsEn], [...nextUrls, data.hoverGifUrl, data.description, data.descriptionEn, data.materials === undefined ? previous.materials : data.materials, data.materialsEn === undefined ? previous.materialsEn : data.materialsEn]);
       await flushVariantConstraints(tx);
     }, configuration ? { ...MEDIA_TRANSACTION_OPTIONS, maxWait: 10000, timeout: 30000 } : MEDIA_TRANSACTION_OPTIONS);

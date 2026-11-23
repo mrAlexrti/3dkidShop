@@ -1,6 +1,6 @@
 import type { z } from "zod";
 
-export type AdminFieldError = "required" | "invalid" | "tooLong" | "slugInvalid" | "slugDuplicate" | "galleryLimit" | "galleryOwnership" | "parentInvalid" | "stale" | "optionDuplicate" | "combinationDuplicate" | "configurationLimit" | "nativeDisabled";
+export type AdminFieldError = "required" | "invalid" | "tooLong" | "slugInvalid" | "slugDuplicate" | "galleryLimit" | "galleryOwnership" | "galleryColor" | "parentInvalid" | "stale" | "optionDuplicate" | "combinationDuplicate" | "configurationLimit" | "nativeDisabled";
 export type AdminFormResult = { error: "validation" | "saveFailed" | "notFound" | "mediaRetired" | "slugInvalid" | "slugDuplicate"; fieldErrors?: Record<string, AdminFieldError> } | void;
 export type AdminDeleteResult = { error: "categoryProducts" | "categoryChildren" | "orderHistory" | "referenced" | "deleteFailed" | "notFound" | "forbidden" } | void;
 

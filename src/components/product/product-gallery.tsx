@@ -6,8 +6,14 @@ import { useEffect, useId, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { photoPosition, swipeDirection } from "@/lib/gallery";
+import { useProductSelection } from "./product-selection";
 
 export function ProductGallery({ images, name }: { images: { id: string; url: string; alt?: string | null }[]; name: string }) {
+  const selection = useProductSelection();
+  return <GalleryView key={selection?.color ?? ""} images={selection?.images ?? images} name={name} />;
+}
+
+function GalleryView({ images, name }: { images: { id: string; url: string; alt?: string | null }[]; name: string }) {
   const [active, setActive] = useState(0);
   const [open, setOpen] = useState(false); const [zoomed, setZoomed] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null); const closeButton = useRef<HTMLButtonElement>(null); const id = useId();

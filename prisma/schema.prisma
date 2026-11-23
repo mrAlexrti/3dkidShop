@@ -114,6 +114,10 @@ model ProductImage {
   url       String
   alt       String?
   order     Int     @default(0)
+  colorValueId String?
+  colorValue ProductOptionValue? @relation(fields: [colorValueId], references: [id], onDelete: NoAction, onUpdate: Restrict)
+
+  @@index([colorValueId])
 }
 
 // Опции товара, напр. "Размер" -> ["10cm","15cm"], "Материал" -> ["Глянец","Матовый"]
@@ -141,6 +145,7 @@ model ProductOptionValue {
   priceModifier Decimal       @default(0) @db.Decimal(10, 2)
   retiredAt         DateTime?
   variantSelections ProductVariantSelection[]
+  colorImages       ProductImage[]
   @@unique([optionId, id])
 }
 

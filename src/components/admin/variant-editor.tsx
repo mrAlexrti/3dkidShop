@@ -1,5 +1,5 @@
 "use client";
-import { useId, useState } from "react";
+import { useId, type Dispatch, type SetStateAction } from "react";
 import { useLangStore } from "@/store/lang-store";
 import { AdminFieldError, useAdminForm } from "./admin-form";
 import { matchesMode, needsColor, needsSize, type ProductConfiguration, type OptionKind } from "@/lib/product-configuration";
@@ -7,8 +7,8 @@ import type { ConfigurationInput } from "@/lib/product-configuration-admin";
 import type { SizeVariant } from "@/lib/product-variants";
 import { ConfirmButton, EditorRemoveButton } from "./confirm-button";
 
-type Draft = Omit<ConfigurationInput, "combinations"> & { combinations: (ConfigurationInput["combinations"][number] & { draftKey: string })[] };
-function initial(config?: ProductConfiguration, legacySizes: SizeVariant[] = []): Draft {
+export type ConfigurationDraft = Omit<ConfigurationInput, "combinations"> & { combinations: (ConfigurationInput["combinations"][number] & { draftKey: string })[] };
+export function initialConfigurationDraft(config?: ProductConfiguration, legacySizes: SizeVariant[] = []): ConfigurationDraft {
   if (config && config.mode !== "LEGACY") return { mode: config.mode,
     values: config.values.map((v) => ({ key: v.id, id: v.id, kind: v.kind, labelUa: v.labelUa, labelEn: v.labelEn ?? "", noteUa: v.noteUa ?? "", noteEn: v.noteEn ?? "", retired: v.retired })),
     combinations: config.combinations.map((v) => ({ id: v.id, draftKey: v.id, color: v.values.COLOR, size: v.values.SIZE, price: v.price, isAvailable: v.isAvailable, retired: v.retired })) };
@@ -16,13 +16,12 @@ function initial(config?: ProductConfiguration, legacySizes: SizeVariant[] = [])
     values: legacySizes.map((v) => ({ key: v.id, id: v.id, kind: "SIZE", labelUa: v.labelUa, labelEn: v.labelEn ?? "", noteUa: v.noteUa ?? "", noteEn: v.noteEn ?? "", retired: false })),
     combinations: legacySizes.map((v) => ({ draftKey: v.id, size: v.id, price: String(v.price), isAvailable: false, retired: false })) };
 }
-export function VariantEditor({ configuration, legacySizes, enabled, onEnabled, legacy, history, allowNative }: {
-  configuration?: ProductConfiguration; legacySizes?: SizeVariant[]; enabled: boolean; onEnabled: (value: boolean) => void; legacy: boolean;
+export function VariantEditor({ draft, setDraft, enabled, onEnabled, legacy, history, allowNative }: {
+  draft: ConfigurationDraft; setDraft: Dispatch<SetStateAction<ConfigurationDraft>>; enabled: boolean; onEnabled: (value: boolean) => void; legacy: boolean;
   history?: { page: number; pages: number; href: string };
   allowNative: boolean;
 }) {
   const { t, locale } = useLangStore(); const text = t.variantConfig; const { pending } = useAdminForm(); const prefix = useId();
-  const [draft, setDraft] = useState(() => initial(configuration, legacySizes));
   function changeMode(color: boolean, size: boolean) {
     const mode = color ? size ? "COLOR_SIZE" : "COLOR" : size ? "SIZE" : "SIMPLE";
     setDraft((current) => ({ mode,
