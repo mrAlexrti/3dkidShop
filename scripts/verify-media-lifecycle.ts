@@ -116,7 +116,7 @@ function fixture() {
     try {
       const result = await callback({ ...models(() => draft, () => locked),
         $executeRaw: async (strings: TemplateStringsArray) => { assert.equal(strings.join(""), "SELECT pg_advisory_xact_lock(175501, 1)"); locked = true; },
-        $queryRaw: async (strings: TemplateStringsArray) => { assert.ok(locked); assert.equal(strings.join(""), 'SELECT clock_timestamp() AS "now"'); return [{ now: new Date(databaseClock ?? clock) }]; },
+        $queryRaw: async (strings: TemplateStringsArray) => { assert.ok(locked); const sql=strings.join(""); if(sql==='SELECT id FROM public."Category" WHERE id= FOR UPDATE') return []; assert.equal(sql, 'SELECT clock_timestamp() AS "now"'); return [{ now: new Date(databaseClock ?? clock) }]; },
       });
       assert.ok(locked); if (failCommit?.(draft)) throw new Error("FIXTURE_COMMIT_FAILED");
       state = draft; return result;
@@ -462,6 +462,18 @@ async function verify() {
   const badHero = contentForm("javascript:alert(1)"); assert.ok((await analogous.categories.updateSiteContent(badHero))?.fieldErrors?.hero_image_1);
   assert.equal(analogous.state.category.length, 0); assert.equal(analogous.state.siteContent.length, 0); assert.equal(analogous.scheduled.length, 0);
   pass("category and hero validation/duplicate errors are structured and leave records, uploaded URL strings and retirement state unchanged");
+  for (const field of ["materials", "materialsEn"]) {
+    const f = fixture(); f.seed("p1", blob()); f.seed("p2", external);
+    f.state.product[1][field] = `Saved materials reference ${blob()}`;
+    await f.products.updateProduct("p1", form(external)); await f.drain();
+    assert.equal(f.queue().length, 0); assert.equal(f.deleted.length, 0);
+    await f.products.updateProduct("p2", form(external, "", "p2"));
+    assert.equal(f.queue().length, 0, "legacy caller must preserve materials reference");
+    const cleared = form(external, "", "p2"); cleared.set(field, "");
+    await f.products.updateProduct("p2", cleared); assert.equal(f.queue().length, 1);
+    assert.equal(f.deleted.length, 0); await mature(f); assert.deepEqual(f.deleted, [blob()]);
+  }
+  pass("UA/EN Materials text protects shared Blob references; omitted fields preserve them, explicit clearing starts normal 30-day retirement");
   console.log(`PASS media lifecycle: ${passed} isolated groups. No live DB, storage, uploads or deletions.`);
 }
 

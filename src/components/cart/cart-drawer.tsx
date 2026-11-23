@@ -10,7 +10,7 @@ import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef } from "react";
-import { sizeLabel } from "@/lib/product-variants";
+import { cartOptionLabel } from "@/lib/product-variants";
 import { cartImageSource } from "@/lib/cart-reconciliation";
 
 export function CartDrawer() {
@@ -119,6 +119,7 @@ function CartDrawerContents() {
             <div className="flex-1 overflow-y-auto p-5">
               {items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full py-16 text-center">
+                  <CartReadiness />
                   <span className="text-5xl mb-4">🛒</span>
                   <p className="text-sm text-ink/50">{t.cart.empty}</p>
                 </div>
@@ -145,9 +146,9 @@ function CartDrawerContents() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium line-clamp-2 leading-snug">{item.name}</p>
                         <CartLineStatus id={item.id} />
-                    {item.variant && (
+                    {(item.variant || item.selection) && (
                           <p className="mt-0.5 text-xs text-ink/40">
-                            {`${t.product.size}: ${sizeLabel(item.variant, locale)}`}
+                            {`${item.variant ? t.product.size + ": " : ""}${cartOptionLabel(item, locale)}`}
                           </p>
                         )}
                         <p className="mt-1 text-sm font-semibold text-pink-600">

@@ -163,10 +163,10 @@ async function run(locale: "ua" | "en") {
   fixture.completeSave(); await until(() => fixture.refreshes > refreshBefore);
   check(snapshot(aboutId) === aboutDraft && fixture.savedContent.some(([key, value]) => key === "hero_image_1" && value === heroDraft), "Successful About retry lost form/hero values");
   fixture.mode = "success"; await submit(); check(fixture.pushes.includes("/admin/products"), "Successful retry did not preserve navigation");
-  const confirmBefore = window.confirm; window.confirm = () => true;
-  container("delete-probe").querySelector<HTMLButtonElement>("button")!.click(); await until(() => container("delete-probe").textContent!.includes(t.admin.deletion.orderHistory));
-  [...container("delete-probe").querySelectorAll("button")].find((button) => button.textContent === t.admin.deletion.archive)!.click(); await until(() => archiveCalls === 1);
-  check(fixture.refreshes > 0, "Archive did not refresh list"); window.confirm = confirmBefore;
+  async function confirmDialog(label: string) { await until(() => Boolean(document.querySelector('dialog[open]'))); [...document.querySelectorAll<HTMLButtonElement>('dialog[open] button')].find((button) => button.textContent === label)!.click(); await until(() => !document.querySelector('dialog[open]')); }
+  container("delete-probe").querySelector<HTMLButtonElement>("button")!.click(); await confirmDialog(t.adminSafety.delete); await until(() => container("delete-probe").textContent!.includes(t.admin.deletion.orderHistory));
+  [...container("delete-probe").querySelectorAll("button")].find((button) => button.textContent === t.admin.deletion.archive)!.click(); await confirmDialog(t.admin.deletion.archive); await until(() => archiveCalls === 1);
+  check(fixture.refreshes > 0, "Archive did not refresh list");
   root.unmount(); check(String(document.body.style.overflow) === "auto", "Modal cleanup leaked scroll lock");
   return `${locale}: React reset reproduced; validation/network retry preserves data and uploads; gallery IDs/order; bulk/category/hero uploads; About bilingual/SEO drafts, locale switch and double-submit guard; carousel swipe/GIF; modal keyboard/zoom/focus; archive UX PASS`;
 }

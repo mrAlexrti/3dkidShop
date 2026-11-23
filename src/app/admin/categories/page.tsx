@@ -16,7 +16,7 @@ export default async function AdminCategoriesPage() {
   const categories = await prisma.category.findMany({
     orderBy: [{ parentId: "asc" }, { order: "asc" }],
     include: {
-      _count: { select: { products: true } },
+      _count: { select: { products: true, children: true } },
       parent: { select: { name: true } },
     },
   });
@@ -70,7 +70,8 @@ export default async function AdminCategoriesPage() {
                       >
                         <Pencil size={16} />
                       </Link>
-                      <DeleteButton action={deleteCategory.bind(null, c.id)} />
+                      <DeleteButton action={deleteCategory.bind(null, c.id)} recordKind="category" recordName={c.name} recordNameEn={c.nameEn}
+                        disabledReason={c._count.products ? t.admin.deletion.categoryProducts.replace("{name}", c.name) : c._count.children ? t.admin.deletion.categoryChildren.replace("{name}", c.name) : undefined} />
                     </div>
                   </td>
                 </tr>

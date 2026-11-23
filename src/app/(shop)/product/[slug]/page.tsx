@@ -1,8 +1,11 @@
-import { getSizeVariants, hasConfiguredSizes, startingPrice } from "@/lib/product-variants";
+import { getSizeVariants } from "@/lib/product-variants";
+import { productOffer, publicConfiguration } from "@/lib/product-configuration";
+import { publicProductInclude } from "@/lib/catalog-products";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ProductGallery } from "@/components/product/product-gallery";
+import { ProductMaterials } from "@/components/product/product-materials";
 import { ProductDescription } from "@/components/product/product-description";
 import { ProductOptions } from "@/components/product/product-options";
 import { RelatedProducts } from "@/components/product/related-products";
@@ -22,19 +25,18 @@ async function getProduct(rawSlug: string) {
   }
   
   // Сначала пробуем точное совпадение
-  let product = await prisma.product.findFirst({
+  let product = await prisma.$transaction((tx) => tx.product.findFirst({
     where: { slug, isActive: true },
     include: {
-      images: { orderBy: [{ order: "asc" }, { id: "asc" }] },
-      options: { include: { values: true } },
+      ...publicProductInclude,
       attributes: true,
       category: true,
     },
-  });
+  }), { isolationLevel: "RepeatableRead" });
 
   // Если не нашли — пробуем case-insensitive поиск (подстраховка)
   if (!product) {
-    product = await prisma.product.findFirst({
+    product = await prisma.$transaction((tx) => tx.product.findFirst({
       where: {
         slug: {
           equals: slug,
@@ -43,12 +45,11 @@ async function getProduct(rawSlug: string) {
         isActive: true,
       },
       include: {
-        images: { orderBy: [{ order: "asc" }, { id: "asc" }] },
-        options: { include: { values: true } },
+        ...publicProductInclude,
         attributes: true,
         category: true,
       },
-    });
+    }), { isolationLevel: "RepeatableRead" });
   }
 
   return product;
@@ -87,15 +88,15 @@ export default async function ProductPage({
   const productDescription = getProductDescription(product, locale);
   const t = translations[locale];
 
-  const related = await prisma.product.findMany({
+  const related = await prisma.$transaction((tx) => tx.product.findMany({
     where: {
       categoryId: product.categoryId,
       id: { not: product.id },
       isActive: true,
     },
-    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 10 }, options: { select: { name: true, values: { select: { price: true } } } } },
+    include: publicProductInclude,
     take: 4,
-  });
+  }), { isolationLevel: "RepeatableRead" });
 
   return (
     <div className="sf-product-page container-shop py-10">
@@ -111,6 +112,7 @@ export default async function ProductPage({
           <h1 className="mt-2 font-display text-3xl text-ink">{productName}</h1>
 
           <ProductDescription text={productDescription} />
+          <ProductMaterials product={product} locale={locale} />
 
           <ProductOptions
             productId={product.id}
@@ -119,7 +121,8 @@ export default async function ProductPage({
             basePrice={Number(product.price)}
             image={product.images[0]?.url ?? "/images/placeholder.svg"}
             isOrderable={product.isOrderable}
-            variants={getSizeVariants(product.options)}
+            variants={(product.optionMode ?? "LEGACY") === "LEGACY" ? getSizeVariants(product.options) : []}
+            configuration={publicConfiguration(product)}
           />
 
           {product.attributes.length > 0 && (
@@ -149,12 +152,13 @@ export default async function ProductPage({
           name: p.name,
           nameEn: p.nameEn,
           hoverGifUrl: p.hoverGifUrl,
-          price: startingPrice(p.price, p.options),
+          price: productOffer(p).price,
           image: p.images[0]?.url ?? "/images/placeholder.svg",
           images: p.images.map(({ id, url, alt }) => ({ id, url, alt })),
           isNew: p.isNew,
-          hasOptions: hasConfiguredSizes(p.options),
-          isOrderable: p.isOrderable,
+          hasOptions: productOffer(p).hasOptions,
+          hasColorOptions: productOffer(p).hasColorOptions,
+          isOrderable: productOffer(p).isOrderable,
         }))}
       />
     </div>

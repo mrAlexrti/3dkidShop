@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useLangStore } from "@/store/lang-store";
 import type { LegacySize, SizeVariant } from "@/lib/product-variants";
+import { ConfirmButton, EditorRemoveButton, namedConfirmation } from "./confirm-button";
 
 type Draft = { key: string; id?: string; labelUa: string; labelEn: string; price: string; noteUa: string; noteEn: string };
 const emptySize = (): Draft => ({ key: crypto.randomUUID(), labelUa: "", labelEn: "", price: "", noteUa: "", noteEn: "" });
@@ -22,10 +23,12 @@ export function SizeEditor({ defaults = [], legacySizes = [] }: { defaults?: Siz
     <legend className="px-2 font-semibold">{text.title}</legend>
     <p className="text-sm text-ink/60">{text.help}</p>
     <label className="flex items-center gap-2 text-sm">
-      <input type="checkbox" checked={state.enabled} onChange={(event) => {
-        const enabled = event.target.checked;
-        setState((current) => ({ ...current, enabled, dirty: true, sizes: enabled && !current.sizes.length ? [emptySize()] : current.sizes }));
-      }} />
+      <ConfirmButton message={namedConfirmation(t.adminSafety.savedRemoval, t.adminSafety.allSizes)} onConfirm={() => setState((current) => ({ ...current, enabled: false, dirty: true }))}
+        renderTrigger={(ask) => <input type="checkbox" checked={state.enabled} onChange={(event) => {
+          const enabled = event.target.checked;
+          if (!enabled && state.sizes.some((size) => size.id)) { ask(); return; }
+          setState((current) => ({ ...current, enabled, dirty: true, sizes: enabled && !current.sizes.length ? [emptySize()] : current.sizes }));
+        }} />} />
       {text.enabled}
     </label>
     {/* An untouched editor sends no mutation instruction, including on legacy products. */}
@@ -43,10 +46,10 @@ export function SizeEditor({ defaults = [], legacySizes = [] }: { defaults?: Siz
             required={field === "labelUa" || field === "price"} maxLength={field.startsWith("note") ? 500 : 100} value={size[field]} onChange={(event) => update(size.key, field, event.target.value)} className={inputClass} />
         </label>)}
       </div>
-      <button type="button" onClick={() => setState((current) => {
+      <EditorRemoveButton persisted={Boolean(size.id)} name={size.labelUa} onConfirm={() => setState((current) => {
         const sizes = current.sizes.filter((entry) => entry.key !== size.key);
         return { ...current, sizes, enabled: sizes.length > 0, dirty: true };
-      })} className="rounded-full px-3 py-2 text-sm text-pink-700">{text.remove}</button>
+      })} className="rounded-full px-3 py-2 text-sm text-pink-700">{text.remove}</EditorRemoveButton>
     </div>)}
     {!state.enabled && <p className="text-sm text-ink/60">{text.none}</p>}
     {state.dirty && !state.enabled && defaults.length > 0 && <p className="text-sm text-ink/60">{text.disableHelp}</p>}

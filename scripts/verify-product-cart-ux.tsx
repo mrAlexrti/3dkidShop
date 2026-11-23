@@ -53,7 +53,7 @@ function pass(name: string) { passed++; console.log(`PASS ${name}`); }
 async function verify() {
   for (const version of [0, 1]) {
     const persisted = { ...item, id: "p1-small", quantity: 3, image: "https://oldstore.public.blob.vercel-storage.com/retired.webp", variant: { id: "small", labelUa: "S", labelEn: "Small" } };
-    storageValues.set("stikr-cart", JSON.stringify({ state: { items: [persisted], verification: "verified", verifiedRevision: 42, checkoutRevision: 42 }, version }));
+    storageValues.set("stikr-cart-v2", JSON.stringify({ state: { items: [persisted], verification: "verified", verifiedRevision: 42, checkoutRevision: 42 }, version }));
     await useCartStore.persist.rehydrate();
     assert.deepEqual(cart().items, [{ ...persisted, image: reconciliation.CART_IMAGE_PLACEHOLDER }]);
     assert.equal(cart().verification, "idle"); assert.equal(cart().ready(), false);
@@ -64,7 +64,7 @@ async function verify() {
   assert.equal(await cart().verifyCart("en"), true);
   assert.equal(cart().items[0].name, "Dragon"); assert.equal(cart().items[0].image, product.image);
   assert.equal(cart().items[0].quantity, 2); assert.equal(cart().items[0].id, item.id);
-  assert.equal(JSON.parse(storageValues.get("stikr-cart")!).state.items[0].image, reconciliation.CART_IMAGE_PLACEHOLDER);
+  assert.equal(JSON.parse(storageValues.get("stikr-cart-v2")!).state.items[0].image, reconciliation.CART_IMAGE_PLACEHOLDER);
   products[0].image = "/replacement.webp"; await cart().verifyCart("en", true);
   assert.equal(cart().items[0].image, "/replacement.webp");
   assert.equal(reconciliation.cartImageSource(cart().items[0], cart()), "/replacement.webp");

@@ -1,6 +1,7 @@
 "use client";
 
 import { generateProductSlug, slugFromNameChange, type ProductSaveResult } from "@/lib/product-slug";
+import { MaterialsFields } from "./materials-fields";
 import { Fragment, useState } from "react";
 import { useLangStore } from "@/store/lang-store";
 import type { CategoryTreeNode } from "@/lib/categories";
@@ -10,8 +11,14 @@ import { AdminForm, AdminFieldError, AdminSaveButton } from "@/components/admin/
 import { GalleryEditor } from "@/components/admin/gallery-editor";
 import type { ProductPhoto } from "@/lib/product-gallery-admin";
 import type { LegacySize, SizeVariant } from "@/lib/product-variants";
+import { VariantEditor } from "./variant-editor";
+import type { ProductConfiguration, OptionMode } from "@/lib/product-configuration";
 
 type ProductDefaults = {
+  optionMode?: OptionMode;
+  variantRevision?: number;
+  configuration?: ProductConfiguration;
+  history?: { page: number; pages: number; href: string };
   variants?: SizeVariant[];
   legacySizes?: LegacySize[];
   name?: string;
@@ -19,6 +26,9 @@ type ProductDefaults = {
   slug?: string;
   description?: string;
   descriptionEn?: string | null;
+  materials?: string | null;
+  materialsEn?: string | null;
+  materialsDivider?: string | null;
   price?: number;
   oldPrice?: number | null;
   isOrderable?: boolean;
@@ -35,13 +45,17 @@ export function ProductForm({
   categories,
   defaults,
   action,
+  allowNative = false,
 }: {
   categories: CategoryTreeNode[];
   defaults?: ProductDefaults;
   action: (formData: FormData) => Promise<ProductSaveResult>;
+  allowNative?: boolean;
 }) {
   const { t } = useLangStore();
   const tp = t.admin.product;
+  const legacy = Boolean(defaults) && (!defaults?.optionMode || defaults.optionMode === "LEGACY");
+  const [nativeEditing, setNativeEditing] = useState(!legacy && (Boolean(defaults) || allowNative));
   const [slugState, setSlugState] = useState({ name: defaults?.name ?? "", slug: defaults?.slug ?? "", manual: Boolean(defaults) });
 
   const inputClass =
@@ -51,6 +65,7 @@ export function ProductForm({
     <AdminForm action={action} successHref="/admin/products"
       className="glass max-w-2xl space-y-5 rounded-xl2 p-4 shadow-soft sm:p-6"
     >
+      <input type="hidden" name="variantRevision" value={defaults?.variantRevision ?? 0} />
       <div>
         <label htmlFor="product-name-ua" className="mb-1 block text-sm font-medium">{tp.nameUa} *</label>
         <input id="product-name-ua" name="name" minLength={2} value={slugState.name} onChange={(event) => setSlugState((state) => slugFromNameChange(state, event.target.value))} required className={inputClass} /><AdminFieldError name="name" />
@@ -79,10 +94,13 @@ export function ProductForm({
         <textarea id="product-description-en" name="descriptionEn" minLength={5} defaultValue={defaults?.descriptionEn ?? ""} rows={4} required className={inputClass} /><AdminFieldError name="descriptionEn" />
       </div>
 
+      <MaterialsFields defaults={defaults} />
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="product-price" className="mb-1 block text-sm font-medium">{tp.price} *</label>
           <input id="product-price" name="price" type="number" min="0.01" max="99999999.99" step="0.01" defaultValue={defaults?.price} required className={inputClass} /><AdminFieldError name="price" />
+          <p className="mt-1 text-xs text-ink/60">{t.variantConfig.basePriceHelp}</p>
         </div>
         <div>
           <label htmlFor="product-old-price" className="mb-1 block text-sm font-medium">{tp.oldPrice}</label>
@@ -117,8 +135,8 @@ export function ProductForm({
 
       <GalleryEditor images={defaults?.images} imageUrl={defaults?.imageUrl} />
       <MediaUrlField name="hoverGifUrl" label={tp.hoverGif} help={tp.hoverGifHelp} defaultValue={defaults?.hoverGifUrl ?? ""} uploadEnabled animated />
-      <SizeEditor defaults={defaults?.variants} legacySizes={defaults?.legacySizes} />
-      <AdminFieldError name="variants" />
+      <VariantEditor configuration={defaults?.configuration} legacySizes={defaults?.variants} enabled={nativeEditing} onEnabled={setNativeEditing} legacy={legacy} history={defaults?.history} allowNative={allowNative} />
+      <fieldset disabled={nativeEditing} hidden={nativeEditing}><SizeEditor defaults={defaults?.variants} legacySizes={defaults?.legacySizes} /><AdminFieldError name="variants" /></fieldset>
 
       <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
         <label className="flex items-center gap-2">

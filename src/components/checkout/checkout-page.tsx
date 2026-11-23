@@ -8,7 +8,7 @@ import { CheckoutForm } from "@/components/checkout/checkout-form";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
-import { sizeLabel } from "@/lib/product-variants";
+import { cartOptionLabel } from "@/lib/product-variants";
 import { cartImageSource } from "@/lib/cart-reconciliation";
 
 export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: boolean }) {
@@ -20,6 +20,7 @@ export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: 
 
   if (!mounted) return <div className="container-shop py-20 text-center text-ink/40">{t.common.loading}</div>;
   if (items.length === 0) return <div className="sf-checkout-page container-shop flex flex-col items-center py-32 text-center">
+    <CartReadiness />
     <h1 className="font-display text-3xl">{t.cart.empty}</h1>
     <p className="mt-2 text-ink/60">{t.cart.emptyDesc}</p>
     <Link href="/catalog" className="mt-6"><Button size="lg">{t.cart.toCatalog}</Button></Link>
@@ -41,7 +42,7 @@ export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: 
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-2 text-sm font-medium leading-snug">{item.name}</p>
                 <CartLineStatus id={item.id} />
-                {item.variant && <p className="text-xs text-ink/60">{`${t.product.size}: ${sizeLabel(item.variant, locale)}`}</p>}
+                {(item.variant || item.selection) && <p className="text-xs text-ink/60">{`${item.variant ? t.product.size + ": " : ""}${cartOptionLabel(item, locale)}`}</p>}
                 <p className="text-xs text-ink/40">× {item.quantity}</p>
               </div>
               <span className="shrink-0 text-sm font-semibold"><CartAmount id={item.id} /></span>

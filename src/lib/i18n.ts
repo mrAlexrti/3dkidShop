@@ -4,6 +4,22 @@ export type Locale = "ua" | "en";
 
 export const translations = {
   ua: {
+    // Optional editor values are text; the UI never interprets them as markup.
+    materials: {"heading":"Матеріали:","adminTitle":"Матеріали та роздільник","ua":"Матеріали (UA)","en":"Матеріали (EN)","motif":"Символ або візерунок роздільника","help":"Необов’язково. Зміни застосовуються після збереження товару. Порожній EN використовує український текст.","preview":"Попередній перегляд роздільника","invalid":"Використайте короткий візерунок (до 8 символів), без перенесення рядка."},
+    adminSafety: {"categoryMissing":"Категорію «{name}» не знайдено. Оновіть список.","categoryFailed":"Не вдалося видалити категорію «{name}». Повторіть спробу.","categoryReference":"Категорія «{name}» має захищені залежності. Пов’язані дані не змінено.","cancel":"Скасувати","delete":"Видалити","product":"Ви впевнені, що хочете видалити товар «{name}»?","category":"Ви впевнені, що хочете видалити категорію «{name}»?","archive":"Приховати товар «{name}»? Дані та історія залишаться збереженими.","savedRemoval":"Прибрати «{name}» після збереження? Зміна застосовується лише після успішного збереження товару.","retire":"Прибрати з продажу «{name}» після збереження? Ідентифікатор та історія залишаться збереженими.","mode":"Зміна конфігурації прибере несумісні збережені варіанти з продажу після збереження. Продовжити?","apply":"Підтвердити","photo":"Фото","allSizes":"Усі збережені розміри"},
+    variantConfig: {
+      title: "Варіанти товару", color: "Колір", size: "Розмір", useColor: "Використовувати колір", useSize: "Використовувати розмір",
+      history: "Історія прибраних варіантів", previous: "Назад", next: "Далі", historyWarning: "Перехід до іншої сторінки історії скине незбережені зміни. Зберегли потрібні дані?",
+      basePriceHelp: "Базова ціна діє для товару без параметрів. Кожне поєднання має власну повну ціну.",
+      convert: "Налаштувати нові варіанти", cancel: "Залишити попередні розміри", legacy: "Попередні розміри зберігаються без автоматичного перетворення. Перехід застосовується лише після збереження.",
+      addColor: "Додати колір", addSize: "Додати розмір", labelUa: "Назва українською", labelEn: "Назва англійською", noteUa: "Примітка українською", noteEn: "Примітка англійською",
+      combinations: "Дозволені поєднання", addCombination: "Додати поєднання", available: "Доступний до замовлення", price: "Повна ціна, грн", retire: "Прибрати варіант", restore: "Відновити", retired: "Прибрано", remove: "Видалити незбережений рядок",
+      choose: "Оберіть усі параметри", empty: "Без збережених доступних поєднань замовлення недоступне.", limits: "До 40 активних значень кожного типу та 200 поєднань. Відсутні пари не продаються. Зміни діють після збереження.",
+      immutable: "Для іншого поєднання приберіть цей рядок і додайте новий. ID зберігається під час редагування ціни та назви.",
+      modeWarning: "Зміна параметрів прибере несумісні поєднання. Наявні товари в кошиках потребуватимуть перевірки. Продовжити?", cleared: "Попередній розмір несумісний із цим кольором. Оберіть розмір знову.",
+      migrationError: "Не вдалося безпечно відновити попередній кошик. Вихідні дані збережено в браузері. Оновіть попередню вкладку або усуньте некоректні рядки там і повторіть відновлення.",
+      storageError: "Браузер не зберіг зміни кошика. Не закривайте вкладку; звільніть місце або дозвольте локальне сховище та повторіть спробу.", retry: "Повторити відновлення",
+    },
     statuses: {
       fields: { order: "Замовлення", payment: "Оплата", delivery: "Доставка" },
       updated: "Статус оновлено", updateFailed: "Не вдалося оновити статус. Оновіть сторінку та повторіть спробу.",
@@ -112,6 +128,7 @@ export const translations = {
         retry: "Перевірити ще раз", blocked: "Видаліть недоступні товари, щоб оформити замовлення.",
         unavailable: "Товар видалено або він тимчасово недоступний до замовлення.",
         sizeUnavailable: "Обраний розмір більше недоступний. Видаліть цю позицію та оберіть розмір на сторінці товару.",
+        variantUnavailable: "Обране поєднання більше недоступне. Видаліть позицію або оберіть інші параметри на сторінці товару.",
         priceChanged: "Ціни змінилися. Перегляньте оновлені суми перед оформленням.",
         review: "Я перевірив(-ла) оновлені суми", limit: "Сума перевищує допустиму межу. Зменште кількість або видаліть позиції.",
       },
@@ -384,6 +401,9 @@ export const translations = {
       },
       validation: {
         tooLong: "Текст перевищує максимальну довжину, вказану під полем.",
+        stale: "Товар змінився в іншій вкладці. Введені дані збережено; скопіюйте їх і перезавантажте товар перед повторним збереженням.",
+        nativeDisabled: "Редагування нових варіантів ще не дозволене в цьому середовищі. Активацію окремо погоджує власник після перевірки схеми та ізоляції.",
+        optionDuplicate: "Активна назва цього кольору або розміру вже існує.", combinationDuplicate: "Таке поєднання вже є. Відновіть наявний рядок замість створення дубліката.", configurationLimit: "Перевищено ліміт: 40 активних значень кожного типу та 200 поєднань.",
         summary: "Перевірте позначені поля. Введені дані збережено", required: "Заповніть обов’язкове поле.",
         invalid: "Перевірте формат, довжину або допустиме значення поля.", slugInvalid: "Slug: малі латинські літери, цифри й одинарні дефіси, до 160 символів.",
         slugDuplicate: "Цей slug уже використовується. Оберіть інший.", galleryLimit: "Дозволено від 1 до 10 фотографій.",
@@ -398,6 +418,7 @@ export const translations = {
         primary: "Головне фото", makePrimary: "Зробити головним", up: "Перемістити вище", down: "Перемістити нижче", remove: "Прибрати фото", alt: "Опис фото для доступності (необов’язково)",
       },
       deletion: {
+        categoryProducts: "Неможливо видалити категорію «{name}», оскільки до неї прив’язані товари. Спочатку перенесіть товари в іншу категорію.", categoryChildren: "Неможливо видалити категорію «{name}», оскільки вона містить підкатегорії. Спочатку впорядкуйте підкатегорії.",
         forbidden: "Для цієї дії потрібен доступ адміністратора. Увійдіть знову та повторіть спробу.",
         orderHistory: "Товар пов’язаний з історією замовлень. Фізичне видалення заблоковано; можна приховати товар без зміни історії.",
         referenced: "На товар посилаються захищені записи. Їх не видалено. Можна приховати товар.",
@@ -431,6 +452,21 @@ export const translations = {
   },
 
   en: {
+    materials: {"heading":"Materials:","adminTitle":"Materials and divider","ua":"Materials (UA)","en":"Materials (EN)","motif":"Divider symbol or motif","help":"Optional. Changes apply after saving the product. Empty English content falls back to Ukrainian.","preview":"Live divider preview","invalid":"Use a short motif (up to 8 symbols), without line breaks."},
+    adminSafety: {"categoryMissing":"Category “{name}” was not found. Refresh the list.","categoryFailed":"Could not delete category “{name}”. Try again.","categoryReference":"Category “{name}” has protected dependencies. Related data was preserved.","cancel":"Cancel","delete":"Delete","product":"Are you sure you want to delete product “{name}”?","category":"Are you sure you want to delete category “{name}”?","archive":"Hide product “{name}”? Data and history will be preserved.","savedRemoval":"Remove “{name}” when saved? This change applies only after the product is successfully saved.","retire":"Retire “{name}” when saved? Its identity and history will be preserved.","mode":"Changing configuration will retire incompatible saved variants when saved. Continue?","apply":"Confirm","photo":"Photo","allSizes":"All saved sizes"},
+    variantConfig: {
+      title: "Product variants", color: "Color", size: "Size", useColor: "Enable color", useSize: "Enable size",
+      history: "Retired variant history", previous: "Previous", next: "Next", historyWarning: "Opening another history page discards unsaved changes. Have you saved the values you need?",
+      basePriceHelp: "The base price applies to a simple product. Each configured combination has its own full price.",
+      convert: "Configure native variants", cancel: "Keep previous sizes", legacy: "Previous sizes remain unchanged. Conversion is explicit and applies only after Save.",
+      addColor: "Add color", addSize: "Add size", labelUa: "Ukrainian label", labelEn: "English label", noteUa: "Ukrainian note", noteEn: "English note",
+      combinations: "Allowed combinations", addCombination: "Add combination", available: "Available to order", price: "Full price, UAH", retire: "Retire variant", restore: "Restore", retired: "Retired", remove: "Remove unsaved row",
+      choose: "Choose all options", empty: "Ordering is unavailable until available combinations are saved.", limits: "Up to 40 active values per dimension and 200 combinations. Missing pairs are not offered. Changes apply after Save.",
+      immutable: "For a different combination, retire this row and add a new one. Price and label edits preserve its ID.",
+      modeWarning: "Changing dimensions retires incompatible combinations. Existing cart selections will need verification. Continue?", cleared: "The previous size is unavailable in this color. Choose a size again.",
+      migrationError: "The previous cart could not be restored safely. Its original browser data is preserved. Refresh the old tab or correct its invalid lines there, then retry recovery.",
+      storageError: "The browser could not save cart changes. Keep this tab open, allow local storage or free space, then retry.", retry: "Retry recovery",
+    },
     statuses: {
       fields: { order: "Order", payment: "Payment", delivery: "Delivery" },
       updated: "Status updated", updateFailed: "Could not update status. Reload the page and try again.",
@@ -528,7 +564,7 @@ export const translations = {
       size: "Size", chooseSize: "Choose a size", from: "from", sizeUnavailable: "This size is unavailable",
     },
     cart: {
-      reconciliation: {"checking":"Checking products and prices. Displayed amounts are not yet confirmed.","failed":"Unable to verify the cart. Your selections are saved. Retry verification before checkout.","retry":"Check again","blocked":"Remove unavailable items to continue to checkout.","unavailable":"This product has been removed or is temporarily unavailable to order.","sizeUnavailable":"The selected size is no longer available. Remove this line and choose a size on the product page.","priceChanged":"Prices have changed. Review the updated amounts before checkout.","review":"I have reviewed the updated amounts","limit":"The amount exceeds the supported limit. Reduce quantities or remove items."},
+      reconciliation: {"checking":"Checking products and prices. Displayed amounts are not yet confirmed.","failed":"Unable to verify the cart. Your selections are saved. Retry verification before checkout.","retry":"Check again","blocked":"Remove unavailable items to continue to checkout.","unavailable":"This product has been removed or is temporarily unavailable to order.","sizeUnavailable":"The selected size is no longer available. Remove this line and choose a size on the product page.","variantUnavailable":"This combination is no longer available. Remove the line or choose other options on the product page.","priceChanged":"Prices have changed. Review the updated amounts before checkout.","review":"I have reviewed the updated amounts","limit":"The amount exceeds the supported limit. Reduce quantities or remove items."},
       title:      "Cart",
       empty:      "Your cart is empty",
       emptyDesc:  "Time to find something bright",
@@ -793,6 +829,9 @@ export const translations = {
       },
       validation: {
         tooLong: "The text exceeds the maximum length shown below the field.",
+        stale: "This product changed in another tab. Your inputs are preserved; copy them and reload before saving again.",
+        nativeDisabled: "Native variant writes are not enabled in this environment. The owner must separately approve activation after schema and isolation checks.",
+        optionDuplicate: "An active value in this dimension already uses this label.", combinationDuplicate: "This combination already exists. Restore its existing row instead of creating a duplicate.", configurationLimit: "Limit exceeded: 40 active values per dimension and 200 combinations.",
         summary: "Check the marked fields. Your entries are preserved", required: "Complete this required field.",
         invalid: "Check the field format, length or allowed value.", slugInvalid: "Slug: lowercase Latin letters, numbers and single hyphens, up to 160 characters.",
         slugDuplicate: "This slug is already in use. Choose another.", galleryLimit: "Use between 1 and 10 photographs.",
@@ -807,6 +846,7 @@ export const translations = {
         primary: "Primary photo", makePrimary: "Make primary", up: "Move up", down: "Move down", remove: "Remove photo", alt: "Accessible photo description (optional)",
       },
       deletion: {
+        categoryProducts: "Cannot delete category “{name}” because products reference it. Move the products to another category first.", categoryChildren: "Cannot delete category “{name}” because it contains subcategories. Review its subcategories first.",
         forbidden: "This action requires administrator access. Sign in again and retry.",
         orderHistory: "This product is linked to order history. Physical deletion is blocked; you can hide it without changing history.",
         referenced: "Protected records reference this product. They were preserved. You can hide the product.",

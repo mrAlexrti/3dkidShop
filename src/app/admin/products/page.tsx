@@ -66,7 +66,7 @@ export default async function AdminProductsPage() {
                     <Link href={`/admin/products/${p.id}/edit`} className="rounded-full p-2 hover:bg-pink-50">
                       <Pencil size={16} />
                     </Link>
-                    <DeleteButton action={deleteProduct.bind(null, p.id)} archiveAction={archiveProduct.bind(null, p.id)} />
+                    <DeleteButton action={deleteProduct.bind(null, p.id)} archiveAction={archiveProduct.bind(null, p.id)} recordName={p.name} recordNameEn={p.nameEn} />
                   </div>
                 </td>
               </tr>

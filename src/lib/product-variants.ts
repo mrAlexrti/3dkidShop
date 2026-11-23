@@ -60,8 +60,18 @@ export function orderSizeLabel(json: string | null, locale: Locale = "ua") {
   if (!json) return "";
   try {
     const value = JSON.parse(json);
+    if (value?.version === 2) {
+      if (!Array.isArray(value.dimensions) || value.dimensions.length < 1 || value.dimensions.length > 2 || value.dimensions.some((d: { kind?: string; labelUa?: string }) => !["COLOR", "SIZE"].includes(d?.kind ?? "") || typeof d.labelUa !== "string" || d.labelUa.length > 100)) return "";
+      return value.dimensions.map((d: { kind: string; labelUa: string; labelEn?: string | null }) => d.kind === "SIZE" ? sizeLabel({ labelUa: d.labelUa, labelEn: d.labelEn ?? null }, locale) : locale === "en" ? d.labelEn?.trim() || d.labelUa : d.labelUa).join(", ");
+    }
     if (value?.version === 1 && typeof value.size?.labelUa === "string") return sizeLabel(value.size, locale);
+    if (value?.version !== undefined) return "";
     // Historical flat option snapshots remain readable.
     return Object.values(value).filter((label): label is string => typeof label === "string").join(", ");
   } catch { return ""; }
+}
+
+export function cartOptionLabel(item: import("@/types").CartItem, locale: Locale) {
+  if (item.selection) return [item.selectionLabels?.COLOR, item.selectionLabels?.SIZE].filter((value) => value && typeof value.labelUa === "string").map((value) => locale === "en" ? value!.labelEn?.trim() || value!.labelUa : value!.labelUa).join(", ");
+  return item.variant ? sizeLabel(item.variant, locale) : "";
 }

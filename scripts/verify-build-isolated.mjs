@@ -23,7 +23,13 @@ const model = new Proxy({}, { get: (_, method) => {
   return forbidden;
 } });
 class FixtureClient {
-  constructor() { return new Proxy(this, { get: (_, key) => typeof key === 'string' && key.startsWith('$') ? forbidden : model }); }
+  constructor() {
+    const client = new Proxy(this, { get: (_, key) => key === '$transaction' ? async (callback, options) => {
+      if (typeof callback !== 'function' || options?.isolationLevel !== 'RepeatableRead') return forbidden();
+      return callback(client); // Empty read fixtures; every mutation/raw/connection remains forbidden.
+    } : typeof key === 'string' && key.startsWith('$') ? forbidden : model });
+    return client;
+  }
 }
 Module._load = function(name, parent, main) {
   const result = load.call(this, name, parent, main);

@@ -1,4 +1,5 @@
-import { hasConfiguredSizes, startingPrice } from "@/lib/product-variants";
+import { productOffer } from "@/lib/product-configuration";
+import { publicProductInclude } from "@/lib/catalog-products";
 import { prisma } from "@/lib/prisma";
 import { FeaturedProducts } from "@/components/home/featured-products";
 import { Benefits } from "@/components/home/benefits";
@@ -7,12 +8,12 @@ import { Hero } from "@/components/home/hero";
 export const revalidate = 60;
 
 async function getHomeData() {
-  return prisma.product.findMany({
+  return prisma.$transaction((tx) => tx.product.findMany({
     where: { isActive: true },
-    include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 10 }, options: { select: { name: true, values: { select: { price: true } } } } },
+    include: publicProductInclude,
     take: 12,
     orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-  });
+  }), { isolationLevel: "RepeatableRead" });
 }
 
 export default async function HomePage() {
@@ -24,13 +25,14 @@ export default async function HomePage() {
     name: product.name,
     nameEn: product.nameEn,
     hoverGifUrl: product.hoverGifUrl,
-    price: startingPrice(product.price, product.options),
-    oldPrice: product.oldPrice ? Number(product.oldPrice) : null,
+    price: productOffer(product).price,
+    oldPrice: productOffer(product).oldPrice,
     image: product.images[0]?.url ?? "/images/placeholder.svg",
     images: product.images.map(({ id, url, alt }) => ({ id, url, alt })),
     isNew: product.isNew,
-    hasOptions: hasConfiguredSizes(product.options),
-    isOrderable: product.isOrderable,
+    hasOptions: productOffer(product).hasOptions,
+    hasColorOptions: productOffer(product).hasColorOptions,
+    isOrderable: productOffer(product).isOrderable,
   });
 
   return (

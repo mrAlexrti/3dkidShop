@@ -10,7 +10,7 @@ import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
-import { sizeLabel } from "@/lib/product-variants";
+import { cartOptionLabel } from "@/lib/product-variants";
 import { cartImageSource } from "@/lib/cart-reconciliation";
 
 export default function CartPage() {
@@ -22,6 +22,7 @@ export default function CartPage() {
   if (items.length === 0) {
     return (
       <div className="sf-cart-page container-shop flex flex-col items-center py-32 text-center">
+        <CartReadiness />
         <ShoppingBag size={52} className="text-pink-200" />
         <h1 className="mt-6 font-display text-3xl">{t.cart.empty}</h1>
         <p className="mt-2 text-ink/60">{t.cart.emptyDesc}</p>
@@ -62,9 +63,9 @@ export default function CartPage() {
                       {item.name}
                     </Link>
                     <CartLineStatus id={item.id} />
-                    {item.variant && (
+                    {(item.variant || item.selection) && (
                       <p className="text-xs text-ink/40 mt-0.5">
-                        {`${t.product.size}: ${sizeLabel(item.variant, locale)}`}
+                        {`${item.variant ? t.product.size + ": " : ""}${cartOptionLabel(item, locale)}`}
                       </p>
                     )}
                   </div>

@@ -7,6 +7,7 @@ import { useLangStore } from "@/store/lang-store";
 import { MAX_PRODUCT_IMAGES, gallerySnapshot, type ProductPhoto } from "@/lib/gallery";
 import { inspectMediaFile, uploadErrorCode, type UploadErrorCode } from "@/lib/media-upload";
 import { mediaUploadsAvailable, uploadProductMedia } from "@/lib/media-upload-client";
+import { EditorRemoveButton } from "./confirm-button";
 
 type Draft = { key: string; id?: string; url: string; alt: string };
 export function GalleryEditor({ images, imageUrl = "" }: { images?: ProductPhoto[]; imageUrl?: string }) {
@@ -60,7 +61,7 @@ export function GalleryEditor({ images, imageUrl = "" }: { images?: ProductPhoto
         <button type="button" className="min-h-11 rounded-full border px-3" disabled={locked || index === 0} onClick={() => move(index, 0)} aria-label={`${text.makePrimary}: ${index + 1}`}>{text.makePrimary}</button>
         <button type="button" className="min-h-11 rounded-full border px-3" disabled={locked || index === 0} onClick={() => move(index, index - 1)} aria-label={`${text.up}: ${index + 1}`}>↑</button>
         <button type="button" className="min-h-11 rounded-full border px-3" disabled={locked || index === photos.length - 1} onClick={() => move(index, index + 1)} aria-label={`${text.down}: ${index + 1}`}>↓</button>
-        <button type="button" className="min-h-11 rounded-full border px-3" disabled={locked || photos.length <= 1} onClick={() => setPhotos((current) => current.filter((image) => image.key !== photo.key))} aria-label={`${text.remove}: ${index + 1}`}>{text.remove}</button>
+        <EditorRemoveButton persisted={Boolean(photo.id)} name={photo.alt || `${t.adminSafety.photo} ${index + 1}`} className="min-h-11 rounded-full border px-3" disabled={locked || photos.length <= 1} onConfirm={() => setPhotos((current) => current.filter((image) => image.key !== photo.key))} label={`${text.remove}: ${index + 1}`}>{text.remove}</EditorRemoveButton>
       </div>
     </div>)}
     <div className="flex flex-wrap gap-2">

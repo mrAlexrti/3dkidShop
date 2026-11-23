@@ -9,8 +9,9 @@ import { formatPrice } from "@/lib/utils";
 
 export function CartReadiness() {
   const { t, locale } = useLangStore();
-  const { items, checkoutRevision, verification, issues, priceChanges, verifyCart, reviewPrices } = useCartStore();
+  const { items, checkoutRevision, verification, issues, priceChanges, verifyCart, reviewPrices, migrationError, persistenceError, retryPersistence } = useCartStore();
   useEffect(() => { void verifyCart(locale, true); }, [checkoutRevision, locale, verifyCart]);
+  if (migrationError || persistenceError) return <div role="alert" className="my-3 space-y-2 text-sm text-red-700"><p>{migrationError ? t.variantConfig.migrationError : t.variantConfig.storageError}</p><button type="button" className="min-h-11 underline" onClick={retryPersistence}>{t.variantConfig.retry}</button></div>;
   if (!items.length) return null;
   const text = t.cart.reconciliation;
   return <div role="status" aria-live="polite" className="my-3 space-y-2 text-sm text-ink/70">

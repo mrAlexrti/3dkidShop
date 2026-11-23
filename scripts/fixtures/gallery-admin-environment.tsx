@@ -17,8 +17,12 @@ export function Image({ fill: _fill, sizes: _sizes, unoptimized: _unoptimized, p
   return <img {...props} style={_fill ? { ...props.style, position: "absolute", inset: 0, width: "100%", height: "100%" } : props.style} data-media-source={props.src} src="/placeholder.svg" alt={props.alt ?? ""} />;
 }
 const originalMatchMedia = window.matchMedia.bind(window); const mediaListeners = new Set<() => void>();
-window.matchMedia = (query) => query.includes("hover: hover") ? ({ matches: fixture.animation, media: query,
-  addEventListener: (_name: string, listener: () => void) => mediaListeners.add(listener), removeEventListener: (_name: string, listener: () => void) => mediaListeners.delete(listener) } as unknown as MediaQueryList) : originalMatchMedia(query);
+window.matchMedia = (query) => {
+  const native = originalMatchMedia(query);
+  return query.includes("hover: hover") ? ({ matches: fixture.animation && native.matches, media: query,
+    addEventListener: (_name: string, listener: () => void) => { mediaListeners.add(listener); native.addEventListener("change", listener); },
+    removeEventListener: (_name: string, listener: () => void) => { mediaListeners.delete(listener); native.removeEventListener("change", listener); } } as unknown as MediaQueryList) : native;
+};
 export function reducedMotion() { fixture.animation = false; mediaListeners.forEach((listener) => listener()); }
 globalThis.fetch = async (url, init) => {
   if (url !== MEDIA_UPLOAD_URL) throw new Error("LIVE_NETWORK_FORBIDDEN");

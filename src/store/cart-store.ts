@@ -1,7 +1,9 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { CART_STORAGE_KEY, cartStorage, observeCartPersistence } from "@/lib/cart-persistence";
+import { requestedSizeId } from "@/lib/cart-items";
 import type { CartItem } from "@/types";
 import { normalizeCartItems, cartAfterAddition } from "@/lib/cart-items";
 import { canSetQuantity, cartTotalMinor } from "@/lib/cart-limits";
@@ -10,6 +12,9 @@ import { lookupCartProducts } from "@/lib/actions/reconcile-cart";
 import type { Locale } from "@/lib/i18n";
 
 type CartState = {
+  migrationError: boolean;
+  persistenceError: boolean;
+  retryPersistence: () => void;
   items: CartItem[];
   checkoutRevision: number;
   isOpen: boolean;
@@ -40,12 +45,17 @@ export const useCartStore = create<CartState>()(
         priceChanges: state.priceChanges.filter((id) => items.some((item) => item.id === id)) }));
       return {
       items: [],
+      migrationError: false, persistenceError: false,
+      retryPersistence: () => {
+        if (get().migrationError) { void useCartStore.persist.rehydrate(); return; }
+        cartStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 2, state: { items: withoutCartImages(get().items), checkoutRevision: get().checkoutRevision, priceChanges: get().priceChanges, legacyImported: true } }));
+      },
       checkoutRevision: 0,
       isOpen: false,
       verification: "idle", verifiedRevision: null, issues: {}, priceChanges: [],
       ready: () => {
         const state = get();
-        return state.items.length > 0 && state.verification === "verified" && state.verifiedRevision === state.checkoutRevision &&
+        return !state.migrationError && !state.persistenceError && state.items.length > 0 && state.verification === "verified" && state.verifiedRevision === state.checkoutRevision &&
           !Object.keys(state.issues).length && !state.priceChanges.length && cartTotalMinor(state.items) !== null;
       },
       verifyCart: (locale, force = false) => {
@@ -60,7 +70,8 @@ export const useCartStore = create<CartState>()(
         const current = () => request === requestSequence && get().checkoutRevision === revision && get().items === items;
         const promise = (async () => {
           try {
-            const products = await lookupCartProducts([...new Set(items.map((item) => item.productId))]);
+            const products = await lookupCartProducts({ version: 2, lines: items.map((item) => ({ productId: item.productId,
+              ...(item.selection ? { selection: item.selection } : requestedSizeId(item) ? { sizeId: requestedSizeId(item) } : {}) })) });
             if (!current()) return false;
             const result = reconcileCart(items, products, locale);
             set({ items: result.items, issues: result.issues, priceChanges: [...new Set([...get().priceChanges, ...result.changed])],
@@ -76,9 +87,12 @@ export const useCartStore = create<CartState>()(
       },
       reviewPrices: () => { if (get().verification === "verified") set({ priceChanges: [] }); },
       addItem: (item) => {
-        const items = cartAfterAddition(get().items, item);
+        const previous = get().items;
+        const items = cartAfterAddition(previous, item);
         if (!items) return false;
+        const changed = items.filter((line) => previous.some((old) => old.id === line.id && old.price !== line.price)).map((line) => line.id);
         mutate(items, true);
+        if (changed.length) set({ priceChanges: [...new Set([...get().priceChanges, ...changed])] });
         return true;
       },
       removeItem: (id) => mutate(get().items.filter((item) => item.id !== id)),
@@ -94,16 +108,28 @@ export const useCartStore = create<CartState>()(
       count: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
     }; },
     {
-      name: "stikr-cart", version: 1,
-      partialize: (state) => ({ items: withoutCartImages(state.items), checkoutRevision: state.checkoutRevision, priceChanges: state.priceChanges }),
-      migrate: (persisted) => ({ items: withoutCartImages(normalizeCartItems((persisted as { items?: unknown })?.items)) }),
+      name: CART_STORAGE_KEY, version: 2, storage: createJSONStorage(() => cartStorage),
+      onRehydrateStorage: () => (_state, error) => { if (error) queueMicrotask(() => useCartStore.setState({ migrationError: true })); },
+      partialize: (state) => ({ items: withoutCartImages(state.items), checkoutRevision: state.checkoutRevision, priceChanges: state.priceChanges, migrationError: state.migrationError, legacyImported: true }),
+      migrate: (persisted, version) => {
+        if (![0,1,2].includes(version) || !persisted || typeof persisted !== "object") return { items: [], migrationError: true };
+        const source = persisted as { items?: unknown; checkoutRevision?: unknown; priceChanges?: unknown };
+        // Let merge inspect the ORIGINAL rows, so a discarded/unknown selection
+        // cannot disappear before the loss check. Error records never overwrite storage.
+        return { items: Array.isArray(source.items) ? source.items : [], migrationError: !Array.isArray(source.items), checkoutRevision: source.checkoutRevision, priceChanges: source.priceChanges };
+      },
       merge: (persisted, current) => {
+        if (!persisted || typeof persisted !== "object") return current;
         const revision = (persisted as { checkoutRevision?: unknown })?.checkoutRevision;
         const changes = (persisted as { priceChanges?: unknown })?.priceChanges;
         const items = withoutCartImages(normalizeCartItems((persisted as { items?: unknown })?.items));
+        const raw = (persisted as { items?: unknown })?.items;
+        const lost = !Array.isArray(raw) || raw.reduce((sum, item) => sum + (item?.quantity ?? NaN), 0) !== items.reduce((sum, item) => sum + item.quantity, 0);
         return { ...current, items, checkoutRevision: typeof revision === "number" && Number.isSafeInteger(revision) && revision >= 0 ? revision : 0, isOpen: false,
+          migrationError: Boolean((persisted as { migrationError?: unknown })?.migrationError) || lost,
           verification: "idle", verifiedRevision: null, issues: {}, priceChanges: Array.isArray(changes) ? items.filter((item) => changes.includes(item.id)).map((item) => item.id) : [] };
       },
     }
   )
 );
+observeCartPersistence((persistenceError) => useCartStore.setState({ persistenceError }));

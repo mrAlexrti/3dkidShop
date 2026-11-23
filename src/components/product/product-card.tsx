@@ -13,6 +13,7 @@ import { useRef, useState, useSyncExternalStore } from "react";
 import { httpMediaUrl } from "@/lib/product-media";
 import { cartAfterAddition } from "@/lib/cart-items";
 import { MAX_PRODUCT_IMAGES, photoPosition, swipeDirection, type ProductPhoto } from "@/lib/gallery";
+import { useMobileCardAnimation } from "./use-mobile-card-animation";
 
 const animationQuery = "(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)";
 function subscribeAnimationPreference(callback: () => void) {
@@ -28,24 +29,25 @@ type Props = {
   slug: string;
   name: string;
   nameEn?: string | null;
-  price: number;
+  price: number | null;
   oldPrice?: number | null;
   image: string;
   images?: ProductPhoto[];
   hoverGifUrl?: string | null;
   isNew?: boolean;
   hasOptions?: boolean;
+  hasColorOptions?: boolean;
   isOrderable: boolean;
 };
 
-export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, images, hoverGifUrl, isNew, hasOptions = false, isOrderable }: Props) {
+export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, images, hoverGifUrl, isNew, hasOptions = false, hasColorOptions = false, isOrderable }: Props) {
   const router = useRouter();
   const addItem  = useCartStore((s) => s.addItem);
   const items = useCartStore((s) => s.items);
   const { locale, t } = useLangStore();
   const localizedName = getProductName({ name, nameEn }, locale);
   const currency = "UAH";
-  const candidate = { id, productId: id, name: localizedName, slug, price, image, quantity: 1 };
+  const candidate = { id, productId: id, name: localizedName, slug, price: price ?? 0, image, quantity: 1 };
   const atLimit = !hasOptions && cartAfterAddition(items, candidate) === null;
   const animationAllowed = useSyncExternalStore(subscribeAnimationPreference, canAnimate, staticOnServer);
   const [pointed, setPointed] = useState(false);
@@ -53,13 +55,15 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, im
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
   const [index, setIndex] = useState(0); const [browsing, setBrowsing] = useState(false);
+  const card = useRef<HTMLElement>(null);
   const touch = useRef<{ x: number; y: number } | null>(null); const suppressClickUntil = useRef(0);
   const photos = images?.length ? images.slice(0, MAX_PRODUCT_IMAGES) : [{ id: "main", url: image }];
   const active = index % photos.length; const text = t.product.gallery;
   function changePhoto(direction: number) { setIndex((current) => (current + direction + photos.length) % photos.length); setBrowsing(true); }
   const parsedGif = httpMediaUrl.safeParse(hoverGifUrl);
   const gifUrl = parsedGif.success ? parsedGif.data : null;
-  const showGif = animationAllowed && active === 0 && !browsing && (pointed || focused) && gifUrl && failedUrl !== gifUrl;
+  const mobileAnimation = useMobileCardAnimation(card, Boolean(gifUrl && failedUrl !== gifUrl && active === 0 && !browsing));
+  const showGif = active === 0 && !browsing && ((animationAllowed && (pointed || focused)) || mobileAnimation) && gifUrl && failedUrl !== gifUrl;
   const interaction = {
     onPointerEnter: (event: React.PointerEvent<HTMLElement>) => setPointed(event.pointerType === "mouse"),
     onPointerLeave: () => { setPointed(false); setBrowsing(false); },
@@ -82,7 +86,7 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, im
       return;
     }
     if (hasOptions) {
-      toast.message(t.product.chooseSize);
+      toast.message((hasColorOptions ? t.variantConfig.choose : t.product.chooseSize));
       router.push(`/product/${slug}`);
       return;
     }
@@ -90,7 +94,7 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, im
   };
 
   return (
-    <article className="sf-product-card" {...interaction}>
+    <article ref={card} className="sf-product-card" {...interaction}>
       <div className="sf-product-visual">
       <Link className="absolute inset-0 block" href={`/product/${slug}`} aria-label={localizedName} draggable={false} style={{ touchAction: "pan-y pinch-zoom" }}
         onPointerDown={(event) => { if (event.pointerType === "touch" || event.pointerType === "pen") touch.current = { x: event.clientX, y: event.clientY }; }}
@@ -118,10 +122,10 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, im
         {isOrderable && atLimit && <p className="mt-2 text-xs text-ink/60">{t.cart.reconciliation.limit}</p>}
         <div className="sf-product-bottom">
           <div className="sf-product-price">
-            <span>{hasOptions && `${t.product.from} `}{formatPrice(price, currency)}</span>
+            <span>{hasOptions && price !== null && `${t.product.from} `}{price === null ? "—" : formatPrice(price, currency)}</span>
             {oldPrice && <del>{formatPrice(oldPrice, currency)}</del>}
           </div>
-          <button type="button" className="sf-product-add disabled:opacity-50" disabled={!isOrderable || atLimit} onClick={handleQuickAdd} aria-label={`${!isOrderable ? t.product.unavailable : atLimit ? t.cart.reconciliation.limit : hasOptions ? t.product.chooseSize : t.product.addToCart}: ${localizedName}`} aria-disabled={!isOrderable || atLimit}>
+          <button type="button" className="sf-product-add disabled:opacity-50" disabled={!isOrderable || atLimit} onClick={handleQuickAdd} aria-label={`${!isOrderable ? t.product.unavailable : atLimit ? t.cart.reconciliation.limit : hasOptions ? (hasColorOptions ? t.variantConfig.choose : t.product.chooseSize) : t.product.addToCart}: ${localizedName}`} aria-disabled={!isOrderable || atLimit}>
             <ShoppingBag size={20} aria-hidden="true" />
           </button>
         </div>

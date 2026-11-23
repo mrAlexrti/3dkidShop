@@ -1,0 +1,68 @@
+# REVIEW ONLY: model diff with comments omitted; not an execution/apply script.
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index bb4eaed..4bb3e6c 100644
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -97,0 +98,3 @@ model Product {
++  optionMode      ProductOptionMode @default(LEGACY)
++  variantRevision Int               @default(0)
++  variants        ProductVariant[]
+@@ -114,0 +118,4 @@ model ProductOption {
++  kind              ProductOptionKind?
++  variantSelections ProductVariantSelection[]
++  @@unique([productId, id])
++  @@unique([productId, kind])
+@@ -126,0 +134,3 @@ model ProductOptionValue {
++  retiredAt         DateTime?
++  variantSelections ProductVariantSelection[]
++  @@unique([optionId, id])
+@@ -255,0 +266,3 @@ model OrderItem {
++  productVariantId String?
++  productVariant   ProductVariant? @relation(fields: [productId, productVariantId], references: [productId, id], onDelete: Restrict, onUpdate: Restrict)
++  @@index([productId, productVariantId])
+@@ -263,0 +277,45 @@ model SiteContent {
++
++enum ProductOptionMode {
++  LEGACY
++  SIMPLE
++  SIZE
++  COLOR
++  COLOR_SIZE
++}
++
++enum ProductOptionKind {
++  COLOR
++  SIZE
++}
++
++model ProductVariant {
++  id             String                    @id @default(cuid())
++  productId      String
++  product        Product                   @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Restrict)
++  combinationKey String                    @db.VarChar(300)
++  price          Decimal                   @db.Decimal(10, 2)
++  isAvailable    Boolean                   @default(false)
++  retiredAt      DateTime?
++  selections     ProductVariantSelection[]
++  orderItems     OrderItem[]
++  createdAt      DateTime                  @default(now())
++  updatedAt      DateTime                  @updatedAt
++
++  @@unique([productId, id])
++  @@unique([productId, combinationKey])
++  @@index([productId, retiredAt, isAvailable])
++}
++
++model ProductVariantSelection {
++  variantId String
++  productId String
++  optionId  String
++  valueId   String
++  variant   ProductVariant     @relation(fields: [productId, variantId], references: [productId, id], onDelete: Cascade, onUpdate: Restrict)
++  option    ProductOption      @relation(fields: [productId, optionId], references: [productId, id], onDelete: NoAction, onUpdate: Restrict)
++  value     ProductOptionValue @relation(fields: [optionId, valueId], references: [optionId, id], onDelete: NoAction, onUpdate: Restrict)
++
++  @@id([variantId, optionId])
++  @@index([optionId, valueId])
++  @@index([productId, variantId])
++}

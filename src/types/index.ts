@@ -8,6 +8,8 @@ export type CartItem = {
   quantity: number;
   options?: Record<string, string>;
   variant?: { id: string; labelUa: string; labelEn: string | null };
+  selection?: import("@/lib/product-configuration").CombinationSelection;
+  selectionLabels?: { COLOR: { labelUa: string; labelEn: string | null }; SIZE?: { labelUa: string; labelEn: string | null } };
 };
 
 export type ProductWithRelations = {

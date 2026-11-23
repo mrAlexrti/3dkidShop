@@ -113,13 +113,13 @@ async function readMediaReferences(tx: Prisma.TransactionClient) {
   // image. A scan limit/error defers cleanup; it can never authorize deletion.
   const [images, products, categories, content, testimonials] = await Promise.all([
     tx.productImage.findMany({ select: { url: true }, take: MAX_SCAN + 1 }),
-    tx.product.findMany({ select: { hoverGifUrl: true, description: true, descriptionEn: true }, take: MAX_SCAN + 1 }),
+    tx.product.findMany({ select: { hoverGifUrl: true, description: true, descriptionEn: true, materials: true, materialsEn: true }, take: MAX_SCAN + 1 }),
     tx.category.findMany({ select: { imageUrl: true, description: true }, take: MAX_SCAN + 1 }),
     tx.siteContent.findMany({ where: { NOT: { OR: [{ key: { startsWith: CLEANUP_QUEUE_PREFIX } }, { key: { startsWith: RETIRED_MEDIA_PREFIX } }] } }, select: { value: true }, take: MAX_SCAN + 1 }),
     tx.review.findMany({ select: { avatarUrl: true, text: true }, take: MAX_SCAN + 1 }),
   ]);
   if ([images, products, categories, content, testimonials].some((rows) => rows.length > MAX_SCAN)) throw new Error("MEDIA_REFERENCE_SCAN_LIMIT");
-  return new Set(mediaReferences([...images.map((row) => row.url), ...products.flatMap((row) => [row.hoverGifUrl, row.description, row.descriptionEn]),
+  return new Set(mediaReferences([...images.map((row) => row.url), ...products.flatMap((row) => [row.hoverGifUrl, row.description, row.descriptionEn, row.materials, row.materialsEn]),
     ...categories.flatMap((row) => [row.imageUrl, row.description]), ...content.map((row) => row.value),
     ...testimonials.flatMap((row) => [row.avatarUrl, row.text])], true));
 }

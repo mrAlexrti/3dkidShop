@@ -6,12 +6,13 @@ type Product = {
   slug: string;
   name: string;
   nameEn?: string | null;
-  price: number;
+  price: number | null;
   image: string;
   images?: import("@/lib/gallery").ProductPhoto[];
   hoverGifUrl?: string | null;
   isNew?: boolean;
   hasOptions?: boolean;
+  hasColorOptions?: boolean;
   isOrderable: boolean;
 };
 

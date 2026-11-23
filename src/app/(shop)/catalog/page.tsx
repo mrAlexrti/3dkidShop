@@ -1,5 +1,5 @@
-import { hasConfiguredSizes, startingPrice } from "@/lib/product-variants";
-import { prisma } from "@/lib/prisma";
+import { productOffer } from "@/lib/product-configuration";
+import { catalogProducts } from "@/lib/catalog-products";
 import { CatalogFilters, type FilterCategory } from "@/components/catalog/catalog-filters";
 import { ProductGrid } from "@/components/catalog/product-grid";
 import { Pagination } from "@/components/catalog/pagination";
@@ -36,7 +36,7 @@ export default async function CatalogPage({
 }) {
   const params = await searchParams;
   const [t, locale] = await Promise.all([getT(), getLocale()]);
-  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
+  const page = Math.min(1000000, Math.max(1, parseInt(params.page ?? "1", 10) || 1));
 
   const categoryTree = await getCategoryTree();
   const categoryIds = getCategoryIdsForSlug(categoryTree, params.category);
@@ -59,16 +59,7 @@ export default async function CatalogPage({
     params.sort === "name"       ? { [getProductNameField(locale)]: "asc" } :
                                    { createdAt: "desc" };
 
-  const [products, total] = await Promise.all([
-    prisma.product.findMany({
-      where,
-      orderBy,
-      include: { images: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 10 }, options: { select: { name: true, values: { select: { price: true } } } } },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-    }),
-    prisma.product.count({ where }),
-  ]);
+  const { products, total } = await catalogProducts({ where, orderBy, categoryIds, q: params.q, sort: params.sort, page, pageSize: PAGE_SIZE });
 
   const filterCategories: FilterCategory[] = categoryTree.map((c) => ({
     id: c.id,
@@ -114,13 +105,14 @@ export default async function CatalogPage({
           name:     p.name,
           nameEn:   p.nameEn,
           hoverGifUrl: p.hoverGifUrl,
-          price:    startingPrice(p.price, p.options),
-          oldPrice: p.oldPrice ? Number(p.oldPrice) : null,
+          price:    productOffer(p).price,
+          oldPrice: productOffer(p).oldPrice,
           image:    p.images[0]?.url ?? "/images/placeholder.svg",
           images: p.images.map(({ id, url, alt }) => ({ id, url, alt })),
           isNew:    p.isNew,
-          hasOptions: hasConfiguredSizes(p.options),
-          isOrderable: p.isOrderable,
+          hasOptions: productOffer(p).hasOptions,
+          hasColorOptions: productOffer(p).hasColorOptions,
+          isOrderable: productOffer(p).isOrderable,
         }))}
       />
 

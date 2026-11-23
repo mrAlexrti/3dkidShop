@@ -22,12 +22,15 @@ import { INVOICE_INITIALIZING } from "@/lib/payments/initialization-state";
 import { moneyMinorUnits, moneyDecimal } from "@/lib/payments/money";
 import { allocateOrderNumber, isOrderNumberCollision } from "@/lib/order-number";
 import { Prisma } from "@prisma/client";
+import { nativeMode, productConfiguration, selectedCombination, snapshotCombination, combinationSelectionSchema } from "@/lib/product-configuration";
+import { flushVariantConstraints } from "@/lib/variant-transaction";
 
 export type CreateOrderResult =
   | { success: true; orderNumber: string | null; emailSent: boolean; resultUrl: string; payment?: HostedCheckout }
   | { success: false; error: string };
 
 type PricedOrderItem = {
+  productVariantId?: string;
   productId: string;
   productName: string;
   optionsJson: string | null;
@@ -47,10 +50,11 @@ async function priceOrderItems(tx: Prisma.TransactionClient, items: CartItem[], 
 
   // Actual PostgreSQL shared row locks coordinate acceptance with Admin updates.
   // Concurrent manufacture orders can share these locks. No product is mutated.
-  await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Product" WHERE "id" IN (${Prisma.join(productIds)}) ORDER BY "id" FOR SHARE`);
+  await tx.$queryRaw(Prisma.sql`SELECT "id" FROM public."Product" WHERE "id" IN (${Prisma.join(productIds)}) ORDER BY "id" FOR SHARE`);
   const products = await tx.product.findMany({
     where: { id: { in: productIds }, isActive: true, isOrderable: true },
     include: {
+      variants: { include: { selections: true } },
       options: {
         include: { values: true },
       },
@@ -77,6 +81,23 @@ async function priceOrderItems(tx: Prisma.TransactionClient, items: CartItem[], 
     if (!product) {
       return { success: false as const, error: errors.notFound };
     }
+
+    if (item.selection !== undefined && (item.variant || item.options || !combinationSelectionSchema.safeParse(item.selection).success)) return { success: false as const, error: errors.options };
+    if (nativeMode(product.optionMode)) {
+      const config = productConfiguration(product);
+      const sizeId = requestedSizeId(item);
+      const combination = config.mode === "SIMPLE" ? null : selectedCombination(config, sizeId, item.selection);
+      if (config.mode === "SIMPLE" ? Boolean(sizeId || item.selection) : !combination) return { success: false as const, error: errors.options };
+      const priceMinor = moneyMinorUnits(combination?.price ?? product.price.toString());
+      if (priceMinor === null || priceMinor <= 0) return { success: false as const, error: errors.unavailable };
+      if (requirePriceMatch && (!Number.isFinite(item.price) || Math.abs(item.price - priceMinor / 100) > 0.000001)) return { success: false as const, error: errors.priceChanged };
+      subtotalMinor += priceMinor * item.quantity;
+      if (!Number.isSafeInteger(subtotalMinor) || subtotalMinor > 9999999999) return { success: false as const, error: errors.quantity };
+      pricedItems.push({ productId: product.id, productName: product.name, price: moneyDecimal(priceMinor), quantity: item.quantity,
+        optionsJson: combination ? snapshotCombination(config, combination) : null, ...(combination ? { productVariantId: combination.id } : {}) });
+      continue;
+    }
+    if (item.selection) return { success: false as const, error: errors.options };
 
     const variants = getSizeVariants(product.options);
     const sizeId = requestedSizeId(item);
@@ -178,7 +199,7 @@ export async function createOrder(
         orderNumber = onlineConfig ? null : await allocateOrderNumber(tx);
         resultUrl = reference ? getAttemptResultPath(reference) : getOrderResultPath(orderNumber!);
         const subtotal = moneyDecimal(priced.subtotalMinor);
-        return tx.order.create({
+        const created = await tx.order.create({
           data: {
             number: orderNumber,
             checkoutAcceptance: onlineConfig ? "PROVISIONAL" : "ACCEPTED",
@@ -215,6 +236,7 @@ export async function createOrder(
             items: {
               create: priced.items.map((item) => ({
                 productId: item.productId,
+                ...(item.productVariantId ? { productVariantId: item.productVariantId } : {}),
                 productName: item.productName,
                 optionsJson: item.optionsJson,
                 price: item.price,
@@ -223,6 +245,8 @@ export async function createOrder(
             },
           }, include: { items: true },
         });
+        await flushVariantConstraints(tx);
+        return created;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
       break;
     } catch (error) {

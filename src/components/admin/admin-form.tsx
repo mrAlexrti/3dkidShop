@@ -31,6 +31,12 @@ export function AdminForm({ action, successHref, children, className }: {
   const [ready, setReady] = useState(false);
   useEffect(() => { setReady(true); }, []);
   const formRef = useRef<HTMLFormElement>(null);
+  const pendingFocus = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!pending && pendingFocus.current) {
+      pendingFocus.current.focus(); pendingFocus.current.scrollIntoView({ block: "nearest", behavior: "auto" }); pendingFocus.current = null;
+    }
+  }, [pending, errors]);
   const uploadStateChanged = useCallback((name: string, busy: boolean) => {
     if (busy) uploads.current.add(name); else uploads.current.delete(name);
     setUploading(uploads.current.size > 0);
@@ -47,9 +53,11 @@ export function AdminForm({ action, successHref, children, className }: {
       if (described.length) control.setAttribute("aria-describedby", described.join(" ")); else control.removeAttribute("aria-describedby");
     }
     const first = Object.keys(fields)[0];
-    const target = Array.from(form.querySelectorAll<HTMLElement>("[name], [data-field-name]")).find((node) =>
-      (node.getAttribute("name") === first && node.getAttribute("type") !== "hidden") || node.dataset.fieldName === first);
-    target?.focus(); target?.scrollIntoView({ block: "nearest", behavior: "auto" });
+    const nodes = Array.from(form.querySelectorAll<HTMLElement>("[name], [data-field-name]"));
+    const target = nodes.find((node) => (node.getAttribute("name") === first && node.getAttribute("type") !== "hidden") || node.dataset.fieldName === first) ??
+      nodes.find((node) => node.dataset.fieldName === first?.split(".")[0]);
+    pendingFocus.current = target ?? null;
+    if (!target?.matches(":disabled")) { target?.focus(); target?.scrollIntoView({ block: "nearest", behavior: "auto" }); }
   }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

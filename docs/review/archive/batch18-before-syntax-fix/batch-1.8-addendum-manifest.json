@@ -1,0 +1,12 @@
+{
+  "status": "NOT APPROVED FOR PRODUCTION EXECUTION",
+  "scope": "Combined variants + nullable materials + category parent RESTRICT",
+  "artifacts": {
+    "docs/review/batch-1.8-variants.sql": "4c404d4ecb1ed144de4f7886036d0e5f64e7a82e4abe12c344935ac818d05623",
+    "docs/review/batch-1.8-production-candidate.sql": "f37cdbceaca10d56bdccd3ccee75191e677809bf344995a35042f0f18e887509",
+    "docs/review/batch-1.8-neon-preflight-readonly.sql": "0be460b0027a909716bfc92f05eb71f62ec298fcefa1b9e067d215592882ee8f",
+    "docs/review/batch-1.8-variants.prisma": "b847306df2e2e0eb1ef349a13034df43e15a3c5713d013cff847f31243291e65",
+    "docs/release/batch-1.8-production-migration.sql": "c692476add8a90143ca88efc077b383eeafe9f4c4dbf3bd07a90e907262ef796",
+    "docs/release/batch-1.8-production-verify.sql": "fd907da74d622b672dd2da3a9984b71832a2bca820e82d3a86fe0555346e05dd"
+  }
+}

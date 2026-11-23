@@ -9,15 +9,18 @@ import { formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { productLineId, sizeLabel, type SizeVariant } from "@/lib/product-variants";
+import { NativeProductOptions } from "./native-product-options";
+import type { ProductConfiguration } from "@/lib/product-configuration";
 
-export function ProductOptions({ productId, name, slug, basePrice, image, isOrderable, variants }: {
-  productId: string; name: string; slug: string; basePrice: number; image: string; isOrderable: boolean; variants: SizeVariant[];
+export function ProductOptions({ productId, name, slug, basePrice, image, isOrderable, variants, configuration }: {
+  productId: string; name: string; slug: string; basePrice: number; image: string; isOrderable: boolean; variants: SizeVariant[]; configuration?: ProductConfiguration;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const addItem = useCartStore((state) => state.addItem);
   const items = useCartStore((state) => state.items);
   const { t, locale } = useLangStore();
+  if (configuration && configuration.mode !== "LEGACY" && configuration.mode !== "SIMPLE") return <NativeProductOptions key={`${productId}:${configuration.mode}`} {...{ productId, name, slug, image, isOrderable, configuration }} />;
   const selected = variants.find((variant) => variant.id === selectedId);
   const validPrices = variants.flatMap((variant) => variant.price == null ? [] : [variant.price]);
   const unitPrice = variants.length ? selected?.price ?? (validPrices.length ? Math.min(...validPrices) : null) : basePrice;
@@ -36,7 +39,7 @@ export function ProductOptions({ productId, name, slug, basePrice, image, isOrde
       <legend className="mb-2 text-sm">{t.product.size}</legend>
       <div className="flex flex-wrap gap-2">
         {variants.map((variant) => <button key={variant.id} type="button" aria-pressed={selectedId === variant.id} disabled={variant.price == null}
-          onClick={() => setSelectedId(variant.id)} className={`rounded-full border px-4 py-2 text-sm disabled:opacity-40 ${selectedId === variant.id ? "border-pink-500 bg-pink-500 text-white" : "border-ink/15 hover:border-pink-400"}`}>
+          onClick={() => setSelectedId(variant.id)} className={`max-w-full break-words rounded-full border px-4 py-2 text-sm disabled:opacity-40 ${selectedId === variant.id ? "border-pink-500 bg-pink-500 text-white" : "border-ink/15 hover:border-pink-400"}`}>
           {sizeLabel(variant, locale)}
         </button>)}
       </div>

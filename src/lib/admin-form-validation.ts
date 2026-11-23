@@ -1,18 +1,19 @@
 import type { z } from "zod";
 
-export type AdminFieldError = "required" | "invalid" | "tooLong" | "slugInvalid" | "slugDuplicate" | "galleryLimit" | "galleryOwnership" | "parentInvalid";
+export type AdminFieldError = "required" | "invalid" | "tooLong" | "slugInvalid" | "slugDuplicate" | "galleryLimit" | "galleryOwnership" | "parentInvalid" | "stale" | "optionDuplicate" | "combinationDuplicate" | "configurationLimit" | "nativeDisabled";
 export type AdminFormResult = { error: "validation" | "saveFailed" | "notFound" | "mediaRetired" | "slugInvalid" | "slugDuplicate"; fieldErrors?: Record<string, AdminFieldError> } | void;
-export type AdminDeleteResult = { error: "orderHistory" | "referenced" | "deleteFailed" | "notFound" | "forbidden" } | void;
+export type AdminDeleteResult = { error: "categoryProducts" | "categoryChildren" | "orderHistory" | "referenced" | "deleteFailed" | "notFound" | "forbidden" } | void;
 
 export function validationResult(error: z.ZodError): AdminFormResult {
   const fieldErrors: Record<string, AdminFieldError> = {};
   for (const issue of error.issues) {
-    const field = String(issue.path[0] ?? "form");
+    const field = issue.path[0] === "configuration" ? issue.path.join(".") : String(issue.path[0] ?? "form");
     if (!fieldErrors[field]) {
       const required = issue.code === "invalid_type" && issue.received === "undefined" ||
         issue.code === "too_small" && issue.type === "string" && issue.minimum === 1 ||
         issue.code === "custom" && issue.message === "required";
-      fieldErrors[field] = required ? "required" : issue.code === "too_big" && issue.type === "string" ? "tooLong" : "invalid";
+      const reason = issue.code === "custom" && ["optionDuplicate", "combinationDuplicate", "configurationLimit"].includes(issue.message ?? "") ? issue.message as AdminFieldError : null;
+      fieldErrors[field] = reason ?? (required ? "required" : issue.code === "too_big" && issue.type === "string" ? "tooLong" : "invalid");
     }
   }
   return { error: "validation", fieldErrors };

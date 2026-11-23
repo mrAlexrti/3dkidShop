@@ -10,7 +10,7 @@ import { SITE_FONT_KEY } from "@/lib/site-settings";
 import { storefrontContentSchema, STOREFRONT_CONTENT_KEYS } from "@/lib/site-content";
 import { assertMediaAttachable, enqueueSupersededMedia, lockMediaWrites, MEDIA_TRANSACTION_OPTIONS } from "@/lib/media-lifecycle";
 import { scheduleProductMediaCleanup } from "@/lib/media-cleanup-after";
-import { AdminInputError, validationResult, isUniqueFieldError, type AdminFormResult } from "@/lib/admin-form-validation";
+import { AdminInputError, validationResult, isUniqueFieldError, type AdminFormResult, type AdminDeleteResult } from "@/lib/admin-form-validation";
 import { RetiredMediaError } from "@/lib/media-lifecycle-policy";
 
 const categorySchema = z.object({
@@ -134,22 +134,32 @@ export async function updateCategory(id: string, formData: FormData): Promise<Ad
   scheduleProductMediaCleanup();
 }
 
-export async function deleteCategory(id: string) {
-  await requireAdmin();
+export async function deleteCategory(id: string): Promise<AdminDeleteResult> {
+  try { await requireAdmin(); } catch { return { error: "forbidden" }; }
 
-  await prisma.$transaction(async (tx) => {
+  try { const result = await prisma.$transaction(async (tx) => {
     await lockMediaWrites(tx);
+    // FK attachments take KEY SHARE on this parent. Serialize the dependency
+    // check with inserts/reparenting; RESTRICT remains the backstop for all writers.
+    await tx.$queryRaw`SELECT id FROM public."Category" WHERE id=${id} FOR UPDATE`;
     const category = await tx.category.findUnique({
       where: { id },
       select: { imageUrl: true, description: true, _count: { select: { products: true, children: true } } },
     });
-    if (!category) return;
-    if (category._count.products > 0 || category._count.children > 0) {
-      throw new Error("Нельзя удалить непустую категорию или категорию с подкатегориями");
-    }
+    if (!category) return { error: "notFound" as const };
+    if (category._count.products > 0) return { error: "categoryProducts" as const };
+    if (category._count.children > 0) return { error: "categoryChildren" as const };
     await tx.category.delete({ where: { id } });
     await enqueueSupersededMedia(tx, [category.imageUrl, category.description]);
   }, MEDIA_TRANSACTION_OPTIONS);
+  if (result?.error) return result;
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+    const sqlState = error && typeof error === "object" && "meta" in error ? (error.meta as { code?: string } | undefined)?.code : undefined;
+    if (["P2003", "P2014"].includes(String(code)) || ["23001", "23503"].includes(sqlState ?? "")) return { error: "referenced" };
+    if (code === "P2025") return { error: "notFound" };
+    console.warn("admin_category_delete_failed"); return { error: "deleteFailed" };
+  }
 
   revalidateCategoryViews();
   scheduleProductMediaCleanup();
