@@ -160,7 +160,8 @@ try {
   assert.equal(new URL(oauthStart.url).searchParams.get("redirect_uri"), origin + "/api/customer-auth/callback/google");
   assert.match(oauth.headers.get("cache-control"), /private.*no-store/);
   console.log("PASS canonical OAuth origin and customer auth method, Host and bounded body checks");
-  console.log(await run(process.execPath, [resolve("scripts/verify-batch19-browser.mjs")]));
+  const screenshots = process.argv.includes("--ux06-screenshots") ? ["--ux06-screenshots"] : [];
+  console.log(await run(process.execPath, [resolve("scripts/verify-batch19-browser.mjs"), ...screenshots]));
   }
   await assert.rejects(file(release + "-rollback.sql", approved), /B19_USE_FORWARD_RECOVERY/);
   if (!process.argv.includes("--database-only")) {

@@ -1,4 +1,5 @@
 import { getT } from "@/lib/i18n-server";
+import "./account.css";
 
 export const dynamic = "force-dynamic";
 
@@ -7,5 +8,5 @@ export async function generateMetadata() {
 }
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
-  return <div className="container-shop max-w-5xl space-y-5 py-8 sm:py-12">{children}</div>;
+  return <div className="sf-shell ac-shell">{children}</div>;
 }

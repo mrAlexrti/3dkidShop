@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useActionState, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowRight, CircleCheck, Globe } from "lucide-react";
 import { useLangStore } from "@/store/lang-store";
 import type { AccountResult } from "@/lib/customer/actions";
 import type { GoogleResult } from "@/lib/customer/google";
@@ -28,17 +29,20 @@ export function AccountForm({ action, button, children, token = false, done, ref
     if (refresh && result === "ok") router.refresh();
   }, [refresh, result, router]);
   const finished = !!done && (result === "ok" || (token && result === "sent"));
-  return <form action={submit} className="space-y-3">
-    <fieldset disabled={pending || finished} className="space-y-3 disabled:opacity-70">
+  const successful = result === "ok" || result === "sent";
+  return <form action={submit} className="ac-form" aria-busy={pending}>
+    <fieldset disabled={pending || finished}>
       {children}
       {token && <input type="hidden" name="token" value={proof ?? ""} />}
-      <button type="submit" disabled={token && !proof} className="min-h-11 rounded-full bg-pink-700 px-5 py-2 text-sm font-semibold text-white disabled:opacity-60">
+      <button type="submit" disabled={token && !proof} className="ac-button">
         {pending ? t.common.loading : button}
       </button>
     </fieldset>
-    {token && proof === "" && <p role="alert">{t.account.result.invalid}</p>}
-    {typeof result === "string" && <p role={result === "ok" || result === "sent" ? "status" : "alert"} className="text-sm">{t.account.result[result]}</p>}
-    {finished && <Link className="text-pink-700 underline" href={done}>{done === "/account/sign-in" ? t.account.signIn : t.account.title}</Link>}
+    {token && proof === "" && <p className="ac-feedback" role="alert">{t.account.result.invalid}</p>}
+    {typeof result === "string" && <p role={successful ? "status" : "alert"} className={`ac-feedback${successful ? " ac-feedback--success" : ""}`}>
+      {successful && <CircleCheck size={19} aria-hidden="true" />}{t.account.result[result]}
+    </p>}
+    {finished && <Link className="ac-text-link" href={done} prefetch={false}>{done === "/account/sign-in" ? t.account.signIn : t.account.title}<ArrowRight size={16} aria-hidden="true" /></Link>}
   </form>;
 }
 
@@ -72,23 +76,24 @@ export function GoogleForm({ link = false }: { link?: boolean }) {
     inFlight.current = false;
     setPending(false);
   }
-  return <form method="post" action="/api/customer-auth/start/google" onSubmit={submit} className="space-y-3">
+  return <form method="post" action="/api/customer-auth/start/google" onSubmit={submit} className="ac-form" aria-busy={pending}>
     <input type="hidden" name="mode" value={link ? "link" : "signin"} />
     {link && <AccountField name="password" label={t.account.password} type="password" autoComplete="current-password" maxLength={72} />}
-    <button type="submit" disabled={pending} className="min-h-11 rounded-full border border-ink/20 bg-white px-5 py-2 text-sm font-semibold disabled:opacity-60">
-      {pending ? t.common.loading : link ? t.account.linkGoogle : t.account.google}
+    <button type="submit" disabled={pending} className="ac-button ac-button--soft">
+      <Globe size={19} aria-hidden="true" />{pending ? t.common.loading : link ? t.account.linkGoogle : t.account.google}
     </button>
-    {error && <p className="text-sm" role="alert">{t.account.result[error]}</p>}
+    {error && <p className="ac-feedback" role="alert">{t.account.result[error]}</p>}
   </form>;
 }
 
 export function AccountField({ label, name, type = "text", defaultValue, autoComplete, required = true, maxLength, help }: {
   label: string; name: string; type?: string; defaultValue?: string | null; autoComplete?: string; required?: boolean; maxLength?: number; help?: string;
 }) {
-  return <label className="block text-sm font-semibold">
-    {label}
-    <input name={name} type={type} defaultValue={defaultValue ?? undefined} autoComplete={autoComplete} required={required} maxLength={maxLength}
-      className="mt-1 min-h-11 w-full rounded-xl border border-ink/20 bg-white px-3 py-2 font-normal" />
-    {help && <span className="mt-1 block text-xs font-normal text-ink/65">{help}</span>}
-  </label>;
+  const id = useId();
+  return <div className="ac-field">
+    <label htmlFor={id}>{label}</label>
+    <input id={id} name={name} type={type} defaultValue={defaultValue ?? undefined} autoComplete={autoComplete} required={required} maxLength={maxLength}
+      aria-describedby={help ? `${id}-help` : undefined} />
+    {help && <small id={`${id}-help`}>{help}</small>}
+  </div>;
 }

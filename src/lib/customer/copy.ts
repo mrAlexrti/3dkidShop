@@ -28,6 +28,21 @@ export const customerCopy = {
       rate: "Забагато спроб. Спробуйте пізніше.", unavailable: "Ця дія зараз недоступна." },
     googleError: "Не вдалося продовжити з Google. Якщо у вас уже є акаунт, підключіть Google у профілі.",
     tryAgain: "Спробувати знову",
+    welcomeTitle: "Вітаємо!",
+    welcomeName: (name: string) => `Вітаємо, ${name}!`,
+    myOrders: "Мої замовлення", myProfile: "Мій профіль", continueShopping: "До каталогу",
+    recentOrders: "Останні замовлення", allOrders: "Усі замовлення", backToOrders: "До історії замовлень",
+    profileHint: "Контактні дані та налаштування входу.", shopHint: "Знайдіть нових улюбленців у каталозі.",
+    favoritesHint: "Збережені товари, до яких легко повернутися.", ordersHint: "Переглядайте покупки та відстежуйте доставку.",
+    emptyOrdersHint: "Ваші покупки та їхній статус з’являться тут.", emptyFavoritesHint: "Натисніть сердечко на товарі, щоб зберегти його тут.",
+    personalDetails: "Особисті дані", security: "Вхід і безпека", accountEmail: "Адреса акаунта",
+    emailVerified: "Підтверджено", emailUnverified: "Не підтверджено", googleConnected: "Google підключено", googleNotConnected: "Google не підключено",
+    passwordSet: "Пароль встановлено", passwordNotSet: "Пароль не встановлено", newEmail: "Нова адреса email", googleProvider: "Google",
+    orderedItems: "Товари в замовленні", orderSummary: "Оплата й доставка",
+    authIntro: "Увійдіть, щоб зберігати обране та переглядати замовлення.",
+    confirmHint: "Підтвердьте дію, щоб продовжити.",
+    counts: { orders: { one: "замовлення", few: "замовлення", many: "замовлень", other: "замовлення" },
+      favorites: { one: "збережений товар", few: "збережені товари", many: "збережених товарів", other: "збереженого товару" } },
   },
   en: {
     title: "My account", overview: "Overview", profile: "Profile", favorites: "Favorites", orders: "Order history",
@@ -58,5 +73,26 @@ export const customerCopy = {
       rate: "Too many attempts. Try again later.", unavailable: "This action is currently unavailable." },
     googleError: "Google sign-in could not continue. If you already have an account, connect Google from your profile.",
     tryAgain: "Try again",
+    welcomeTitle: "Welcome!",
+    welcomeName: (name: string) => `Welcome, ${name}!`,
+    myOrders: "My orders", myProfile: "My profile", continueShopping: "Continue shopping",
+    recentOrders: "Recent orders", allOrders: "All orders", backToOrders: "Back to orders",
+    profileHint: "Contact details and sign-in settings.", shopHint: "Find your next favorite in the catalog.",
+    favoritesHint: "Saved products you can come back to anytime.", ordersHint: "Review your purchases and track delivery.",
+    emptyOrdersHint: "Your purchases and their status will appear here.", emptyFavoritesHint: "Tap the heart on a product to save it here.",
+    personalDetails: "Personal details", security: "Sign-in and security", accountEmail: "Account email",
+    emailVerified: "Verified", emailUnverified: "Unverified", googleConnected: "Google connected", googleNotConnected: "Google not connected",
+    passwordSet: "Password set", passwordNotSet: "Password not set", newEmail: "New email address", googleProvider: "Google",
+    orderedItems: "Items in your order", orderSummary: "Payment and delivery",
+    authIntro: "Sign in to save favorites and see your orders.",
+    confirmHint: "Confirm this action to continue.",
+    counts: { orders: { one: "order", other: "orders" }, favorites: { one: "saved product", other: "saved products" } },
   },
 } as const;
+
+export function formatAccountCount(locale: "ua" | "en", value: number, kind: "orders" | "favorites") {
+  const language = locale === "ua" ? "uk-UA" : "en-GB";
+  const forms: Partial<Record<Intl.LDMLPluralRule, string>> = customerCopy[locale].counts[kind];
+  const label = forms[new Intl.PluralRules(language).select(value)] ?? forms.other;
+  return `${value.toLocaleString(language)} ${label}`;
+}

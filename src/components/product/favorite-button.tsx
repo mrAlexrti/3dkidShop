@@ -10,6 +10,8 @@ import { useLangStore } from "@/store/lang-store";
 const key = "3dkid.guest-favorites";
 const syncKey = "3dkid.favorites-sync";
 const favorites = createContext<{ ids: string[]; busy: boolean; setFavorite: (id: string, saved: boolean) => void } | null>(null);
+const customerPresence = createContext<boolean | null>(null);
+export const useCustomerPresence = () => useContext(customerPresence);
 
 function guestIds(): string[] {
   try {
@@ -23,6 +25,7 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   const syncPath = pathname.startsWith("/account") ? pathname : "/";
   const [ids, setIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(true);
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const lock = useRef(false);
   const refreshNeeded = useRef(false);
   const authenticated = useRef<boolean | null>(null);
@@ -39,6 +42,7 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
       if (!response.ok) throw new Error("FAVORITES_UNAVAILABLE");
       const { ids: remote, version: sessionVersion } = await response.json() as { ids: string[] | null; version: string | null };
       authenticated.current = remote !== null;
+      setSignedIn(authenticated.current);
       version.current = sessionVersion;
       const guest = guestIds();
       setIds(remote ?? guest);
@@ -53,6 +57,7 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     } catch {
       setIds([]);
       authenticated.current = null;
+      setSignedIn(null);
       version.current = null;
       // Retry on navigation, focus or the next interaction.
     } finally {
@@ -104,7 +109,7 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  return <favorites.Provider value={{ ids, busy, setFavorite }}>{children}</favorites.Provider>;
+  return <customerPresence.Provider value={signedIn}><favorites.Provider value={{ ids, busy, setFavorite }}>{children}</favorites.Provider></customerPresence.Provider>;
 }
 
 export function FavoriteButton({ productId, productName, className }: { productId: string; productName: string; className?: string }) {

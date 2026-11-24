@@ -7,9 +7,11 @@ import type { CategoryTreeNode } from "@/lib/categories";
 import { getCategoryName } from "@/lib/category-name";
 import { safeContentUrl, type StorefrontContent } from "@/lib/site-content";
 import { SocialIcon } from "@/components/layout/social-icon";
+import { useCustomerPresence } from "@/components/product/favorite-button";
 
 export function Footer({ categories, content }: { categories: CategoryTreeNode[]; content: StorefrontContent }) {
   const { locale, t } = useLangStore();
+  const signedIn = useCustomerPresence();
   const socials = (["instagram", "telegram", "tiktok", "youtube"] as const).flatMap((network) => {
     const url = safeContentUrl(content[`social_${network}`]);
     return url ? [{ network, url }] : [];
@@ -30,7 +32,7 @@ export function Footer({ categories, content }: { categories: CategoryTreeNode[]
       </nav>
       <nav aria-label={t.footer.customers}>
         <h2>{t.footer.customers}</h2>
-        <Link href="/account" prefetch={false}>{t.footer.account}</Link>
+        <Link href="/account" prefetch={false}>{signedIn === false ? t.account.signIn : t.account.title}</Link>
         <Link href="/about">{t.footer.about}</Link>
         <Link href="/delivery-payment">{t.footer.delivery}</Link>
       </nav>

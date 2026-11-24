@@ -1,3 +1,5 @@
+import { Heart } from "lucide-react";
+import { AccountEmpty, AccountIntro } from "@/components/account/account-surface";
 import { ProductGrid } from "@/components/catalog/product-grid";
 import { requireCustomer } from "@/lib/customer/pages";
 import { getT } from "@/lib/i18n-server";
@@ -16,7 +18,10 @@ export default async function CustomerFavorites() {
     id: p.id, slug: p.slug, name: p.name, nameEn: p.nameEn, hoverGifUrl: p.hoverGifUrl, ...productOffer(p),
     image: p.images[0]?.url ?? "/images/placeholder.svg", images: p.images.map(({ id, url, alt }) => ({ id, url, alt })),
   }));
-  return <section className="space-y-4"><h2 className="font-display text-xl">{t.favorites}</h2>
-    {products.length ? <ProductGrid products={products} /> : <p role="status">{t.emptyFavorites}</p>}
+  return <section className="ac-favorites">
+    <AccountIntro title={t.favorites} description={t.favoritesHint} />
+    {products.length ? <ProductGrid products={products} /> : <div className="ac-panel">
+      <AccountEmpty title={t.emptyFavorites} description={t.emptyFavoritesHint} cta={t.continueShopping} icon={<Heart size={26} />} />
+    </div>}
   </section>;
 }

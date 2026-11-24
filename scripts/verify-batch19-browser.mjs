@@ -1,8 +1,8 @@
 // Focused browser tests against the rehearsal's production build and mock providers.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
 import { PrismaClient } from "@prisma/client";
 
@@ -200,6 +200,74 @@ try {
     await path("/checkout/success");
   }
 
+  async function viewport(width, locale) {
+    await send("Emulation.setDeviceMetricsOverride", { width, height: 880, deviceScaleFactor: 1, mobile: width <= 680 });
+    await evaluate(`document.cookie = 'locale=${locale}; path=/'`);
+  }
+
+  async function verifyAccountShell(width, locale, signedIn) {
+    const label = signedIn ? (locale === "ua" ? "Особистий кабінет" : "My account") : (locale === "ua" ? "Увійти" : "Sign in");
+    await until(() => evaluate(`document.querySelector('footer a[href="/account"]')?.textContent === ${JSON.stringify(label)} &&
+      !!document.querySelector('header .sf-account-entry-state') === ${signedIn}`), "header and footer account status");
+    await until(() => evaluate("!!document.querySelector('main h1') && !document.querySelector('main .ac-state')"), "streamed account screen");
+    const shell = await evaluate(`(() => {
+      const header = document.querySelector('header.sf-header');
+      const account = document.querySelector('.ac-shell');
+      const accountLink = header?.querySelector('a[href="/account"]');
+      const catalog = header?.querySelector('a[href="/catalog"]');
+      return {
+        categoryNav: !!document.querySelector('.sf-categories, #store-menu-toggle, #store-mobile-nav'),
+        primary: !!header?.querySelector('.sf-brand') && !!catalog?.offsetWidth && !!header?.querySelector('.sf-language') && !!header?.querySelector('.sf-cart-count'),
+        accountLabel: accountLink?.getAttribute('aria-label'), signedIn: !!accountLink?.querySelector('.sf-account-entry-state'),
+        aroundHeader: account.getBoundingClientRect().top - header.getBoundingClientRect().bottom,
+        sameWidth: Math.abs(account.getBoundingClientRect().width - header.getBoundingClientRect().width) <= 4,
+        noOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+        h1: document.querySelectorAll('main h1').length,
+      };
+    })()`);
+    assert.deepEqual({ ...shell, aroundHeader: shell.aroundHeader <= 4 }, {
+      categoryNav: false, primary: true, accountLabel: label, signedIn, aroundHeader: true, sameWidth: true, noOverflow: true, h1: 1,
+    }, `account shell at ${width}px in ${locale}`);
+  }
+
+  async function captureUX06(name) {
+    if (!process.argv.includes("--ux06-screenshots")) return;
+    await evaluate(`(async () => {
+      await document.fonts.ready;
+      await Promise.all([...document.querySelectorAll('main img')].filter(img => img.offsetWidth).map(img => img.decode().catch(() => {})));
+      return true;
+    })()`);
+    const { cssContentSize } = await send("Page.getLayoutMetrics");
+    const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true,
+      clip: { x: 0, y: 0, width: cssContentSize.width, height: cssContentSize.height, scale: 1 } });
+    const folder = resolve("coverage/ux-06");
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(join(folder, `${name}.png`), Buffer.from(data, "base64"));
+  }
+
+  async function verifyPublicAccountPages() {
+    for (const width of [320, 768, 1280]) for (const locale of ["ua", "en"]) {
+      await viewport(width, locale);
+      for (const route of ["/account/sign-in", "/account/sign-in?mode=register", "/account/sign-in?mode=reset", "/account/confirm?mode=verify"]) {
+        await go(route);
+        await verifyAccountShell(width, locale, false);
+        if (width === 1280 && locale === "ua" && route === "/account/sign-in") await captureUX06("desktop-ua-sign-in");
+      }
+      await go("/");
+      assert.equal(await evaluate("!!document.querySelector('.sf-categories--home')"), true);
+      await go("/catalog");
+      assert.equal(await evaluate("!!document.querySelector('.sf-primary-category-chips, .sf-mobile-category-filter')"), true);
+      await go("/product/qa-cat");
+      assert.equal(await evaluate("!!document.querySelector('header + .sf-categories')"), true);
+      if (width <= 680) {
+        await evaluate("document.querySelector('#store-menu-toggle').click()");
+        await until(() => evaluate("!!document.querySelector('#store-mobile-nav a[href*=category]')"), "storefront mobile category menu");
+      }
+    }
+    await viewport(1280, "en");
+    passes("UX-06 route-aware header and public category navigation across UA/EN desktop, tablet and mobile");
+  }
+
   const outside = await request("/account/orders/claim_order");
   assert.ok([200, 307].includes(outside.status));
   assert.match(outside.headers.get("location") ?? await outside.text(), /account\/sign-in/);
@@ -211,6 +279,7 @@ try {
   assert.equal((await fetch(origin + "/api/customer-auth/start/google", {
     method: "POST", headers: { origin: "https://cross-origin.example.test" }, body: new URLSearchParams({ mode: "signin" }),
   })).status, 403);
+  await verifyPublicAccountPages();
 
   await go("/catalog");
   await evaluate("document.cookie = 'locale=en; path=/'");
@@ -257,6 +326,11 @@ try {
   await until(() => evaluate("!!localStorage.getItem('3dkid.favorites-sync')"), "authenticated favorite cross-tab notification");
   await go("/product/qa-cat");
   await until(() => evaluate("!!document.querySelector('main button[aria-label^=Add]:not(:disabled)[aria-pressed]')"), "account favorite control");
+  await db.customerFavorite.create({ data: { userId: user.id, productId: savedId } });
+  await evaluate("window.dispatchEvent(new StorageEvent('storage', {key: '3dkid.favorites-sync'}))");
+  await until(() => evaluate("!!document.querySelector('main button[aria-label^=Remove]:not(:disabled)[aria-pressed=true]')"), "favorite refresh from another tab");
+  await evaluate("document.querySelector('main button[aria-label^=Remove][aria-pressed]').click()");
+  await until(() => evaluate("!!document.querySelector('main button[aria-label^=Add]:not(:disabled)[aria-pressed]')"), "favorite removed after cross-tab refresh");
   await evaluate("document.querySelector('main button[aria-label^=Add][aria-pressed]').click()");
   await until(async () => (await db.customerFavorite.count({ where: { userId: user.id } })) === 1, "favorite restored");
   await db.product.update({ where: { id: savedId }, data: { isOrderable: false } });
@@ -307,22 +381,22 @@ try {
   await go("/account/orders");
   const claimIndex = currentMail().length;
   await fill("main input[name=number]", "102");
-  await submit("main article form, main section > div form");
+  await submit("main form:has(input[name=number])");
   await textIncludes("you’ll receive an email", main);
   assert.equal(await db.customerChallenge.count({ where: { orderId: "phone_order" } }), 0);
   await fill("main input[name=number]", "101");
-  await submit("main article form, main section > div form");
+  await submit("main form:has(input[name=number])");
   const expiredClaim = await messageLink("claim", claimIndex);
   await db.customerChallenge.updateMany({ where: { orderId: "claim_order", purpose: "claim" }, data: { expires: new Date(0) } });
   await confirm(expiredClaim, undefined, "Check your details.");
   await go("/account/orders");
   const freshClaimIndex = currentMail().length;
   await fill("main input[name=number]", "101");
-  await submit("main article form, main section > div form");
+  await submit("main form:has(input[name=number])");
   const claim = await messageLink("claim", freshClaimIndex);
   const conflictingIndex = currentMail().length;
   await fill("main input[name=number]", "101");
-  await submit("main article form, main section > div form");
+  await submit("main form:has(input[name=number])");
   const conflictingClaim = await messageLink("claim", conflictingIndex);
   await confirm(claim);
   await confirm(conflictingClaim, undefined, "Check your details.");
@@ -339,6 +413,87 @@ try {
   await textIncludes("haven’t saved any favorites", main);
   await db.product.update({ where: { id: savedId }, data: { isActive: true } });
   passes("checkout prefill, guest cart through sign-in, cleared and differing recipient/email, verified guest claim and historical snapshots");
+
+  await viewport(390, "ua");
+  await go("/account");
+  await textIncludes("3 замовлення", ".ac-shortcuts");
+  await db.product.update({ where: { id: savedId }, data: { name: "Кишеньковий кролик", nameEn: "Pocket bunny" } });
+  await db.productImage.updateMany({ where: { productId: savedId }, data: { url: "/hero/bunny-v1.webp" } });
+  for (const [slug, name, nameEn, image, price] of [
+    ["qa-saved-dragon", "Міні-дракон", "Pocket dragon", "/hero/dragon-v1.webp", 245],
+    ["qa-saved-robot", "Робот-помічник", "Little robot", "/hero/robot-v1.webp", 310],
+  ]) {
+    const product = await db.product.create({ data: { slug, name, nameEn, description: "Synthetic favorite", price, categoryId: "qa_category",
+      isOrderable: true, images: { create: { url: image } } } });
+    await db.customerFavorite.create({ data: { userId: user.id, productId: product.id } });
+  }
+
+  for (const [number, status] of [["9701", "PROCESSING"], ["9702", "COMPLETED"]]) {
+    await db.order.create({ data: { number, customerId: user.id, checkoutAcceptance: "ACCEPTED", acceptedAt: new Date(), status,
+      customerName: "Synthetic recipient", customerPhone: "0501112233", shippingAddress: "Synthetic address", city: "Kyiv", postalCode: "00000",
+      paymentMethod: "COD", paymentStatus: status === "COMPLETED" ? "PAID" : "PENDING", paidAt: status === "COMPLETED" ? new Date() : null,
+      novaPoshtaTtn: "20400000000000", novaPoshtaStatusCode: status === "COMPLETED" ? "9" : null, subtotal: 140, total: 140 } });
+  }
+  const pages = [["overview", "/account"], ["profile", "/account/profile"], ["favorites", "/account/favorites"], ["orders", "/account/orders"]];
+  for (const width of [320, 390, 768, 1280]) for (const locale of ["ua", "en"]) {
+    await viewport(width, locale);
+    for (const [name, route] of pages) {
+      await go(route);
+      await verifyAccountShell(width, locale, true);
+      assert.equal(await evaluate("document.querySelector('.ac-nav a[aria-current=page]')?.getAttribute('href')"), route);
+      if (name === "overview") {
+        assert.equal(await evaluate("document.querySelectorAll('.ac-shortcuts a').length"), 4);
+        assert.equal(await evaluate("[...document.querySelectorAll('.ac-shortcut-arrow')].filter(icon => icon.getBoundingClientRect().width > 0).length"), 4);
+        assert.equal(await evaluate("document.querySelectorAll('.ac-recent .ac-order-link').length"), 3);
+        await textIncludes(locale === "ua" ? "5 замовлень" : "5 orders", ".ac-shortcuts");
+        await textIncludes(locale === "ua" ? "3 збережені товари" : "3 saved products", ".ac-shortcuts");
+      }
+      if (name === "favorites") assert.equal(await evaluate("document.querySelectorAll('.ac-favorites .sf-product-card').length"), 3);
+      if (name === "orders") {
+        await textIncludes("20400000000000", ".ac-order-list");
+        assert.equal(await evaluate("document.querySelectorAll('.ac-order-link').length"), 5);
+      }
+      if ((width === 1280 && locale === "ua") || (width === 390 && locale === "en")) {
+        await captureUX06(`${width === 1280 ? "desktop" : "mobile"}-${locale}-${name}`);
+      }
+    }
+  }
+
+  const longEmail = `${"wrapping-test".repeat(4)}@${"fixture".repeat(6)}.example.test`;
+  const longName = "CustomerDisplayName".repeat(5);
+  await db.user.update({ where: { id: user.id }, data: { firstName: longName, email: longEmail } });
+  try {
+    for (const locale of ["ua", "en"]) for (const width of [320, 1280]) {
+      await viewport(width, locale);
+      await go("/account/profile");
+      await textIncludes(longEmail, ".ac-security-identity");
+      await verifyAccountShell(width, locale, true);
+      await go("/account");
+      await textIncludes(longName, ".ac-welcome");
+      await verifyAccountShell(width, locale, true);
+    }
+  } finally {
+    await db.user.update({ where: { id: user.id }, data: { firstName: "Profile", email: credentials.email } });
+  }
+
+  await viewport(390, "en");
+  await go("/account");
+  await evaluate("document.querySelector('.ac-nav a').focus()");
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
+  assert.equal(await evaluate("document.activeElement?.getAttribute('href')"), "/account/profile");
+  assert.equal(await evaluate("getComputedStyle(document.activeElement).outlineStyle"), "solid");
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  await path("/account/profile");
+  await go("/account");
+  const recentRoute = await evaluate("document.querySelector('.ac-recent .ac-order-link').getAttribute('href')");
+  await evaluate("document.querySelector('.ac-recent .ac-order-link').click()");
+  await path(recentRoute);
+  await verifyAccountShell(390, "en", true);
+  assert.equal(await evaluate("document.querySelector('.ac-nav a[aria-current=location]')?.getAttribute('href')"), "/account/orders");
+  await viewport(1280, "en");
+  passes("UX-06 populated account, real authorized counts, bounded recent orders, long content, keyboard navigation and responsive screenshots");
 
   await signOut();
   assert.equal((await (await request(favoritesApi, nativeCookie)).json()).ids, null);
@@ -370,7 +525,7 @@ try {
     selectedGoogle = identity;
     badState = forgedState;
     await go("/account/sign-in");
-    await submit("main section > div > form");
+    await submit('main form[action="/api/customer-auth/start/google"]');
     await path(expected);
     await pause(250);
   }
@@ -390,6 +545,15 @@ try {
   const other = await accountCookie();
   assert.deepEqual((await (await request(favoritesApi, other)).json()).ids, []);
   await deniedOrder(gift.id, other);
+  await textIncludes("0 orders", ".ac-shortcuts");
+  await textIncludes("0 saved products", ".ac-shortcuts");
+  await textIncludes("You haven’t placed any orders yet.", ".ac-recent");
+  assert.equal(await evaluate("document.querySelectorAll('.ac-recent .ac-order-link').length"), 0);
+  await captureUX06("desktop-en-overview-empty");
+  await go("/account/favorites");
+  assert.equal(await evaluate("document.querySelector('.ac-empty a')?.getAttribute('href')"), "/catalog");
+  await go("/account/orders");
+  assert.equal(await evaluate("document.querySelector('.ac-empty a')?.getAttribute('href')"), "/catalog");
   await go("/account/profile?userId=" + user.id);
   assert.deepEqual(await evaluate("[document.querySelector('main [name=firstName]').value,document.querySelector('main [name=lastName]').value]"), ["Mock", "Google"]);
   passes("mock Google code/PKCE/nonce/state, verified subject, deliberate linking, email collision, independent customer and data");

@@ -4,13 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { ShoppingBag, X, Menu, UserRound } from "lucide-react";
+import { Check, ShoppingBag, X, Menu, UserRound } from "lucide-react";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { LangSwitcher } from "@/components/layout/lang-switcher";
 import { CategoryNav } from "@/components/layout/category-nav";
 import type { CategoryTreeNode } from "@/lib/categories";
 import { getCategoryName } from "@/lib/category-name";
+import { useCustomerPresence } from "@/components/product/favorite-button";
 
 export function Header({ categories }: { categories: CategoryTreeNode[] }) {
   const pathname = usePathname();
@@ -19,12 +20,15 @@ export function Header({ categories }: { categories: CategoryTreeNode[] }) {
   const openCart = useCartStore((s) => s.openCart);
   const { locale, t } = useLangStore();
   const isHome = pathname === "/";
+  const isAccount = pathname === "/account" || pathname.startsWith("/account/");
   const isInformationPage = pathname === "/about" || pathname === "/delivery-payment";
+  const signedIn = useCustomerPresence();
+  const accountLabel = signedIn === false ? t.account.signIn : t.account.title;
 
   return (
     <>
       <a href="#main-content" className="sf-skip">{t.nav.skip}</a>
-      <header className={`sf-shell ${isHome ? "sf-home-controls" : "sf-header"}`} onKeyDown={(event) => {
+      <header className={`sf-shell ${isHome ? "sf-home-controls" : "sf-header"}${isAccount ? " sf-header--account" : ""}`} onKeyDown={(event) => {
         if (event.key === "Escape" && mobileOpen) {
           setMobileOpen(false);
           document.getElementById("store-menu-toggle")?.focus();
@@ -36,18 +40,19 @@ export function Header({ categories }: { categories: CategoryTreeNode[] }) {
         <Link href="/catalog" className="sf-header-link">{t.nav.catalog}</Link></>}
         <div className="sf-controls">
           <LangSwitcher />
-          <Link href="/account" className="sf-icon-button" prefetch={false} aria-label={t.account.title} title={t.account.title}>
+          <Link href="/account" className={`sf-icon-button${isAccount ? " sf-account-entry--active" : ""}`} prefetch={false} aria-label={accountLabel} title={accountLabel}>
             <UserRound size={21} aria-hidden="true" />
+            {signedIn && <span className="sf-account-entry-state" aria-hidden="true"><Check size={11} strokeWidth={3} /></span>}
           </Link>
           <button type="button" onClick={openCart} className="sf-icon-button" aria-label={`${t.nav.openCart} (${count})`}>
             <ShoppingBag size={21} aria-hidden="true" />
             <span className="sf-cart-count" aria-hidden="true">{count}</span>
           </button>
-          {!isHome && <button id="store-menu-toggle" type="button" className="sf-icon-button sf-mobile-menu" onClick={() => setMobileOpen(!mobileOpen)} aria-label={mobileOpen ? t.nav.closeMenu : t.nav.menu} aria-expanded={mobileOpen} aria-controls="store-mobile-nav">
+          {!isHome && !isAccount && <button id="store-menu-toggle" type="button" className="sf-icon-button sf-mobile-menu" onClick={() => setMobileOpen(!mobileOpen)} aria-label={mobileOpen ? t.nav.closeMenu : t.nav.menu} aria-expanded={mobileOpen} aria-controls="store-mobile-nav">
             {mobileOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
           </button>}
         </div>
-        {!isHome && mobileOpen && (
+        {!isHome && !isAccount && mobileOpen && (
           <nav id="store-mobile-nav" className="sf-mobile-links" aria-label={t.nav.categories}>
             <Link href="/catalog" onClick={() => setMobileOpen(false)}>{t.nav.catalog}</Link>
             {categories.map((category) => (
@@ -61,7 +66,7 @@ export function Header({ categories }: { categories: CategoryTreeNode[] }) {
           </nav>
         )}
       </header>
-      {!isHome && !isInformationPage && pathname !== "/catalog" && <CategoryNav categories={categories} />}
+      {!isHome && !isAccount && !isInformationPage && pathname !== "/catalog" && <CategoryNav categories={categories} />}
     </>
   );
 }

@@ -1,4 +1,7 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft, Package, Truck } from "lucide-react";
+import { AccountPanel } from "@/components/account/account-surface";
 import { ProductImage } from "@/components/product/product-image";
 import { ownedOrders, requireCustomer } from "@/lib/customer/pages";
 import { identifier } from "@/lib/customer/security";
@@ -6,7 +9,7 @@ import { getLocale } from "@/lib/i18n-server";
 import { translations } from "@/lib/i18n";
 import { formatOrderReference } from "@/lib/order-reference";
 import { orderSizeLabel } from "@/lib/product-variants";
-import { statusLabels } from "@/lib/status";
+import { normalizeOrderStage, statusLabels } from "@/lib/status";
 import { getOrderStatusLabel } from "@/lib/order-status";
 import { isCashOnDelivery } from "@/lib/payments/payment-method";
 import { prisma } from "@/lib/prisma";
@@ -36,21 +39,31 @@ export default async function CustomerOrderDetails({ params }: { params: Promise
   const deliveryLabels = { np_warehouse: checkout.delivery.warehouse, np_parcel_locker: checkout.delivery.locker, np_courier: checkout.delivery.courier };
   const date = new Intl.DateTimeFormat(locale === "ua" ? "uk-UA" : "en-GB", { dateStyle: "long", timeZone: "Europe/Kyiv" });
   const price = (value: { toString(): string }) => formatPrice(Number(value.toString()), "UAH");
-  return <article aria-label={t.orderDetails} className="glass space-y-5 rounded-xl2 p-5">
-    <header><h2 className="font-display text-xl">{formatOrderReference(order.number, locale)}</h2>
-      <p>{date.format(order.createdAt)} · {getOrderStatusLabel(order.status, locale)}</p></header>
-    <ul className="space-y-3">{order.items.map((item) => <li key={item.id} className="flex flex-wrap items-center gap-3 border-b border-ink/10 pb-3">
-      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg"><ProductImage alt="" src={item.productImageUrl ?? item.product?.images[0]?.url ?? "/images/placeholder.svg"} fill sizes="56px" className="object-cover" /></div>
-      <div className="min-w-0 flex-1"><strong>{item.productName}</strong><p>{orderSizeLabel(item.optionsJson, locale)}</p>
-        <p className="text-sm">{t.unitPrice} · {price(item.price)} × {item.quantity}</p></div>
-    </li>)}</ul>
-    <dl className="grid gap-3 text-sm sm:grid-cols-2">
-      <div><dt className="font-semibold">{t.recipient}</dt><dd>{order.customerName}<br />{order.customerPhone}{order.customerEmail && <><br /><span className="break-all">{order.customerEmail}</span></>}</dd></div>
-      <div><dt className="font-semibold">{checkout.payment.title}</dt><dd>{method && <>{paymentLabels[method]}<br /></>}{labels.payment}</dd></div>
-      <div><dt className="font-semibold">{checkout.delivery.title}</dt><dd>{delivery && <>{deliveryLabels[delivery]}<br /></>}
-        {deliveryAddress}<br />{labels.delivery}</dd></div>
-      {order.novaPoshtaTtn && <div><dt className="font-semibold">{t.tracking}</dt><dd>{order.novaPoshtaTtn}</dd></div>}
-      <div><dt className="font-semibold">{translations[locale].cart.total}</dt><dd>{price(order.total)}</dd></div>
-    </dl>
+  return <article className="ac-detail" aria-label={t.orderDetails}>
+    <Link href="/account/orders" className="ac-text-link" prefetch={false}><ArrowLeft size={18} aria-hidden="true" />{t.backToOrders}</Link>
+    <header className="ac-intro ac-detail-header">
+      <div><h1>{formatOrderReference(order.number, locale)}</h1><time dateTime={order.createdAt.toISOString()}>{date.format(order.createdAt)}</time></div>
+      <span className="ac-badge" data-stage={normalizeOrderStage(order.status)}>{getOrderStatusLabel(order.status, locale)}</span>
+    </header>
+    <AccountPanel title={t.orderedItems} mark={<Package size={22} />}>
+      <ul className="ac-detail-items">{order.items.map((item) => {
+        const options = orderSizeLabel(item.optionsJson, locale);
+        return <li key={item.id}>
+          <div className="ac-detail-image"><ProductImage alt="" src={item.productImageUrl ?? item.product?.images[0]?.url ?? "/images/placeholder.svg"} fill sizes="60px" className="object-cover" /></div>
+          <div><strong>{item.productName}</strong>{options && <p>{options}</p>}
+            <p>{t.unitPrice} · {price(item.price)} × {item.quantity}</p></div>
+        </li>;
+      })}</ul>
+      <p className="ac-detail-total"><span>{translations[locale].cart.total}</span><strong>{price(order.total)}</strong></p>
+    </AccountPanel>
+    <AccountPanel title={t.orderSummary} mark={<Truck size={22} />}>
+      <dl className="ac-detail-meta">
+        <div><dt>{t.recipient}</dt><dd>{order.customerName}<br />{order.customerPhone}{order.customerEmail && <><br />{order.customerEmail}</>}</dd></div>
+        <div><dt>{checkout.payment.title}</dt><dd>{method && <>{paymentLabels[method]}<br /></>}{labels.payment}</dd></div>
+        <div><dt>{checkout.delivery.title}</dt><dd>{delivery && <>{deliveryLabels[delivery]}<br /></>}
+          {deliveryAddress}<br />{labels.delivery}</dd></div>
+        {order.novaPoshtaTtn && <div><dt>{t.tracking}</dt><dd>{order.novaPoshtaTtn}</dd></div>}
+      </dl>
+    </AccountPanel>
   </article>;
 }
