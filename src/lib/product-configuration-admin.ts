@@ -11,6 +11,7 @@ export const configurationInputSchema = z.object({
   values: z.array(z.object({ key, id: z.string().cuid().optional(), kind: z.enum(["COLOR", "SIZE"]),
     labelUa: z.string().trim().min(1).max(100), labelEn: z.string().trim().max(100).optional().default(""),
     noteUa: text, noteEn: text, retired: z.boolean().default(false),
+    displayPosition: z.number().int().min(0).max(1000000).optional(),
   })).max(160),
   combinations: z.array(z.object({ id: z.string().cuid().optional(), color: key.optional(), size: key.optional(),
     price: z.string().refine((value) => (moneyMinorUnits(value) ?? 0) > 0),
@@ -62,6 +63,7 @@ export async function syncProductConfiguration(tx: Prisma.TransactionClient, pro
       groupId = group.id; groupIds.set(value.kind, group.id);
     }
     const data = { value: value.labelUa, valueEn: value.labelEn || null, note: value.noteUa || null, noteEn: value.noteEn || null,
+      ...(value.displayPosition === undefined ? {} : { displayPosition: value.displayPosition }),
       retiredAt: value.retired ? existing?.retiredAt ?? new Date() : null };
     const saved = value.id ? await tx.productOptionValue.update({ where: { id: value.id }, data }) : await tx.productOptionValue.create({ data: { ...data, optionId: groupId } });
     valueIds.set(value.key, saved.id);

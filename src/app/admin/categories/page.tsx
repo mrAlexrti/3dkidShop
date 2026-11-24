@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { requireAdmin } from "@/lib/actions/require-admin";
 import { Pencil } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { createCategory, deleteCategory } from "@/lib/actions/categories";
@@ -10,6 +11,7 @@ import { getT } from "@/lib/i18n-server";
 import { CategoryImage } from "@/components/category/category-image";
 
 export default async function AdminCategoriesPage() {
+  await requireAdmin();
   const t = await getT();
   const tc = t.admin.categories;
 

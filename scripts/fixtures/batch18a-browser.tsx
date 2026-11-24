@@ -98,8 +98,12 @@ async function run(locale: "ua" | "en") {
   check(JSON.parse(hidden("images").value)[3].colorKey === key, "Draft color reference not serialized");
   const snapshot = () => JSON.stringify([...new FormData(form).entries()]);
   const before = snapshot();
-  for (const kind of ["field", "network", "stale"]) {
-    failure = kind; const previous = saves; form.requestSubmit(); await until(() => saves > previous && !form.querySelector<HTMLButtonElement>("button[type=submit]")!.disabled); await settle();
+  const errorLabels = { field: t.admin.validation.galleryColor, network: t.admin.validation.saveFailed, stale: t.admin.validation.stale };
+  for (const kind of ["field", "network", "stale"] as const) {
+    failure = kind;
+    const previous = saves;
+    form.requestSubmit();
+    await until(() => saves > previous && !form.querySelector<HTMLButtonElement>("button[type=submit]")!.disabled && form.textContent!.includes(errorLabels[kind]));
     check(snapshot() === before && hidden("imagesSnapshot").value === originalSnapshot, `Draft/gallery/configuration lost after ${kind} error`);
   }
   check(form.textContent?.includes(t.admin.validation.stale), "Stale error missing");

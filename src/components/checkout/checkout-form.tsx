@@ -80,7 +80,7 @@ const inp =
 
 const NUM_STYLES = "flex h-7 w-7 items-center justify-center rounded-full bg-pink-500 text-xs font-bold text-white";
 
-export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean }) {
+export function CheckoutForm({ onlineCardEnabled, contact, customerScope }: { onlineCardEnabled: boolean; contact?: import("@/lib/validations/checkout").CheckoutContact; customerScope?: string }) {
   const { t, locale } = useLangStore();
   const c = t.checkout;
   const schema = useMemo(() => getCheckoutSchema(locale), [locale]);
@@ -106,6 +106,7 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
   } = useForm<CheckoutInput>({
     resolver: zodResolver(schema),
     defaultValues: {
+      ...contact,
       deliveryType:  "np_warehouse",
       paymentMethod: onlineCardEnabled ? "card_online" : "cash_on_delivery",
     },
@@ -156,7 +157,7 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
       const snapshot = useCartStore.getState();
       const items = snapshot.items;
       const checkoutRevision = snapshot.checkoutRevision;
-      const retryKey = data.paymentMethod === "card_online" ? await onlineCheckoutKey(data, items, checkoutRevision) : undefined;
+      const retryKey = data.paymentMethod === "card_online" ? await onlineCheckoutKey(data, items, checkoutRevision, customerScope) : undefined;
       if (!useCartStore.getState().ready() || useCartStore.getState().checkoutRevision !== checkoutRevision || useCartStore.getState().items !== items) return;
       const result = await createOrder(data, items, locale, retryKey, checkoutRetrySource(retryKey), true);
       if (result.success) {
@@ -213,7 +214,7 @@ export function CheckoutForm({ onlineCardEnabled }: { onlineCardEnabled: boolean
             {errors.customerPhone && <p id="customerPhone-error" role="alert" className="mt-1 text-xs text-pink-600">{errorText("customerPhone")}</p>}
           </div>
           <div>
-            <label htmlFor="customerEmail" className="mb-1 block text-xs font-medium text-ink/60">{c.contact.email}</label>
+            <label htmlFor="customerEmail" className="mb-1 block text-xs font-medium text-ink/60">{t.account.optionalEmail}</label>
             <input type="email" placeholder="you@example.com" className={inp} id="customerEmail" autoComplete="email" aria-invalid={!!errors.customerEmail} aria-describedby={errors.customerEmail ? "customerEmail-error" : undefined} {...register("customerEmail")} />
             {errors.customerEmail && <p id="customerEmail-error" role="alert" className="mt-1 text-xs text-pink-600">{errorText("customerEmail")}</p>}
           </div>

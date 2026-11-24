@@ -5,7 +5,7 @@ import { moneyMinorUnits } from "./payments/money";
 export const optionModes = ["LEGACY", "SIMPLE", "SIZE", "COLOR", "COLOR_SIZE"] as const;
 export type OptionMode = typeof optionModes[number];
 export type OptionKind = "COLOR" | "SIZE";
-export type OptionValue = { id: string; optionId: string; kind: OptionKind; labelUa: string; labelEn: string | null; noteUa: string | null; noteEn: string | null; retired: boolean };
+export type OptionValue = { id: string; optionId: string; kind: OptionKind; labelUa: string; labelEn: string | null; noteUa: string | null; noteEn: string | null; retired: boolean; displayPosition?: number | null };
 export type Combination = { id: string; values: { COLOR?: string; SIZE?: string }; price: string; isAvailable: boolean; manufacturable?: boolean; retired: boolean };
 export type ProductConfiguration = { mode: OptionMode; values: OptionValue[]; combinations: Combination[] };
 const id = z.string().regex(/^[a-zA-Z0-9_]{1,128}$/);
@@ -41,13 +41,33 @@ export function selectedCombination(config: ProductConfiguration, sizeId?: strin
 
 type Price = number | string | { toString(): string };
 export type ConfigurationProduct = { optionMode?: OptionMode; price: Price; isActive?: boolean; isOrderable?: boolean; oldPrice?: Price | null;
-  options: { id?: string; kind?: OptionKind | null; name: string; values: { id?: string; value?: string; valueEn?: string | null; price?: Price | null; note?: string | null; noteEn?: string | null; retiredAt?: unknown }[] }[];
+  options: { id?: string; kind?: OptionKind | null; name: string; values: { id?: string; value?: string; valueEn?: string | null; price?: Price | null; note?: string | null; noteEn?: string | null; retiredAt?: unknown; displayPosition?: number | null }[] }[];
   variants?: { id: string; price: Price; isAvailable: boolean; retiredAt?: unknown; filamentGroups?: { id: string }[]; selections: { optionId: string; valueId: string }[] }[];
 };
+const standardSizes = [
+  ["xxs"], ["xs", "extra small", "дуже малий", "дуже маленький"],
+  ["s", "small", "малий", "маленький", "мала", "маленька", "мале", "маленьке"],
+  ["m", "medium", "середній", "середня", "середнє"],
+  ["l", "large", "великий", "велика", "велике"],
+  ["xl", "extra large", "дуже великий"], ["xxl", "2xl"], ["xxxl", "3xl"],
+];
+function sizeRank(labelUa: string, labelEn: string | null) {
+  const labels = [labelUa, labelEn].map((label) => label?.normalize("NFKC").trim().toLowerCase());
+  const rank = standardSizes.findIndex((aliases) => aliases.some((alias) => labels.includes(alias)));
+  return rank < 0 ? standardSizes.length : rank;
+}
+
+function compareValues(a: OptionValue, b: OptionValue) {
+  if (a.kind !== b.kind) return a.kind === "COLOR" ? -1 : 1;
+  const position = (a.displayPosition ?? 2147483647) - (b.displayPosition ?? 2147483647);
+  const natural = a.kind === "SIZE" ? sizeRank(a.labelUa, a.labelEn) - sizeRank(b.labelUa, b.labelEn) : 0;
+  return position || natural || a.id.localeCompare(b.id, "en");
+}
+
 export function productConfiguration(product: ConfigurationProduct): ProductConfiguration {
   const mode = product.optionMode ?? "LEGACY";
   if (!nativeMode(mode)) return { mode, values: [], combinations: [] };
-  const values = product.options.flatMap((group) => group.kind ? group.values.flatMap((v): OptionValue[] => v.id && v.value ? [{ id: v.id, optionId: group.id!, kind: group.kind!, labelUa: v.value, labelEn: v.valueEn ?? null, noteUa: v.note ?? null, noteEn: v.noteEn ?? null, retired: Boolean(v.retiredAt) }] : []) : []);
+  const values = product.options.flatMap((group) => group.kind ? group.values.flatMap((v): OptionValue[] => v.id && v.value ? [{ id: v.id, optionId: group.id!, kind: group.kind!, labelUa: v.value, labelEn: v.valueEn ?? null, noteUa: v.note ?? null, noteEn: v.noteEn ?? null, retired: Boolean(v.retiredAt), displayPosition: v.displayPosition ?? null }] : []) : []).sort(compareValues);
   const combinations = (product.variants ?? []).map((row) => {
     const choices: Combination["values"] = {};
     for (const selection of row.selections) {

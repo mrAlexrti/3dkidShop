@@ -34,6 +34,7 @@ const env: Record<string, string> = { MONO_ACQUIRING_TOKEN: "qa-private-token", 
 const serverEnv = { readServerEnv: (name: string) => env[name] ?? "", getAuthSecret: () => "qa-result-secret" };
 const forbidden = () => { throw new Error("UNEXPECTED_EXTERNAL_EFFECT"); };
 let creates = 0; let queries = 0; let emailSends = 0; const telegramSends: string[] = [];
+let invoiceHasEmail = false;
 const keyboards: unknown[] = [];
 let transport: "ok" | "retry" | "unknown" | "permanent" = "ok";
 let createMode: "ok" | "network" | "bad-page" | "rejected" = "ok";
@@ -48,6 +49,7 @@ globalThis.fetch = async (input, init) => {
     creates++;
     const body = JSON.parse(String(init?.body));
     assert.equal(body.amount, 19900); assert.equal(body.ccy, 980);
+    invoiceHasEmail = "customerEmails" in body.merchantPaymInfo;
     const snapshot = { invoiceId: `invoice_${creates}`, reference: body.merchantPaymInfo.reference, status: "created", amount: 19900, ccy: 980, modifiedDate: new Date().toISOString() };
     snapshots.set(snapshot.invoiceId, snapshot);
     if (onCreate) await onCreate(snapshot);
@@ -87,7 +89,7 @@ const reconciliation = sourceModule<typeof import("../src/lib/payments/reconcili
 const webhook = sourceModule<typeof import("../src/app/api/payments/mono/webhook/route")>("src/app/api/payments/mono/webhook/route.ts", { "next/server": { NextResponse }, "@/lib/payments/mono": { ...mono, verifyMonoSignature: async (_raw: Buffer, signature: string) => signature === "qa-verified" }, "@/lib/payments/mono-state": adapter, "@/lib/payments/transitions": lifecycle });
 const statusRoute = sourceModule<typeof import("../src/app/api/payments/status/route")>("src/app/api/payments/status/route.ts", { "next/server": { NextResponse }, "@/lib/prisma": { prisma: db }, "@/lib/payments/order-result": result, "@/lib/payments/retry-state": retryState, "@/lib/payments/payment-state": states });
 const work = sourceModule<typeof import("../src/lib/orders/take-into-work")>("src/lib/orders/take-into-work.ts", { "./cod-eligibility": codEligibility, "@/lib/payments/payment-method": paymentMethods, "@/lib/prisma": { prisma: db }, "@/lib/payments/acceptance": acceptance, "@/lib/status": status, "@/lib/notifications/orders": notifications });
-const ttn = sourceModule<typeof import("../src/app/api/admin/orders/[id]/create-ttn/route")>("src/app/api/admin/orders/[id]/create-ttn/route.ts", { "next/server": { NextResponse }, "@/lib/prisma": { prisma: db }, "@/lib/payments/acceptance": acceptance, "@/lib/auth": { auth: async () => ({ user: { role: "ADMIN" } }) }, "@/lib/novaposhta": { createNovaPoshtaWaybill: forbidden }, "@/lib/notifications/orders": notifications });
+const ttn = sourceModule<typeof import("../src/app/api/admin/orders/[id]/create-ttn/route")>("src/app/api/admin/orders/[id]/create-ttn/route.ts", { "next/server": { NextResponse }, "@/lib/prisma": { prisma: db }, "@/lib/payments/acceptance": acceptance, "@/lib/auth": { auth: async () => ({ user: { role: "ADMIN" } }) }, "@/lib/novaposhta": { createNovaPoshtaWaybill: forbidden }, "@/lib/notifications/orders": notifications, "@/lib/server-env": { readServerEnv: () => "https://shop.example.invalid" } });
 const admin = sourceModule<typeof import("../src/lib/actions/orders")>("src/lib/actions/orders.ts", { "@/lib/prisma": { prisma: db }, "@/lib/payments/acceptance": acceptance, "next/cache": { revalidatePath: () => {} }, "@/lib/actions/require-admin": { requireAdmin: async () => {} }, "@/lib/notifications/orders": notifications, "@/lib/order-status": orderStatus, "@/lib/payments/transitions": lifecycle, "@/lib/orders/take-into-work": work, "@/lib/status": status });
 const cron = sourceModule<typeof import("../src/app/api/cron/payments/route")>("src/app/api/cron/payments/route.ts", { "node:crypto": crypto, "next/server": { NextResponse }, "@/lib/server-env": serverEnv, "@/lib/payments/reconciliation": reconciliation, "@/lib/notifications/outbox": outbox });
 const data = { customerName: "Isolated", customerSurname: "QA", customerEmail: "qa@example.invalid", customerPhone: "+380000000000", deliveryType: "np_warehouse", npCityName: "QA city", npWarehouseRef: "qa", npWarehouseAddress: "QA address", paymentMethod: "card_online" };
@@ -150,7 +152,7 @@ async function verify() {
   assert.equal(await work.takeOrderIntoWork(String(current().id)), "not_found");
   await assert.rejects(admin.updateOrderStatus(String(current().id), "PROCESSING"));
   await assert.rejects(admin.updateOrderStatus(String(current().id), "COMPLETED"));
-  assert.equal((await ttn.POST(new Request("https://shop.example.invalid/ttn"), { params: Promise.resolve({ id: String(current().id) }) })).status, 409);
+  assert.equal((await ttn.POST(new Request("https://shop.example.invalid/ttn", { method: "POST", headers: { origin: "https://shop.example.invalid", host: "shop.example.invalid" } }), { params: Promise.resolve({ id: String(current().id) }) })).status, 409);
   assert.equal((await submit(key)).success, true); assert.equal(creates, 1); assert.equal(db.orders.length, 1);
   assert.equal((await action.createOrder({ ...data, comment: "different purchase" }, items, "en", key)).success, false);
   assert.equal((await post(paid(), "invalid")).status, 401);
@@ -304,6 +306,11 @@ async function verify() {
   reset(); await submit();
   const blockedSource = { reference: String(current().paymentReference), token: result.createAttemptResultToken(String(current().paymentReference)) };
   const terminal = paid({ status: "failure" }); await post(terminal); snapshots.set(String(current().paymentInvoiceId), terminal);
+  current().customerId = "qa-customer-owner";
+  assert.equal(await retry.verifiedPaymentRetry(blockedSource, null), null, "Guest may not retry a customer's payment");
+  assert.equal(await retry.verifiedPaymentRetry(blockedSource, "qa-other-customer"), null, "Another customer may not retry the attempt");
+  assert.ok(await retry.verifiedPaymentRetry(blockedSource, "qa-customer-owner"));
+  current().customerId = null;
   const allowedKey = await retry.verifiedPaymentRetry(blockedSource); assert.ok(allowedKey);
   snapshots.set(String(current().paymentInvoiceId), paid({ status: "processing", modifiedDate: new Date(Date.now() + 2000).toISOString() }));
   assert.equal((await action.createOrder(data, items, "en", allowedKey, blockedSource)).success, false, "Re-check provider at submission, blocking a changed/ambiguous state");
@@ -322,6 +329,14 @@ async function verify() {
   assert.equal((await action.createOrder(data, items, "en", reservedKey, paidRaceSource)).success, false);
   assert.equal(creates, 1); assert.equal(current().checkoutAcceptance, "ACCEPTED"); assert.ok(current().paidAt);
   assert.equal(db.notifications.length, 2, "Fresh paid truth accepts original rather than creating another charge");
+  reset();
+  assert.ok((await action.createOrder({ ...data, customerEmail: "  " }, items, "en", crypto.randomUUID())).success);
+  assert.equal(current().customerEmail, null);
+  assert.equal(invoiceHasEmail, false, "Mono invoice omits the email field when checkout contact email is empty");
+  assert.equal((await post(paid())).status, 200);
+  await runOutbox();
+  assert.equal(emailSends, 0);
+  assert.equal(telegramSends.length, 1);
   console.log("PASS 1.7.4A: 15 acceptance categories; one initial Telegram message TOTAL; outbox retry/UNKNOWN/rollback; early/lost/delayed/concurrent events; COD/history/guards; explicit verified terminal retry, shared successor identity, refreshed merchant truth, previous audit retained. Providers and database mocked; real PG covered by separate rehearsal.");
 }
 verify().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => { globalThis.fetch = originalFetch; console.warn = originalWarn; });

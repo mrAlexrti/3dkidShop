@@ -15,6 +15,32 @@ const modal = () => document.querySelector<HTMLDialogElement>('dialog[open]');
 const press = (text: string, scope: ParentNode = document) => { const button = [...scope.querySelectorAll<HTMLButtonElement>("button")].find((node) => node.textContent === text); check(button,`Button missing: ${text}`); button.click(); };
 let deleteCalls = 0, saveCalls = 0, release = () => {}, resultMode = "deferred", archiveCalls = 0;
 let language: ReturnType<typeof createLangStore>;
+const longUa = "Рухома фігурка усміхненого дракона з крильцями та візерунком на хвості";
+const longEn = "Articulated smiling dragon figurine with little wings and a patterned tail";
+
+function checkCardAlignment(cards: HTMLElement[], from: string) {
+  const rows = new Map<number, HTMLElement[]>();
+  for (const card of cards) {
+    const top = card.getBoundingClientRect().top;
+    const row = rows.get(top) ?? [];
+    row.push(card);
+    rows.set(top, row);
+  }
+  let mixedRows = 0;
+  for (const row of rows.values()) {
+    check(row.length >= 2, "Catalog fixture did not exercise a multi-card row");
+    const titleHeights = row.map((card) => card.querySelector("h3")!.getBoundingClientRect().height);
+    if (Math.max(...titleHeights) > Math.min(...titleHeights)) mixedRows++;
+    for (const selector of [null, ".sf-product-price", ".sf-product-add"]) {
+      const edges = row.map((card) => (selector ? card.querySelector(selector)! : card).getBoundingClientRect().bottom);
+      check(Math.max(...edges) - Math.min(...edges) < 1, `Catalog row footer is misaligned for ${selector ?? "card"}`);
+    }
+  }
+  check(mixedRows >= 2, "Catalog fixture did not exercise wrapping titles in two rows");
+  const price = (i: number) => cards[i].querySelector(".sf-product-price")!.textContent!.trim();
+  check(price(3).startsWith(from + " ") && !price(2).startsWith(from + " "), "Localized from/regular price fixture is incorrect");
+}
+
 async function run(locale: "ua" | "en") {
   deleteCalls=0; saveCalls=0; archiveCalls=0; resultMode="deferred"; fixture.pushes=[];
   language=createLangStore(locale); const t=language.getState().t;
@@ -27,7 +53,11 @@ async function run(locale: "ua" | "en") {
       <div id="delete-probe"><DeleteButton recordName="Печивко Oreo" action={async () => { deleteCalls++; if(resultMode === "deferred") await new Promise<void>((done)=>{release=done;}); return resultMode === "failure" ? {error:"orderHistory"} : undefined; }} archiveAction={async()=>{archiveCalls++;}} /></div>
       <div id="category-probe"><DeleteButton recordKind="category" recordName="Брелоки" disabledReason={t.admin.deletion.categoryProducts.replace("{name}","Брелоки")} action={async()=>{throw Error("DISABLED_ACTION_REACHED");}} /></div>
       <div style={{height:950}} />
-      <div id="cards-probe" className="sf-product-grid">{Array.from({length:8},(_,i)=><ProductCard key={i} id={`mobile_${i}`} slug={`mobile_${i}`} name={`Card ${i}`} price={10} image="https://res.cloudinary.com/fixture/static.webp" images={[1, 2, 4].includes(i) ? [{ id: "first", url: "https://res.cloudinary.com/fixture/first.webp" }, { id: "second", url: "https://res.cloudinary.com/fixture/second.webp" }] : undefined} hoverGifUrl={[0, 1, 3, 4].includes(i) ? `https://example.invalid/card-${i}.gif` : null} isOrderable />)}</div>
+      <div id="cards-probe" className="sf-product-grid">{Array.from({length:8},(_,i)=><ProductCard key={i} id={`mobile_${i}`} slug={`mobile_${i}`}
+        name={[3, 7].includes(i) ? longUa : `Card ${i}`} nameEn={[3, 7].includes(i) ? longEn : undefined}
+        price={10} hasOptions={[3, 6].includes(i)} image="https://res.cloudinary.com/fixture/static.webp"
+        images={[1, 2, 4].includes(i) ? [{ id: "first", url: "https://res.cloudinary.com/fixture/first.webp" }, { id: "second", url: "https://res.cloudinary.com/fixture/second.webp" }] : undefined}
+        hoverGifUrl={[0, 1, 3, 4].includes(i) ? `https://example.invalid/card-${i}.gif` : null} isOrderable />)}</div>
       <div style={{height:950}} />
     </div>
   </LangStoreContext.Provider></React.StrictMode>);
@@ -47,9 +77,13 @@ async function run(locale: "ua" | "en") {
   const visible=separator.querySelector<HTMLElement>('span.whitespace-pre:not(.invisible)')!;
   check(visible.getBoundingClientRect().width <= separator.clientWidth,"Divider overflows at actual width");
   check(visible.textContent!.split('\u00a0\u00a0').every((value)=>value==='👩🏽‍🚀✦❀'),"Divider split grapheme cluster");
-  const before=JSON.stringify([...new FormData(form).entries()]); form.requestSubmit(); await until(()=>saveCalls===1); await pause();
+  const saveReady = () => !form.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled;
+  await until(saveReady);
+  const before=JSON.stringify([...new FormData(form).entries()]); form.requestSubmit();
+  await until(() => saveCalls === 1 && saveReady() && control("slug").getAttribute("aria-invalid") === "true");
   check(JSON.stringify([...new FormData(form).entries()])===before,"Duplicate slug cleared materials/gallery/options");
-  resultMode='network'; form.requestSubmit(); await until(()=>saveCalls===2); await pause();
+  resultMode='network'; form.requestSubmit();
+  await until(() => saveCalls === 2 && saveReady() && form.textContent!.includes(t.admin.validation.saveFailed));
   check(JSON.stringify([...new FormData(form).entries()])===before,"Network failure cleared materials/gallery/options");
   const galleryBefore=control('images').value;
   form.querySelector<HTMLButtonElement>(`button[aria-label="${t.admin.gallery.remove}: 2"]`)!.click(); await until(()=>Boolean(modal()));
@@ -70,7 +104,9 @@ async function run(locale: "ua" | "en") {
   press(t.admin.deletion.archive,document.querySelector('#delete-probe')!); await until(()=>Boolean(modal())); press(t.admin.deletion.archive,modal()!); await until(()=>!modal()); check(archiveCalls===1,"Explicit archive confirmation failed");
   check(document.querySelector<HTMLButtonElement>('#category-probe button')!.disabled,"Known category dependency not disabled");
   check(!document.querySelector('img[data-media-source$=".gif"]'),"GIF downloaded before viewport eligibility");
-  const cards=[...document.querySelectorAll<HTMLElement>('#cards-probe article')]; cards[0].scrollIntoView({block:'center', behavior:'instant'}); await pause();
+  const cards=[...document.querySelectorAll<HTMLElement>('#cards-probe article')];
+  checkCardAlignment(cards, t.product.from);
+  cards[0].scrollIntoView({block:'center', behavior:'instant'}); await pause();
   const touch=matchMedia('(hover: none) and (pointer: coarse)').matches;
   const gif = (index: number) => cards[index].querySelector<HTMLImageElement>('img[data-media-source$=".gif"]');
   const cardControl = (index: number, label: string) => cards[index].querySelector<HTMLButtonElement>(`[aria-label="${label}: Card ${index}"]`)!;
@@ -118,7 +154,7 @@ async function run(locale: "ua" | "en") {
     cards[0].dispatchEvent(new PointerEvent('pointerout',{bubbles:true,pointerType:'mouse'})); await until(()=>!cards[0].querySelector('img[data-media-source$=".gif"]'));
   }
   check(document.documentElement.scrollWidth<=innerWidth,"Responsive addendum layout overflow");
-  return `${locale}: Materials Unicode/paragraphs/live preview, preserved validation/network/gallery state, confirmation cancel/close/double-submit/archive, category feedback, ${touch?'independent touch GIFs with single/multiple photos, pause, arrows, swipe and navigation':'desktop hover without autoplay'} PASS`;
+  return `${locale}: responsive catalog footer alignment, Materials Unicode/paragraphs/live preview, preserved validation/network/gallery state, confirmation cancel/close/double-submit/archive, category feedback, ${touch?'independent touch GIFs with single/multiple photos, pause, arrows, swipe and navigation':'desktop hover without autoplay'} PASS`;
 }
 async function reduced() {
   document.querySelectorAll<HTMLElement>('#cards-probe article')[4].scrollIntoView({block:'center'});

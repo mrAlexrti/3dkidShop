@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { requireAdmin } from "@/lib/actions/require-admin";
 import { listPaymentAttempts } from "@/lib/admin/payment-attempts";
 import { ATTEMPT_FILTERS, type AttemptSearchParams } from "@/lib/payments/attempt-diagnostics";
 import { getT, getLocale } from "@/lib/i18n-server";
@@ -8,6 +9,7 @@ import { formatManagerDateTime } from "@/lib/date-time";
 import { phoneHref, emailHref } from "@/lib/admin/attempt-contacts";
 
 export default async function PaymentAttemptsPage({ searchParams }: { searchParams: Promise<AttemptSearchParams> }) {
+  await requireAdmin();
   const result = await listPaymentAttempts(await searchParams);
   const translations = await getT();
   const t = translations.admin.paymentAttempts;

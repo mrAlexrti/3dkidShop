@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async headers() {
+    const privateHeaders = [{ key: "Cache-Control", value: "private, no-store, max-age=0" }];
+    return [
+      { source: "/account/:path*", headers: [...privateHeaders, { key: "Referrer-Policy", value: "no-referrer" }] },
+      { source: "/checkout", headers: privateHeaders },
+      { source: "/api/customer-auth/:path*", headers: [...privateHeaders, { key: "Referrer-Policy", value: "no-referrer" }] },
+    ];
+  },
   images: {
     dangerouslyAllowSVG: true,
     remotePatterns: [

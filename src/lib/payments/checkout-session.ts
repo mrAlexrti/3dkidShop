@@ -24,11 +24,11 @@ function matching(predicate: (entry: PendingCheckout) => boolean) {
 
 // The browser stores a digest, never customer form contents. The server remains
 // authoritative about identity, prices, payment and acceptance.
-export async function onlineCheckoutKey(data: object, items: CartItem[], revision = 0) {
+export async function onlineCheckoutKey(data: object, items: CartItem[], revision = 0, customerScope?: string) {
   const fields = Object.fromEntries(Object.entries(data).sort(([a], [b]) => a.localeCompare(b)));
   const name = items.some((item) => item.selection !== undefined) ? combinationKey : storageKey;
   const lines = checkoutSelectionLines(items);
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify({ data: fields, lines, revision })));
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify({ data: fields, lines, revision, customerScope })));
   const inputHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
   const existing = read(name);
   if (existing?.inputHash === inputHash) return existing.key;

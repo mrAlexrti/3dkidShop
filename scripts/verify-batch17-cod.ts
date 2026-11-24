@@ -27,14 +27,18 @@ let order = fixture();
 const route = sourceModule<typeof import("../src/app/api/admin/orders/[id]/create-ttn/route")>("src/app/api/admin/orders/[id]/create-ttn/route.ts", {
   "next/server": { NextResponse }, "@/lib/auth": { auth: async () => ({ user: { role: admin ? "ADMIN" : "MANAGER" } }) },
   "@/lib/novaposhta": provider, "@/lib/notifications/orders": { emitOrderEvents: async () => false },
+  "@/lib/server-env": { readServerEnv: () => "https://example.invalid" },
   "@/lib/payments/acceptance": acceptance, "@/lib/prisma": { prisma: { order: {
     findUnique: async () => ({ ...order }), update: async () => {},
     updateMany: async ({ data }: Prisma.OrderUpdateManyArgs) => { Object.assign(order, data); return { count: 1 }; },
   } } },
 });
-const create = () => route.POST(new Request("https://example.invalid/ttn", { method: "POST", body: JSON.stringify({ codAmount: 0.01, total: 0.01, paymentMethod: "cash_on_delivery" }) }), { params: Promise.resolve({ id: "qa" }) });
+const create = (origin = "https://example.invalid") => route.POST(new Request("https://example.invalid/ttn", {
+  method: "POST", headers: { origin, host: "example.invalid" }, body: JSON.stringify({ codAmount: 0.01, total: 0.01, paymentMethod: "cash_on_delivery" }),
+}), { params: Promise.resolve({ id: "qa" }) });
 async function verify() {
   admin = false; assert.equal((await create()).status, 401); assert.equal(calls, 0); admin = true;
+  assert.equal((await create("https://other.example.invalid")).status, 403); assert.equal(calls, 0);
   assert.equal((await create()).status, 200); assert.deepEqual(backward, [{ PayerType: "Recipient", CargoType: "Money", RedeliveryString: "199.29" }]);
   await create(); assert.equal(calls, 1, "Existing TTN does not call the carrier again");
   for (const method of ["pay_on_pickup", "Оплата при отриманні", "Оплата карткою онлайн"]) {

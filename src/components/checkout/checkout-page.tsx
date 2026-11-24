@@ -10,8 +10,9 @@ import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { cartOptionLabel } from "@/lib/product-variants";
 import { cartImageSource } from "@/lib/cart-reconciliation";
+import type { CheckoutContact } from "@/lib/validations/checkout";
 
-export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: boolean }) {
+export function CheckoutPageContent({ onlineCardEnabled, contact, customerScope }: { onlineCardEnabled: boolean; contact?: CheckoutContact; customerScope?: string }) {
   const cart = useCartStore();
   const { items } = cart;
   const { t, locale } = useLangStore();
@@ -30,7 +31,7 @@ export function CheckoutPageContent({ onlineCardEnabled }: { onlineCardEnabled: 
     <h1 className="font-display text-3xl">{t.checkout.title}</h1>
     <CartReadiness />
     <div className="mt-8 grid gap-10 lg:grid-cols-3">
-      <div className="lg:col-span-2"><CheckoutForm onlineCardEnabled={onlineCardEnabled} /></div>
+      <div className="lg:col-span-2"><CheckoutForm onlineCardEnabled={onlineCardEnabled} contact={contact} customerScope={customerScope} /></div>
       <aside className="h-fit">
         <div className="glass rounded-xl2 p-6 shadow-soft">
           <h2 className="mb-4 font-display text-lg">{t.checkout.yourOrder}</h2>

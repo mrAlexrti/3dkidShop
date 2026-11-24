@@ -52,7 +52,9 @@ function logAuthDebug(req: NextRequest, token: unknown) {
 
 export default async function middleware(req: NextRequest) {
   if (shouldRedirectToCanonical(req)) {
-    const canonicalUrl = new URL(req.nextUrl.pathname + req.nextUrl.search, `https://${getCanonicalHost()}`);
+    const canonicalUrl = new URL(`https://${getCanonicalHost()}`);
+    canonicalUrl.pathname = req.nextUrl.pathname;
+    canonicalUrl.search = req.nextUrl.search;
     return NextResponse.redirect(canonicalUrl, 308);
   }
 
@@ -60,7 +62,7 @@ export default async function middleware(req: NextRequest) {
 
   if (isAdminRoute) {
     const token = await getToken({
-      req,
+      req: { headers: new Headers({ cookie: req.headers.get("cookie") ?? "" }) },
       secret: getAuthSecret(),
       secureCookie: isSecureRequest(req),
     });

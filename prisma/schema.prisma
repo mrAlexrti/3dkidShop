@@ -1,4 +1,4 @@
-// Batch 1.8 local schema. Deployment requires a separately approved additive migration.
+// Batch 1.9 local schema. Deployment requires a separately approved migration.
 // Prisma schema — интернет-магазин
 
 generator client {
@@ -15,6 +15,7 @@ datasource db {
 enum Role {
   ADMIN
   MANAGER
+  CUSTOMER
 }
 
 model User {
@@ -26,6 +27,13 @@ model User {
   createdAt    DateTime  @default(now())
   accounts     Account[]
   sessions     Session[]
+  emailVerified DateTime?
+  firstName    String?
+  lastName     String?
+  phone        String?
+  favorites    CustomerFavorite[]
+  orders       Order[]
+  challenges   CustomerChallenge[]
 }
 
 model Account {
@@ -52,6 +60,42 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expires])
+}
+
+model CustomerFavorite {
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([userId, productId])
+  @@index([productId])
+}
+
+model CustomerChallenge {
+  tokenHash String   @id
+  purpose   String
+  email     String
+  userId    String?
+  orderId   String?
+  context   String?
+  expires   DateTime
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([orderId])
+  @@index([expires])
+}
+
+model CustomerRateLimit {
+  key     String   @id
+  expires DateTime
+  hits    Int
+
+  @@index([expires])
 }
 
 // ---------- Каталог ----------
@@ -98,6 +142,7 @@ model Product {
   options       ProductOption[]
   attributes    ProductAttribute[]
   orderItems    OrderItem[]
+  favorites     CustomerFavorite[]
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
@@ -144,6 +189,7 @@ model ProductOptionValue {
   noteEn        String?
   priceModifier Decimal       @default(0) @db.Decimal(10, 2)
   retiredAt         DateTime?
+  displayPosition   Int?
   variantSelections ProductVariantSelection[]
   colorImages       ProductImage[]
   @@unique([optionId, id])
@@ -204,7 +250,10 @@ model Order {
   customerName            String
   customerFirstName       String?
   customerLastName        String?
-  customerEmail           String
+  customerEmail           String?
+  customerId              String?
+  customer                User?       @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  claimChallenges         CustomerChallenge[]
   customerPhone           String
   shippingAddress         String
   deliveryMethod          String?
@@ -246,6 +295,7 @@ model Order {
   @@unique([paymentProvider, paymentInvoiceId])
   @@index([paymentProvider, paymentNextCheckAt])
   @@index([checkoutAcceptance, createdAt])
+  @@index([customerId, createdAt, id])
 }
 
 model OrderNotification {
@@ -276,6 +326,7 @@ model OrderItem {
   productId   String
   product     Product @relation(fields: [productId], references: [id])
   productName String
+  productImageUrl String?
   optionsJson String? // JSON-строка выбранных опций
   price       Decimal @db.Decimal(10, 2)
   quantity    Int

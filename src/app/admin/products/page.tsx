@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { requireAdmin } from "@/lib/actions/require-admin";
 import Image from "next/image";
 import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/lib/utils";
@@ -11,6 +12,7 @@ import { getT } from "@/lib/i18n-server";
 import { Plus, Pencil } from "lucide-react";
 
 export default async function AdminProductsPage() {
+  await requireAdmin();
   const t = await getT();
   const tl = t.admin.productsList;
   const products = await prisma.product.findMany({

@@ -25,6 +25,8 @@ import { allocateOrderNumber, isOrderNumberCollision } from "@/lib/order-number"
 import { Prisma } from "@prisma/client";
 import { nativeMode, productConfiguration, selectedCombination, snapshotCombination, combinationSelectionSchema } from "@/lib/product-configuration";
 import { flushVariantConstraints } from "@/lib/variant-transaction";
+import { activeCustomerSession, customerSession, lockCustomer } from "@/lib/customer/session";
+import { colorGallery } from "@/lib/gallery";
 
 export type CreateOrderResult =
   | { success: true; orderNumber: string | null; emailSent: boolean; resultUrl: string; payment?: HostedCheckout }
@@ -34,6 +36,7 @@ type PricedOrderItem = {
   productVariantId?: string;
   productId: string;
   productName: string;
+  productImageUrl: string | null;
   optionsJson: string | null;
   price: string;
   quantity: number;
@@ -64,6 +67,7 @@ async function priceOrderItems(tx: Prisma.TransactionClient, items: CartItem[], 
   const products = await tx.product.findMany({
     where: { id: { in: productIds }, isActive: true, isOrderable: true },
     include: {
+      images: { orderBy: [{ order: "asc" }, { id: "asc" }], select: { url: true, colorValueId: true } },
       variants: { include: availabilityVariantInclude },
       options: {
         include: { values: true },
@@ -104,6 +108,7 @@ async function priceOrderItems(tx: Prisma.TransactionClient, items: CartItem[], 
       subtotalMinor += priceMinor * item.quantity;
       if (!Number.isSafeInteger(subtotalMinor) || subtotalMinor > 9999999999) return { success: false as const, error: errors.quantity };
       pricedItems.push({ productId: product.id, productName: product.name, price: moneyDecimal(priceMinor), quantity: item.quantity,
+        productImageUrl: colorGallery(product.images ?? [], combination?.values.COLOR)[0]?.url ?? null,
         optionsJson: combination ? snapshotCombination(config, combination) : null, ...(combination ? { productVariantId: combination.id } : {}) });
       continue;
     }
@@ -126,6 +131,7 @@ async function priceOrderItems(tx: Prisma.TransactionClient, items: CartItem[], 
     pricedItems.push({
       productId: product.id,
       productName: product.name,
+      productImageUrl: product.images?.[0]?.url ?? null,
       optionsJson: size ? snapshotSize(size) : null,
       price: moneyDecimal(priceMinor),
       quantity: item.quantity,
@@ -156,7 +162,9 @@ export async function createOrder(
     return { success: false, error: errors.products };
   }
 
-  const d = parsed.data;
+  const d = { ...parsed.data, customerEmail: parsed.data.customerEmail || "" };
+  const customer = await customerSession();
+  const customerId = customer?.id ?? null;
 
   // A retry is replayed before current pricing/config availability is checked.
   // Its original server-priced snapshot remains immutable.
@@ -166,7 +174,7 @@ export async function createOrder(
     catch { return { success: false, error: errors.invalid }; }
     const existing = await prisma.order.findUnique({ where: { checkoutKeyHash: identity.checkoutKeyHash } });
     if (existing) {
-      if (existing.checkoutPayloadHash !== identity.checkoutPayloadHash || !existing.paymentReference) return { success: false, error: errors.invalid };
+      if ((existing.customerId ?? null) !== customerId || existing.checkoutPayloadHash !== identity.checkoutPayloadHash || !existing.paymentReference) return { success: false, error: errors.invalid };
       return { success: true, orderNumber: existing.number, emailSent: false, resultUrl: getAttemptResultPath(existing.paymentReference),
         ...(!existing.paidAt && existing.status !== "CANCELLED" && existing.paymentStatus === "PENDING" && existing.paymentPageUrl && (!existing.paymentExpiresAt || existing.paymentExpiresAt.getTime() > Date.now())
           ? { payment: { provider: "mono" as const, pageUrl: existing.paymentPageUrl } } : {}) };
@@ -175,7 +183,7 @@ export async function createOrder(
 
   const onlineConfig = d.paymentMethod === "card_online" ? getOnlinePaymentConfig() : null;
   if (d.paymentMethod === "card_online" && retrySource) {
-    try { if (await verifiedPaymentRetry(retrySource) !== retryKey) return { success: false, error: errors.payment }; }
+    try { if (await verifiedPaymentRetry(retrySource, customerId) !== retryKey) return { success: false, error: errors.payment }; }
     catch { return { success: false, error: errors.payment }; }
   }
   if (d.paymentMethod === "card_online" && !onlineConfig) {
@@ -204,6 +212,7 @@ export async function createOrder(
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       order = await prisma.$transaction(async (tx) => {
+        if (customer && (!await lockCustomer(tx, customer.id) || !await activeCustomerSession(tx, customer.id, customer.binding))) throw new CheckoutInputError(errors.invalid);
         const priced = await priceOrderItems(tx, items, errors, requirePriceMatch);
         if (!priced.success) throw new CheckoutInputError(priced.error);
         orderNumber = onlineConfig ? null : await allocateOrderNumber(tx);
@@ -220,7 +229,8 @@ export async function createOrder(
             customerName: `${d.customerName} ${d.customerSurname}`,
             customerFirstName: d.customerName,
             customerLastName: d.customerSurname,
-            customerEmail: d.customerEmail,
+            customerEmail: d.customerEmail || null,
+            customerId,
             customerPhone: d.customerPhone,
             shippingAddress,
             deliveryMethod: d.deliveryType,
@@ -248,6 +258,7 @@ export async function createOrder(
                 productId: item.productId,
                 ...(item.productVariantId ? { productVariantId: item.productVariantId } : {}),
                 productName: item.productName,
+                productImageUrl: item.productImageUrl,
                 optionsJson: item.optionsJson,
                 price: item.price,
                 quantity: item.quantity,

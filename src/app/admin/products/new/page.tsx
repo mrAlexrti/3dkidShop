@@ -1,12 +1,14 @@
 export const dynamic = "force-dynamic";
 
 import { ProductForm } from "@/components/admin/product-form";
+import { requireAdmin } from "@/lib/actions/require-admin";
 import { createProduct } from "@/lib/actions/products";
 import { getT } from "@/lib/i18n-server";
 import { getCategoryTree } from "@/lib/categories";
 import { nativeVariantWritesEnabled } from "@/lib/variant-rollout";
 
 export default async function NewProductPage() {
+  await requireAdmin();
   const t = await getT();
   const categories = await getCategoryTree();
 

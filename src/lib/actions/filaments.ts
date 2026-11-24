@@ -20,7 +20,7 @@ function invalidate() {
 
 export async function saveFilament(id: string | null, form: FormData): Promise<AdminFormResult> {
   await requireAdmin();
-  const parsed = filamentInput.safeParse(Object.fromEntries(form));
+  const parsed = filamentInput.safeParse(Object.fromEntries(form), { reportInput: true });
   if (!parsed.success) return validationResult(parsed.error);
   try {
     await prisma.$transaction(async (tx) => {

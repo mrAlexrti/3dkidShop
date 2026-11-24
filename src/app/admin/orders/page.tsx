@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { requireAdmin } from "@/lib/actions/require-admin";
 import { prisma } from "@/lib/prisma";
 import { operationalOrderWhere } from "@/lib/payments/acceptance";
 import { OrderStatusSummary } from "@/components/admin/order-status-summary";
@@ -10,6 +11,7 @@ import { formatOrderReference } from "@/lib/order-reference";
 import { formatManagerDateTime } from "@/lib/date-time";
 
 export default async function AdminOrdersPage() {
+  await requireAdmin();
   const t = await getT();
   const locale = await getLocale();
   const td = t.admin.dashboard;

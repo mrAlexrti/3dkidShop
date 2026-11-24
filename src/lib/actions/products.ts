@@ -39,7 +39,7 @@ const productSchema = z.object({
 function parseProduct(formData: FormData, previousSlug?: string) {
   const raw = Object.fromEntries(formData.entries());
   const schema = previousSlug !== undefined && previousSlug === raw.slug ? productSchema.extend({ slug: z.literal(previousSlug) }) : productSchema;
-  const result = schema.safeParse({ ...raw, isFeatured: raw.isFeatured === "on", isNew: raw.isNew === "on", isActive: raw.isActive === "on", isOrderable: raw.isOrderable === "on" });
+  const result = schema.safeParse({ ...raw, isFeatured: raw.isFeatured === "on", isNew: raw.isNew === "on", isActive: raw.isActive === "on", isOrderable: raw.isOrderable === "on" }, { reportInput: true });
   if (!result.success) {
     if (result.error.issues.some((issue) => issue.path[0] === "slug")) return { error: { error: "slugInvalid" } as ProductSaveResult };
     const error = validationResult(result.error);

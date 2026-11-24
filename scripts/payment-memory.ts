@@ -109,6 +109,7 @@ export class PaymentMemory {
       const maximum = this.orders.reduce((max, row) => typeof row.number === "string" && /^[0-9]+$/.test(row.number) && BigInt(row.number) > max ? BigInt(row.number) : max, BigInt(0));
       return [{ maximum: String(maximum) }];
     }
+    if (query.sql.includes('FROM public."Filament" f') && query.sql.includes('ORDER BY f."id" FOR SHARE')) return [];
     if (!query.sql.includes('ORDER BY "id" FOR SHARE') || query.values.some((value) => typeof value !== "string")) throw new Error("INVALID_LOCK_READ");
     this.lockReads++;
     return this.products.filter((row) => query.values.includes(row.id)).map((row) => ({ id: row.id }));

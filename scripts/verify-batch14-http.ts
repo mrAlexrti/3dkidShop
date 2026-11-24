@@ -33,10 +33,9 @@ async function verify() {
     const html = await page(path, locale);
     const state = paymentResultState(order);
     assert.ok(html.includes(state === "confirmed" ? t.success.title : t.success[`${state}Title`]));
-    assert.ok(!html.includes(order.customerEmail) && !html.includes(order.customerPhone), "Status-only page must not expose customer details.");
+    assert.ok((!order.customerEmail || !html.includes(order.customerEmail)) && !html.includes(order.customerPhone), "Status-only page must not expose customer details.");
     const home = await page("/", locale);
-    const account = home.match(/<button[^>]*class="sf-icon-button"[^>]*disabled=""[^>]*>/)?.[0];
-    assert.ok(account?.includes(t.nav.accountUnavailable)); assert.ok(!home.includes('href="/account"'));
+    assert.ok(home.includes('href="/account"')); assert.ok(home.includes(t.account.title));
     const login = await page("/login", locale);
     assert.match(login, /autocomplete="username"/i); assert.ok(login.includes('type="password"'));
     assert.doesNotMatch(login, /name="(?:otp|totp)"|Google Authenticator/);
@@ -49,6 +48,6 @@ async function verify() {
     const callback = await fetch(`${base}/api/payments/liqpay/callback`, { method: "POST", body: new URLSearchParams({ data: "isolated-invalid", signature: "isolated-invalid" }) });
     assert.equal(callback.status, 503);
   }
-  console.log(JSON.stringify({ result: "PASS UA/EN localhost production: authoritative capability-protected status; forged browser success denied; no PII; explicit disabled account; login without TOTP; unauthenticated admin protected; truthful payment availability", onlineAvailable: isOnlinePaymentAvailable(), counts: { products: await db.product.count(), images: await db.productImage.count(), categories: await db.category.count(), orders: await db.order.count(), orderItems: await db.orderItem.count() } }));
+  console.log(JSON.stringify({ result: "PASS UA/EN localhost production: authoritative capability-protected status; forged browser success denied; no PII; account navigation; login without TOTP; unauthenticated admin protected; truthful payment availability", onlineAvailable: isOnlinePaymentAvailable(), counts: { products: await db.product.count(), images: await db.productImage.count(), categories: await db.category.count(), orders: await db.order.count(), orderItems: await db.orderItem.count() } }));
 }
 verify().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => db.$disconnect());

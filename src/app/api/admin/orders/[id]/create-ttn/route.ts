@@ -4,6 +4,7 @@ import { isOperationalOrder } from "@/lib/payments/acceptance";
 import { auth } from "@/lib/auth";
 import { createNovaPoshtaWaybill } from "@/lib/novaposhta";
 import { emitOrderEvents } from "@/lib/notifications/orders";
+import { readServerEnv } from "@/lib/server-env";
 
 function unauthorized() {
   return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -13,10 +14,19 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unexpected Nova Poshta error.";
 }
 
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   const role = (session?.user as { role?: string } | undefined)?.role;
   if (role !== "ADMIN") return unauthorized();
+  const origin = request.headers.get("origin");
+  const configured = readServerEnv("AUTH_URL") || readServerEnv("NEXTAUTH_URL");
+  try {
+    if (!origin || new URL(origin).host !== request.headers.get("host") || (configured && origin !== new URL(configured).origin)) {
+      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+    }
+  } catch {
+    return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+  }
 
   const { id } = await params;
   const order = await prisma.order.findUnique({ where: { id }, include: { items: true } });

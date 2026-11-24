@@ -9,11 +9,11 @@ export function validationResult(error: z.ZodError): AdminFormResult {
   for (const issue of error.issues) {
     const field = issue.path[0] === "configuration" ? issue.path.join(".") : String(issue.path[0] ?? "form");
     if (!fieldErrors[field]) {
-      const required = issue.code === "invalid_type" && issue.received === "undefined" ||
-        issue.code === "too_small" && issue.type === "string" && issue.minimum === 1 ||
+      const required = issue.code === "invalid_type" && issue.input === undefined ||
+        issue.code === "too_small" && issue.origin === "string" && issue.minimum === 1 ||
         issue.code === "custom" && issue.message === "required";
       const reason = issue.code === "custom" && ["optionDuplicate", "combinationDuplicate", "configurationLimit"].includes(issue.message ?? "") ? issue.message as AdminFieldError : null;
-      fieldErrors[field] = reason ?? (required ? "required" : issue.code === "too_big" && issue.type === "string" ? "tooLong" : "invalid");
+      fieldErrors[field] = reason ?? (required ? "required" : issue.code === "too_big" && issue.origin === "string" ? "tooLong" : "invalid");
     }
   }
   return { error: "validation", fieldErrors };

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { requireAdmin } from "@/lib/actions/require-admin";
 import { notFound } from "next/navigation";
 import { CreateTtnButton } from "@/components/admin/create-ttn-button";
 import { OrderStatusSelect } from "@/components/admin/order-status-select";
@@ -29,6 +30,7 @@ function deliveryTypeLabel(value: string | null) {
 }
 
 export default async function AdminOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdmin();
   const { id } = await params;
   const locale = await getLocale();
   const statusCopy = translations[locale].statuses;
@@ -103,7 +105,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             <h2 className="mb-4 font-display text-lg">Клієнт</h2>
             <dl className="space-y-2 text-sm">
               <div><dt className="text-ink/50">Ім&apos;я</dt><dd>{order.customerName}</dd></div>
-              <div><dt className="text-ink/50">Email</dt><dd>{order.customerEmail}</dd></div>
+              <div><dt className="text-ink/50">Email</dt><dd>{order.customerEmail ?? "—"}</dd></div>
               <div><dt className="text-ink/50">Телефон</dt><dd>{order.customerPhone}</dd></div>
               <div><dt className="text-ink/50">Адреса</dt><dd>{order.shippingAddress}, {order.city}, {order.postalCode}</dd></div>
               <div><dt className="text-ink/50">Оплата</dt><dd>{order.paymentMethod}</dd></div>

@@ -9,6 +9,7 @@ import { ProductSelectionProvider } from "@/components/product/product-selection
 import { ProductMaterials } from "@/components/product/product-materials";
 import { ProductDescription } from "@/components/product/product-description";
 import { ProductOptions } from "@/components/product/product-options";
+import { FavoriteButton } from "@/components/product/favorite-button";
 import { RelatedProducts } from "@/components/product/related-products";
 import { AnimatedSection } from "@/components/shared/animated-section";
 import { getLocale } from "@/lib/i18n-server";
@@ -114,7 +115,10 @@ export default async function ProductPage({
           <p className="text-xs uppercase tracking-wide text-pink-600">
             {getCategoryName(product.category, locale)}
           </p>
-          <h1 className="mt-2 font-display text-3xl text-ink">{productName}</h1>
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <h1 className="font-display text-3xl text-ink">{productName}</h1>
+            <FavoriteButton productId={product.id} productName={productName} />
+          </div>
 
           <ProductDescription text={productDescription} />
           <ProductMaterials product={product} locale={locale} />

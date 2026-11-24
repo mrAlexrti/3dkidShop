@@ -21,6 +21,8 @@ async function verify() {
   const modules: Record<string, string> = { "next/image": "Image as default", "next/link": "Link as default", "next/navigation": "usePathname, useRouter", sonner: "toast", "@/lib/actions/reconcile-cart": "lookupCartProducts", "@vercel/blob/client": "upload" };
   const bundle = await build({ entryPoints: [colorImages ? "scripts/fixtures/batch18a-browser.tsx" : addendum ? "scripts/fixtures/addendum-browser.tsx" : variants ? "scripts/fixtures/variants-browser.tsx" : galleryAdmin ? "scripts/fixtures/gallery-admin-browser.tsx" : mediaUploads ? "scripts/fixtures/media-upload-browser.tsx" : "scripts/fixtures/cart-drawer-browser.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
     define: { "process.env.NODE_ENV": '"development"' }, plugins: [{ name: "isolated-next-and-toast", setup(api) {
+      api.onResolve({ filter: /^\.\/favorite-button$/ }, ({ path }) => ({ path, namespace: "favorite-qa" }));
+      api.onLoad({ filter: /.*/, namespace: "favorite-qa" }, () => ({ contents: "export const FavoriteButton = () => null;" }));
       api.onResolve({ filter: /^(next\/image|next\/link|next\/navigation|sonner|@\/lib\/actions\/reconcile-cart|@vercel\/blob\/client)$/ }, ({ path }) => ({ path, namespace: "qa" }));
       api.onLoad({ filter: /.*/, namespace: "qa" }, ({ path }) => ({ contents: `export { ${modules[path]} } from ${JSON.stringify(fixture)};`, resolveDir: process.cwd() }));
     } }],
@@ -72,7 +74,8 @@ async function verify() {
       return (result.result as { value: unknown }).value;
     };
     const qa = colorImages ? "colorImagesQA" : addendum ? "addendumQA" : variants ? "variantsQA" : galleryAdmin ? "galleryAdminQA" : mediaUploads ? "mediaUploadQA" : "cartQA";
-    for (const width of mediaUploads || galleryAdmin || variants || addendum || colorImages ? [320, 390, 1280] : [390, 1280]) for (const locale of ["ua", "en"]) {
+    const widths = addendum ? [320, 390, 768, 1280] : mediaUploads || galleryAdmin || variants || colorImages ? [320, 390, 1280] : [390, 1280];
+    for (const width of widths) for (const locale of ["ua", "en"]) {
       await send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
       if (addendum) {
         await send("Emulation.setTouchEmulationEnabled", { enabled: width < 700, maxTouchPoints: 1 });
@@ -117,7 +120,7 @@ async function verify() {
       }
     }
     assert.deepEqual(exceptions, [], "Unhandled browser exceptions");
-    console.log(colorImages ? "PASS Batch 1.8A: color galleries, selected prices, cart candidate, native lightbox/zoom/keyboard/swipes and admin error retention; UA/EN 320/390/1280. Synthetic data, no live services." : addendum ? "PASS addendum: actual React/DOM at 320/390/1280, UA/EN, Unicode divider, coarse-pointer autoplay, keyboard confirmations, reduced motion and simulated visibility; no live services." : variants ? "PASS native variants: actual React/DOM, sparse choices and Admin preservation, UA/EN mobile/desktop, no live services." : galleryAdmin ? "PASS gallery/Admin reliability: real React/DOM and native dialogs, UA/EN mobile/desktop, mocked Blob and actions, no live services." : mediaUploads ? "PASS real Admin media uploads: UA/EN desktop/mobile, native keyboard activation, actual React StrictMode/product form, mocked Blob SDK, no external requests or production data."
+    console.log(colorImages ? "PASS Batch 1.8A: color galleries, selected prices, cart candidate, native lightbox/zoom/keyboard/swipes and admin error retention; UA/EN 320/390/1280. Synthetic data, no live services." : addendum ? "PASS addendum and UX-04: actual React/DOM at 320/390/768/1280, UA/EN, catalog alignment, Unicode divider, coarse-pointer autoplay, keyboard confirmations, reduced motion and simulated visibility; no live services." : variants ? "PASS native variants: actual React/DOM, sparse choices and Admin preservation, UA/EN mobile/desktop, no live services." : galleryAdmin ? "PASS gallery/Admin reliability: real React/DOM and native dialogs, UA/EN mobile/desktop, mocked Blob and actions, no live services." : mediaUploads ? "PASS real Admin media uploads: UA/EN desktop/mobile, native keyboard activation, actual React StrictMode/product form, mocked Blob SDK, no external requests or production data."
       : "PASS real drawer lifecycle: UA/EN desktop/mobile, actual React StrictMode/Framer/Zustand, no external requests or production data.");
   } finally { socket?.close(); browser.kill(); server.closeAllConnections(); server.close(); }
 }

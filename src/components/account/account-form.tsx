@@ -1,0 +1,94 @@
+"use client";
+
+import { useActionState, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useLangStore } from "@/store/lang-store";
+import type { AccountResult } from "@/lib/customer/actions";
+import type { GoogleResult } from "@/lib/customer/google";
+
+type Action = (state: AccountResult | null, data: FormData) => Promise<AccountResult>;
+export function AccountForm({ action, button, children, token = false, done, refresh = false }: {
+  action: Action; button: string; children?: ReactNode; token?: boolean; done?: string; refresh?: boolean;
+}) {
+  const [result, submit, pending] = useActionState(action, null);
+  const [proof, setProof] = useState<string | null>(null);
+  const { t } = useLangStore();
+  const router = useRouter();
+  useEffect(() => {
+    if (!token) return;
+    const value = window.location.hash.slice(1);
+    setProof(value);
+    if (value) window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+    const newLink = () => { if (window.location.hash) window.location.reload(); };
+    window.addEventListener("hashchange", newLink);
+    return () => window.removeEventListener("hashchange", newLink);
+  }, [token]);
+  useEffect(() => {
+    if (refresh && result === "ok") router.refresh();
+  }, [refresh, result, router]);
+  const finished = !!done && (result === "ok" || (token && result === "sent"));
+  return <form action={submit} className="space-y-3">
+    <fieldset disabled={pending || finished} className="space-y-3 disabled:opacity-70">
+      {children}
+      {token && <input type="hidden" name="token" value={proof ?? ""} />}
+      <button type="submit" disabled={token && !proof} className="min-h-11 rounded-full bg-pink-700 px-5 py-2 text-sm font-semibold text-white disabled:opacity-60">
+        {pending ? t.common.loading : button}
+      </button>
+    </fieldset>
+    {token && proof === "" && <p role="alert">{t.account.result.invalid}</p>}
+    {typeof result === "string" && <p role={result === "ok" || result === "sent" ? "status" : "alert"} className="text-sm">{t.account.result[result]}</p>}
+    {finished && <Link className="text-pink-700 underline" href={done}>{done === "/account/sign-in" ? t.account.signIn : t.account.title}</Link>}
+  </form>;
+}
+
+export function GoogleForm({ link = false }: { link?: boolean }) {
+  const { t } = useLangStore();
+  const inFlight = useRef(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<keyof typeof t.account.result>();
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (inFlight.current) return;
+    const form = event.currentTarget;
+    const fields = new FormData(form);
+    const data = new URLSearchParams({ mode: link ? "link" : "signin", password: String(fields.get("password") ?? "") });
+    inFlight.current = true;
+    setError(undefined);
+    setPending(true);
+    try {
+      const response = await fetch("/api/customer-auth/start/google", { method: "POST", body: data, cache: "no-store" });
+      if (!response.ok) throw new Error("GOOGLE_START_FAILED");
+      const result = await response.json() as GoogleResult;
+      if ("url" in result) {
+        window.location.assign(result.url);
+        return;
+      }
+      setError(result.error);
+    } catch {
+      setError("failed");
+    }
+    form.reset();
+    inFlight.current = false;
+    setPending(false);
+  }
+  return <form method="post" action="/api/customer-auth/start/google" onSubmit={submit} className="space-y-3">
+    <input type="hidden" name="mode" value={link ? "link" : "signin"} />
+    {link && <AccountField name="password" label={t.account.password} type="password" autoComplete="current-password" maxLength={72} />}
+    <button type="submit" disabled={pending} className="min-h-11 rounded-full border border-ink/20 bg-white px-5 py-2 text-sm font-semibold disabled:opacity-60">
+      {pending ? t.common.loading : link ? t.account.linkGoogle : t.account.google}
+    </button>
+    {error && <p className="text-sm" role="alert">{t.account.result[error]}</p>}
+  </form>;
+}
+
+export function AccountField({ label, name, type = "text", defaultValue, autoComplete, required = true, maxLength, help }: {
+  label: string; name: string; type?: string; defaultValue?: string | null; autoComplete?: string; required?: boolean; maxLength?: number; help?: string;
+}) {
+  return <label className="block text-sm font-semibold">
+    {label}
+    <input name={name} type={type} defaultValue={defaultValue ?? undefined} autoComplete={autoComplete} required={required} maxLength={maxLength}
+      className="mt-1 min-h-11 w-full rounded-xl border border-ink/20 bg-white px-3 py-2 font-normal" />
+    {help && <span className="mt-1 block text-xs font-normal text-ink/65">{help}</span>}
+  </label>;
+}

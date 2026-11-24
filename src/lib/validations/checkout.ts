@@ -6,10 +6,10 @@ export function getCheckoutSchema(locale: Locale = "ua") {
   return z.object({
   customerName: z.string().trim().min(2, message.name),
   customerSurname: z.string().trim().min(2, message.surname),
-  customerEmail: z.string().trim().email(message.email),
+  customerEmail: z.string().trim().max(254, message.email).refine((value) => !value || z.string().email().safeParse(value).success, message.email).optional(),
   customerPhone: z.string().trim().refine((value) => /^[+\d\s()-]+$/.test(value) && /^\d{10,15}$/.test(value.replace(/\D/g, "")), message.phone),
 
-  deliveryType: z.enum(["np_warehouse", "np_parcel_locker", "np_courier"], { errorMap: () => ({ message: message.invalid }) }),
+  deliveryType: z.enum(["np_warehouse", "np_parcel_locker", "np_courier"], { error: message.invalid }),
 
   npCityRef: z.string().optional(),
   npCityName: z.string().trim().min(2, message.city),
@@ -17,7 +17,7 @@ export function getCheckoutSchema(locale: Locale = "ua") {
   npWarehouseAddress: z.string().optional(),
   npCourierAddress: z.string().optional(),
 
-  paymentMethod: z.enum(["card_online", "cash_on_delivery", "pay_on_pickup"], { errorMap: () => ({ message: message.invalid }) }),
+  paymentMethod: z.enum(["card_online", "cash_on_delivery", "pay_on_pickup"], { error: message.invalid }),
 
   comment: z.string().optional(),
 }).superRefine((data, ctx) => {
@@ -50,6 +50,7 @@ export function getCheckoutSchema(locale: Locale = "ua") {
 export const checkoutSchema = getCheckoutSchema();
 
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
+export type CheckoutContact = Pick<CheckoutInput, "customerName" | "customerSurname" | "customerPhone" | "customerEmail">;
 
 export const DELIVERY_LABELS: Record<CheckoutInput["deliveryType"], string> = {
   np_warehouse: "Нова Пошта — відділення",

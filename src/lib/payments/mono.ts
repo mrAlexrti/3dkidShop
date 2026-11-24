@@ -135,7 +135,7 @@ async function api(path: string, body?: unknown, empty = false): Promise<unknown
   }
 }
 
-export async function createMonoInvoice(input: { number: string; amount: number; email: string; resultPath: string }) {
+export async function createMonoInvoice(input: { number: string; amount: number; email: string | null; resultPath: string }) {
   const origin = monoSiteOrigin();
   if (!origin) throw new MonoError("MONO_NOT_CONFIGURED", { endpoint: "invoice/create" });
   if (!Number.isSafeInteger(input.amount) || input.amount <= 0 || input.amount > 9999999999 ||

@@ -14,6 +14,7 @@ import { httpMediaUrl } from "@/lib/product-media";
 import { cartAfterAddition } from "@/lib/cart-items";
 import { MAX_PRODUCT_IMAGES, photoPosition, swipeDirection, type ProductPhoto } from "@/lib/gallery";
 import { useMobileCardAnimation } from "./use-mobile-card-animation";
+import { FavoriteButton } from "./favorite-button";
 
 const animationQuery = "(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)";
 function subscribeAnimationPreference(callback: () => void) {
@@ -119,6 +120,7 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, im
         {animatedOverlay}
         {isNew && <span className="absolute left-2 top-2 rounded-full bg-pink-700 px-3 py-1 text-xs font-semibold text-white">{t.common.new}</span>}
       </Link>
+      <FavoriteButton productId={id} productName={localizedName} className="absolute right-1 top-1 z-10" />
       {mobileAnimation && active === 0 && gifUrl !== failedUrl && <button
         type="button" className="absolute bottom-1 right-1 z-10 grid h-11 w-11 place-items-center rounded-full focus-visible:outline focus-visible:outline-pink-700"
         aria-label={`${paused ? text.playAnimation : text.pauseAnimation}: ${localizedName}`} onClick={() => setPaused((value) => !value)}>

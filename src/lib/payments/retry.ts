@@ -11,16 +11,16 @@ export type PaymentRetrySource = { reference: string; token: string };
 
 // No invoice is created here. Unknown responses, refunds and financial review
 // fail closed. This is also checked again at checkout, immediately before creation.
-export async function verifiedPaymentRetry(source: PaymentRetrySource): Promise<string | null> {
+export async function verifiedPaymentRetry(source: PaymentRetrySource, customerId: string | null = null): Promise<string | null> {
   if (!source || !validAttemptResultToken(source.reference, source.token)) return null;
   const before = await prisma.order.findUnique({ where: { paymentReference: source.reference } });
-  if (!before || !canStartNewPayment(before) || !before.checkoutKeyHash) return null;
+  if (!before || (before.customerId && before.customerId !== customerId) || !canStartNewPayment(before) || !before.checkoutKeyHash) return null;
   const snapshot = await queryMonoInvoice(before.paymentInvoiceId!);
   if (snapshot.invoiceId !== before.paymentInvoiceId || snapshot.reference !== source.reference) return null;
   const outcome = await applyPaymentEvidence(monoEvidence(snapshot), { authoritativeSnapshot: true });
   if (!["applied", "duplicate"].includes(outcome)) return null;
   const after = await prisma.order.findUnique({ where: { id: before.id } });
-  if (!after || !canStartNewPayment(after)) return null;
+  if (!after || (after.customerId && after.customerId !== customerId) || !canStartNewPayment(after)) return null;
   const secret = getAuthSecret();
   if (!secret) return null;
   // Repeated clicks/tabs share one successor identity; the previous identity and

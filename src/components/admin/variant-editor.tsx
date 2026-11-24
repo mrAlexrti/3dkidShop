@@ -10,7 +10,7 @@ import { ConfirmButton, EditorRemoveButton } from "./confirm-button";
 export type ConfigurationDraft = Omit<ConfigurationInput, "combinations"> & { combinations: (ConfigurationInput["combinations"][number] & { draftKey: string })[] };
 export function initialConfigurationDraft(config?: ProductConfiguration, legacySizes: SizeVariant[] = []): ConfigurationDraft {
   if (config && config.mode !== "LEGACY") return { mode: config.mode,
-    values: config.values.map((v) => ({ key: v.id, id: v.id, kind: v.kind, labelUa: v.labelUa, labelEn: v.labelEn ?? "", noteUa: v.noteUa ?? "", noteEn: v.noteEn ?? "", retired: v.retired })),
+    values: config.values.map((v) => ({ key: v.id, id: v.id, kind: v.kind, labelUa: v.labelUa, labelEn: v.labelEn ?? "", noteUa: v.noteUa ?? "", noteEn: v.noteEn ?? "", retired: v.retired, displayPosition: v.displayPosition ?? undefined })),
     combinations: config.combinations.map((v) => ({ id: v.id, draftKey: v.id, color: v.values.COLOR, size: v.values.SIZE, price: v.price, isAvailable: v.isAvailable, retired: v.retired })) };
   return { mode: legacySizes.length ? "SIZE" : "SIMPLE",
     values: legacySizes.map((v) => ({ key: v.id, id: v.id, kind: "SIZE", labelUa: v.labelUa, labelEn: v.labelEn ?? "", noteUa: v.noteUa ?? "", noteEn: v.noteEn ?? "", retired: false })),
@@ -30,6 +30,17 @@ export function VariantEditor({ draft, setDraft, enabled, onEnabled, legacy, his
   }
   function addValue(kind: OptionKind) {
     setDraft((current) => ({ ...current, values: [...current.values, { key: crypto.randomUUID(), kind, labelUa: "", labelEn: "", noteUa: "", noteEn: "", retired: false }] }));
+  }
+  function moveValue(index: number, direction: -1 | 1) {
+    setDraft((current) => {
+      const values = [...current.values];
+      const sameKind = values.flatMap((value, i) => value.kind === values[index].kind && !value.retired ? [i] : []);
+      const target = sameKind[sameKind.indexOf(index) + direction];
+      if (target === undefined) return current;
+      [values[target], values[index]] = [values[index], values[target]];
+      sameKind.forEach((i, position) => { values[i] = { ...values[i], displayPosition: position }; });
+      return { ...current, values };
+    });
   }
   const field = (name: string, title: string, value: string, update: (value: string) => void, options: { required?: boolean; numeric?: boolean; max?: number } = {}) => <div key={name} className="min-w-0">
     <label htmlFor={`${prefix}-${name}`} className="mb-1 block text-sm">{title}</label>
@@ -56,6 +67,12 @@ export function VariantEditor({ draft, setDraft, enabled, onEnabled, legacy, his
         {draft.values.map((value, i) => value.kind === kind && <div key={value.key} className={`space-y-3 rounded-xl border p-3 ${value.retired ? "border-dashed opacity-75" : "border-ink/15"}`} data-field-name={`configuration.values.${i}`} tabIndex={-1}>
           <div className="grid gap-3 sm:grid-cols-2">{(["labelUa", "labelEn", "noteUa", "noteEn"] as const).map((name) => field(`configuration.values.${i}.${name}`, text[name], value[name], (next) => setDraft((d) => ({ ...d, values: d.values.map((v, j) => j === i ? { ...v, [name]: next } : v) })), { required: name === "labelUa", max: name.startsWith("note") ? 500 : 100 }))}</div>
           {value.retired && <span className="text-sm">{text.retired}</span>}
+          {!value.retired && <div className="flex flex-wrap gap-4">
+            <button type="button" className="min-h-11 text-sm underline disabled:opacity-50" onClick={() => moveValue(i, -1)}
+              disabled={!draft.values.slice(0, i).some((v) => v.kind === kind && !v.retired)}>{t.filamentSummary.up}</button>
+            <button type="button" className="min-h-11 text-sm underline disabled:opacity-50" onClick={() => moveValue(i, 1)}
+              disabled={!draft.values.slice(i + 1).some((v) => v.kind === kind && !v.retired)}>{t.filamentSummary.down}</button>
+          </div>}
           <EditorRemoveButton persisted={Boolean(value.id && !value.retired)} retiring name={(locale === "en" ? value.labelEn || value.labelUa : value.labelUa) || text.choose} className="min-h-11 text-sm underline" disabled={value.retired && (kind === "COLOR" ? !needsColor(draft.mode) : !needsSize(draft.mode))} onConfirm={() => setDraft((d) => ({ ...d,
             values: value.id ? d.values.map((v, j) => j === i ? { ...v, retired: !v.retired } : v) : d.values.filter((_, j) => j !== i),
             combinations: d.combinations.filter((r) => r.id || r.color !== value.key && r.size !== value.key).map((r) => !value.retired && (r.color === value.key || r.size === value.key) ? { ...r, retired: true } : r),

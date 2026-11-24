@@ -1,9 +1,11 @@
 import { isTestModeEnabled } from "@/lib/server-env";
+import { requireAdmin } from "@/lib/actions/require-admin";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { getT } from "@/lib/i18n-server";
 import "./admin.css";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  await requireAdmin();
   const t = await getT();
 
   return (

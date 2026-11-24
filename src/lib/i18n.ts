@@ -1,9 +1,12 @@
 // Переводы UA | EN для всего интерфейса магазина
+import { customerCopy } from "./customer/copy";
 
 export type Locale = "ua" | "en";
 
 export const translations = {
   ua: {
+    account: customerCopy.ua,
+    filamentSummary: { groups: "Групи", alternatives: "Альтернативні філаменти", none: "Філаменти не налаштовано", ready: "Матеріали доступні", blocked: "Матеріали недоступні", blocking: "Заблоковані групи", up: "Вище", down: "Нижче" },
     filaments: {"title":"Філаменти","create":"Додати філамент","edit":"Редагувати філамент","manufacturer":"Виробник","series":"Серія","material":"Матеріал","color":"Колір","hex":"HEX кольору","availability":"Доступність","available":"Доступний","unavailable":"Недоступний","enable":"Зробити доступним","disable":"Зробити недоступним","search":"Пошук","all":"Усі","filter":"Фільтрувати","empty":"Філаменти не знайдено.","requirements":"Філаменти для варіантів","help":"Кожна група має містити хоча б один доступний філамент. Філаменти в межах однієї групи взаємозамінні.","blocked":"Немає доступного філаменту в цій групі","ready":"У групі є доступний філамент","manual":"Варіант вимкнено вручну","productDisabled":"Товар приховано або вимкнено для замовлення","addGroup":"Додати групу","removeGroup":"Прибрати групу","alternative":"Альтернативні філаменти","addAlternative":"Додати альтернативу","removeAlternative":"Прибрати альтернативу","choose":"Оберіть філамент","copy":"Скопіювати вимоги з варіанта","none":"Вимоги до філаментів не задано"},
     // Optional editor values are text; the UI never interprets them as markup.
     materials: {"heading":"Матеріали:","adminTitle":"Матеріали та роздільник","ua":"Матеріали (UA)","en":"Матеріали (EN)","motif":"Символ або візерунок роздільника","help":"Необов’язково. Зміни застосовуються після збереження товару. Порожній EN використовує український текст.","preview":"Попередній перегляд роздільника","invalid":"Використайте короткий візерунок (до 8 символів), без перенесення рядка."},
@@ -47,7 +50,6 @@ export const translations = {
       home: "3D Kid — на головну",
       categories: "Категорії товарів",
       account: "Особистий кабінет",
-      accountUnavailable: "Особистий кабінет наразі недоступний",
       openCart: "Відкрити кошик",
       closeMenu: "Закрити меню",
       skip: "Перейти до вмісту",
@@ -456,6 +458,8 @@ export const translations = {
   },
 
   en: {
+    account: customerCopy.en,
+    filamentSummary: { groups: "Groups", alternatives: "Filament alternatives", none: "Filaments not configured", ready: "Materials available", blocked: "Materials unavailable", blocking: "Blocking groups", up: "Move up", down: "Move down" },
     filaments: {"title":"Filaments","create":"Add filament","edit":"Edit filament","manufacturer":"Manufacturer","series":"Series","material":"Material","color":"Color","hex":"Color HEX","availability":"Availability","available":"Available","unavailable":"Unavailable","enable":"Make available","disable":"Make unavailable","search":"Search","all":"All","filter":"Filter","empty":"No filaments found.","requirements":"Variant filament requirements","help":"Every group needs at least one available filament. Filaments within a group are alternatives.","blocked":"No available filament in this group","ready":"An alternative is available","manual":"Variant disabled manually","productDisabled":"Product is hidden or unavailable to order","addGroup":"Add group","removeGroup":"Remove group","alternative":"Alternative filaments","addAlternative":"Add alternative","removeAlternative":"Remove alternative","choose":"Choose a filament","copy":"Copy requirements from a variant","none":"No filament requirements"},
     materials: {"heading":"Materials:","adminTitle":"Materials and divider","ua":"Materials (UA)","en":"Materials (EN)","motif":"Divider symbol or motif","help":"Optional. Changes apply after saving the product. Empty English content falls back to Ukrainian.","preview":"Live divider preview","invalid":"Use a short motif (up to 8 symbols), without line breaks."},
     adminSafety: {"categoryMissing":"Category “{name}” was not found. Refresh the list.","categoryFailed":"Could not delete category “{name}”. Try again.","categoryReference":"Category “{name}” has protected dependencies. Related data was preserved.","cancel":"Cancel","delete":"Delete","product":"Are you sure you want to delete product “{name}”?","category":"Are you sure you want to delete category “{name}”?","archive":"Hide product “{name}”? Data and history will be preserved.","savedRemoval":"Remove “{name}” when saved? This change applies only after the product is successfully saved.","retire":"Retire “{name}” when saved? Its identity and history will be preserved.","mode":"Changing configuration will retire incompatible saved variants when saved. Continue?","apply":"Confirm","photo":"Photo","allSizes":"All saved sizes"},
@@ -497,7 +501,6 @@ export const translations = {
       home: "3D Kid — home",
       categories: "Product categories",
       account: "Account",
-      accountUnavailable: "Account is currently unavailable",
       openCart: "Open cart",
       closeMenu: "Close menu",
       skip: "Skip to content",
@@ -886,5 +889,4 @@ export const translations = {
     currency: "UAH",
   },
 } as const;
-
 export type Translations = typeof translations.ua;

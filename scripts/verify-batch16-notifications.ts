@@ -237,6 +237,7 @@ async function verify() {
   let shipmentCreates = 0; let shipmentNotifications = 0; let admin = false;
   const ttnRoute = sourceModule<{ POST(req: Request, context: { params: Promise<{ id: string }> }): Promise<Response> }>("src/app/api/admin/orders/[id]/create-ttn/route.ts", {
     "next/server": { NextResponse }, "@/lib/auth": { auth: async () => ({ user: { role: admin ? "ADMIN" : "MANAGER" } }) },
+    "@/lib/server-env": { readServerEnv: () => "http://localhost" },
     "@/lib/notifications/orders": { emitOrderEvents: async (before: Order, after: Order) => {
       assert.deepEqual(events.notificationEvents(before, after), ["DELIVERY_TTN_CREATED"]); shipmentNotifications++;
     } },
@@ -250,7 +251,7 @@ async function verify() {
       },
     } } },
   });
-  const createShipment = () => ttnRoute.POST(new Request("http://localhost/ttn", { method: "POST" }), { params: Promise.resolve({ id: base.id }) });
+  const createShipment = () => ttnRoute.POST(new Request("http://localhost/ttn", { method: "POST", headers: { origin: "http://localhost", host: "localhost" } }), { params: Promise.resolve({ id: base.id }) });
   assert.equal((await createShipment()).status, 401); assert.equal(shipmentCreates, 0);
   admin = true;
   assert.equal((await createShipment()).status, 200); assert.equal(shipmentOrder.status, "PENDING");

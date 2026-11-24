@@ -69,7 +69,7 @@ async function assertValidParent(
 
 export async function createCategory(formData: FormData): Promise<AdminFormResult> {
   await requireAdmin();
-  const result = categorySchema.safeParse(Object.fromEntries(formData.entries()));
+  const result = categorySchema.safeParse(Object.fromEntries(formData.entries()), { reportInput: true });
   if (!result.success) return validationResult(result.error);
   const parsed = result.data;
   const parentId = parsed.parentId || null;
@@ -97,7 +97,7 @@ export async function createCategory(formData: FormData): Promise<AdminFormResul
 
 export async function updateCategory(id: string, formData: FormData): Promise<AdminFormResult> {
   await requireAdmin();
-  const result = categorySchema.safeParse(Object.fromEntries(formData.entries()));
+  const result = categorySchema.safeParse(Object.fromEntries(formData.entries()), { reportInput: true });
   if (!result.success) return validationResult(result.error);
   const parsed = result.data;
   const parentId = parsed.parentId || null;
@@ -170,7 +170,7 @@ export async function updateSiteContent(formData: FormData): Promise<AdminFormRe
 
   const raw = Object.fromEntries(formData.entries());
   const result = storefrontContentSchema.safeParse(
-    Object.fromEntries(Object.entries(raw).filter(([key]) => STOREFRONT_CONTENT_KEYS.includes(key)))
+    Object.fromEntries(Object.entries(raw).filter(([key]) => STOREFRONT_CONTENT_KEYS.includes(key))), { reportInput: true }
   );
   if (!result.success) return validationResult(result.error);
   const entries: Record<string, string> = result.data;

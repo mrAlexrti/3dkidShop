@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/actions/require-admin";
 import { updateSiteContent } from "@/lib/actions/categories";
 import { AdminForm, AdminFieldError, AdminSaveButton } from "@/components/admin/admin-form";
 import { AboutContentFields } from "@/components/admin/about-content-fields";
@@ -16,6 +17,7 @@ import { getNotificationSettings } from "@/lib/notifications/settings";
 import { CONFIGURABLE_EVENTS } from "@/lib/notifications/events";
 
 export default async function AdminContentPage() {
+  await requireAdmin();
   const t = await getT();
   const tc = t.admin.content;
   const notificationSettings = await getNotificationSettings();

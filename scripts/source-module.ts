@@ -7,7 +7,9 @@ import { createJSONStorage } from "zustand/middleware";
 import * as configuration from "../src/lib/product-configuration";
 import * as configurationAdmin from "../src/lib/product-configuration-admin";
 import * as cartPersistence from "../src/lib/cart-persistence";
-import { availabilityVariantInclude, publicProductInclude } from "../src/lib/product-query";
+import * as productQuery from "../src/lib/product-query";
+import { publicProductInclude } from "../src/lib/product-query";
+import * as gallery from "../src/lib/gallery";
 import * as variantHistory from "../src/lib/admin-variant-history";
 import * as money from "../src/lib/payments/money";
 import * as rollout from "../src/lib/variant-rollout";
@@ -27,7 +29,12 @@ export function sourceModule<T>(file: string, bindings: Record<string, unknown>)
   // Explicit pure dependencies for pre-1.8 legacy fixtures. Native integration
   // tests provide real guards/queries explicitly; these defaults are NOT PG proof.
   const pure: Record<string, unknown> = { "@/lib/product-configuration": configuration,
-    "@/lib/product-query": { availabilityVariantInclude },
+    "@/lib/product-query": productQuery,
+    "@/lib/gallery": gallery,
+    "@/lib/customer/session": { customerSession: async () => null },
+    "@/lib/actions/require-admin": { requireAdmin: async () => {} },
+    "./favorite-button": { FavoriteButton: () => null },
+    "@/components/product/favorite-button": { FavoriteButton: () => null },
     "@/lib/product-materials": materials, "./confirm-button": confirmations,
     "@/components/product/product-materials": { ProductMaterials },
     "./materials-fields": { MaterialsFields: () => null },

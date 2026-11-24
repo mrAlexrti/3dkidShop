@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/actions/require-admin";
 import { operationalOrderWhere } from "@/lib/payments/acceptance";
 import { OrderStatusSummary } from "@/components/admin/order-status-summary";
 import { formatPrice } from "@/lib/utils";
@@ -10,6 +11,7 @@ import { formatOrderReference } from "@/lib/order-reference";
 import { formatManagerDateTime } from "@/lib/date-time";
 
 export default async function AdminDashboard() {
+  await requireAdmin();
   const t = await getT();
   const locale = await getLocale();
   const [productsCount, categoriesCount, ordersCount, orders] = await Promise.all([

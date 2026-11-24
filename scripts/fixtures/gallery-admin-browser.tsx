@@ -22,11 +22,18 @@ const container = (id: string) => document.getElementById(id)!;
 const form = (id = "admin-probe") => container(id).querySelector<HTMLFormElement>("form")!;
 const field = (name: string, id = "admin-probe") => form(id).elements.namedItem(name) as HTMLInputElement;
 const snapshot = (id = "admin-probe") => JSON.stringify([...new FormData(form(id)).entries()]);
+const saveReady = (id = "admin-probe") => !form(id).querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled;
 function input(name: string, value: string, id = "admin-probe") {
   const control = field(name, id); const prototype = control.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(control, value); control.dispatchEvent(new Event("input", { bubbles: true })); control.dispatchEvent(new Event("change", { bubbles: true }));
 }
-async function submit(id = "admin-probe") { form(id).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await settle(); }
+async function submit(id = "admin-probe") {
+  const wasReady = saveReady(id);
+  const saves = fixture.saves;
+  form(id).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  await settle();
+  if (wasReady && fixture.saves > saves && fixture.mode !== "deferred") await until(() => saveReady(id));
+}
 function file(): File { return new File([Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, ...Array(24).fill(0)])], "photo.png", { type: "image/png" }); }
 async function choose(picker: HTMLInputElement, files: File[]) { const transfer = new DataTransfer(); files.forEach((item) => transfer.items.add(item)); picker.files = transfer.files; picker.dispatchEvent(new Event("change", { bubbles: true })); await settle(); }
 async function save(data?: FormData): Promise<AdminFormResult> {
@@ -79,7 +86,8 @@ async function run(locale: "ua" | "en") {
   check(fixture.pushes.length === pushesBefore && card.querySelector("img")!.dataset.mediaSource === photos[1].url, "Carousel arrow navigated or failed to change photo");
   check(![...card.querySelectorAll("img")].some((image) => image.dataset.mediaSource?.endsWith("hover.gif")), "GIF obscured a selected photograph");
   link.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", clientX: 200, clientY: 80 }));
-  link.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch", clientX: 90, clientY: 85 })); link.click(); await settle();
+  link.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch", clientX: 90, clientY: 85 }));
+  link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 })); await settle();
   check(fixture.pushes.length === pushesBefore && card.querySelector("img")!.dataset.mediaSource === photos[2].url, "Swipe caused navigation or did not change photo");
   reducedMotion(); await settle(); check(![...card.querySelectorAll("img")].some((image) => image.dataset.mediaSource?.endsWith("hover.gif")), "Reduced motion lost");
 
@@ -110,9 +118,18 @@ async function run(locale: "ua" | "en") {
   check(field("description").value.includes("Другий"), "Client validation reset bilingual description"); input("nameEn", "Dragon edited"); await settle();
   const primary = form().querySelector<HTMLButtonElement>(`button[aria-label="${t.admin.gallery.makePrimary}: 2"]`)!; primary.click(); await settle();
   check(JSON.parse(field("images").value)[0].id === "second", "Primary photo ID/order lost");
-  const beforeFailure = snapshot(); await submit(); check(Number(fixture.saves) === 1 && snapshot() === beforeFailure && document.activeElement === field("nameEn"), "Server validation lost values/order/focus");
-  fixture.mode = "duplicate"; await submit(); check(snapshot() === beforeFailure && document.activeElement === field("slug"), "Duplicate slug reset form or lacked field error");
-  fixture.mode = "network"; await submit(); check(snapshot() === beforeFailure && form().textContent?.includes(t.admin.validation.saveFailed), "Network failure reset form");
+  const beforeFailure = snapshot();
+  await submit();
+  await until(() => Number(fixture.saves) === 1 && saveReady() && document.activeElement === field("nameEn"));
+  check(snapshot() === beforeFailure, "Server validation lost values or photo order");
+  fixture.mode = "duplicate";
+  await submit();
+  await until(() => saveReady() && document.activeElement === field("slug"));
+  check(snapshot() === beforeFailure, "Duplicate slug reset form");
+  fixture.mode = "network";
+  await submit();
+  await until(() => saveReady() && Boolean(form().textContent?.includes(t.admin.validation.saveFailed)));
+  check(snapshot() === beforeFailure, "Network failure reset form");
 
   const images = form().querySelector<HTMLElement>('[data-field-name="images"]')!;
   await choose(images.querySelector<HTMLInputElement>('input[multiple]')!, [file(), file()]);
@@ -123,7 +140,7 @@ async function run(locale: "ua" | "en") {
   check(JSON.parse(field("images").value).length === 3, "Partial upload failure discarded a completed URL");
   const completedUrl = JSON.parse(field("images").value)[2].url;
   [...images.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === t.admin.gallery.upload)!.click(); await until(() => fixture.uploads === 3);
-  fixture.finish(true); await until(() => JSON.parse(field("images").value).length === 4);
+  fixture.finish(true); await until(() => JSON.parse(field("images").value).length === 4 && saveReady());
   check(JSON.parse(field("images").value)[2].url === completedUrl, "Upload retry duplicated or replaced a completed URL");
   check(fixture.saves === savesBeforeUpload && JSON.parse(field("images").value).slice(2).every((image: { url: string }) => image.url.includes("blob.vercel-storage.com")), "Bulk upload failed or saved the product automatically");
   fixture.mode = "validation"; const uploadedBefore = snapshot(); await submit(); check(snapshot() === uploadedBefore, "Validation lost uploaded URLs");
@@ -135,7 +152,7 @@ async function run(locale: "ua" | "en") {
     const wrapper = field(name, id).parentElement!; const before = fixture.uploads;
     wrapper.querySelectorAll<HTMLButtonElement>("button")[1].click(); await until(() => fixture.uploads === before + 1);
     check(current.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled, "Category/hero Save not blocked during upload");
-    fixture.finish(true); await until(() => field(name, id).value.includes("blob.vercel-storage.com"));
+    fixture.finish(true); await until(() => field(name, id).value.includes("blob.vercel-storage.com") && saveReady(id));
     const captured = snapshot(id); await submit(id); check(snapshot(id) === captured, "Category/hero validation lost uploaded URL or fields");
   }
   check(form("hero-probe").querySelectorAll('[aria-controls$="-file"]').length === 3, "Social URL got upload controls or hero controls missing");
@@ -161,6 +178,7 @@ async function run(locale: "ua" | "en") {
   await submit(aboutId); const savingCalls = fixture.saves; await submit(aboutId);
   check(fixture.saves === savingCalls && form(aboutId).querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled, "About Save allowed double submission");
   fixture.completeSave(); await until(() => fixture.refreshes > refreshBefore);
+  await until(() => saveReady(aboutId));
   check(snapshot(aboutId) === aboutDraft && fixture.savedContent.some(([key, value]) => key === "hero_image_1" && value === heroDraft), "Successful About retry lost form/hero values");
   fixture.mode = "success"; await submit(); check(fixture.pushes.includes("/admin/products"), "Successful retry did not preserve navigation");
   async function confirmDialog(label: string) { await until(() => Boolean(document.querySelector('dialog[open]'))); [...document.querySelectorAll<HTMLButtonElement>('dialog[open] button')].find((button) => button.textContent === label)!.click(); await until(() => !document.querySelector('dialog[open]')); }
