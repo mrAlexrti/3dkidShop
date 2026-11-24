@@ -13,13 +13,15 @@ export function formatPrice(
   const amount = typeof value === "string" ? Number.parseFloat(value) : value;
   const safeAmount = Number.isFinite(amount) ? amount : 0;
   const hasFraction = !Number.isInteger(safeAmount);
-
-  const language = locale === "ua" ? "uk-UA" : locale === "en" ? "en-GB" : currency === "UAH" ? "uk-UA" : "en-US";
-  return new Intl.NumberFormat(language, {
-    style: "currency",
-    currency,
-    currencyDisplay: locale ? "narrowSymbol" : "symbol",
+  // Server and browser ICU versions can disagree on UAH symbols and spacing.
+  const digits = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: hasFraction ? 2 : 0,
     maximumFractionDigits: 2,
-  }).format(safeAmount);
+  }).format(Math.abs(safeAmount));
+  const sign = safeAmount < 0 || Object.is(safeAmount, -0) ? "-" : "";
+  const symbol = currency === "UAH" ? "₴" : "$";
+  const ukrainian = locale === "ua" || (locale === undefined && currency === "UAH");
+  return ukrainian
+    ? `${sign}${digits.replaceAll(",", "\u00a0").replace(".", ",")}\u00a0${symbol}`
+    : `${sign}${symbol}${digits}`;
 }

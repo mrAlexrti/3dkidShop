@@ -16,7 +16,8 @@ import { useCustomerPresence } from "@/components/product/favorite-button";
 export function Header({ categories }: { categories: CategoryTreeNode[] }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const count = useCartStore((s) => s.count());
+  // Derive the badge from React's store snapshot during hydration.
+  const count = useCartStore(({ items }) => items.reduce((total, item) => total + item.quantity, 0));
   const openCart = useCartStore((s) => s.openCart);
   const { locale, t } = useLangStore();
   const isHome = pathname === "/";

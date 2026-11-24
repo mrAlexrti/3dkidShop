@@ -60,6 +60,8 @@ try {
   let googleRequests = 0;
   let interceptionFailure;
   let browserException;
+  const hydrationErrors = [];
+  let browserContext = {};
   function finishRequest(method, parameters) {
     void send(method, parameters).catch((error) => {
       // Navigation can cancel a subresource after Edge reports it as paused.
@@ -71,6 +73,13 @@ try {
     if (message.method === "Runtime.exceptionThrown") {
       const details = message.params.exceptionDetails;
       browserException = (details.exception?.description ?? details.text).split("\n")[0];
+      if (/#418\b|hydrat|did not match/i.test(browserException)) {
+        hydrationErrors.push({ ...browserContext, message: browserException });
+      }
+    }
+    if (message.method === "Runtime.consoleAPICalled" && ["warning", "error"].includes(message.params.type)) {
+      const diagnostic = message.params.args.map((arg) => arg.value ?? arg.description).join(" ");
+      if (/#418\b|hydrat|did not match/i.test(diagnostic)) hydrationErrors.push({ ...browserContext, message: diagnostic });
     }
     if (message.method === "Fetch.requestPaused") {
       const { requestId, request: { url } } = message.params;
@@ -94,6 +103,19 @@ try {
   await send("Network.enable");
   await send("Runtime.enable");
   await send("Fetch.enable", { patterns: [{ urlPattern: "http://*" }, { urlPattern: "https://*" }] });
+  // Reproduce the UAH symbol from a browser with different ICU data than the server.
+  await send("Page.addScriptToEvaluateOnNewDocument", { source: `
+    Intl.NumberFormat = new Proxy(Intl.NumberFormat, {
+      construct(target, args) {
+        const formatter = Reflect.construct(target, args);
+        if (args[1]?.style === "currency" && args[1].currency === "UAH") {
+          const format = formatter.format;
+          Object.defineProperty(formatter, "format", { value: (value) => format(value).replaceAll("₴", "грн") });
+        }
+        return formatter;
+      },
+    });
+  ` });
   async function evaluate(expression) {
     const result = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
     if (result.exceptionDetails) throw new Error("Browser script failed: " + (result.result.description || expression));
@@ -110,6 +132,7 @@ try {
   async function go(url, expected = new URL(url, origin).pathname) {
     const target = new URL(url, origin);
     assert.equal(target.origin, origin);
+    browserContext = { ...browserContext, route: expected, navigation: "direct" };
     await send("Page.navigate", { url: target.href });
     await path(expected);
   }
@@ -173,19 +196,26 @@ try {
     await fill("main input[name=email]", email);
     await fill("main input[name=password]", password);
     await submit();
-    if (expected === "/account") await path(expected);
-    else await textIncludes(expected, main);
+    if (expected === "/account") {
+      await path(expected);
+      browserContext = { ...browserContext, authentication: "native customer" };
+    } else {
+      await textIncludes(expected, main);
+    }
   }
   async function signOut() {
     await go("/account");
     await submit("main nav form");
     await path("/account/sign-in");
+    browserContext = { ...browserContext, authentication: "anonymous" };
   }
   async function addCart() {
     await go("/catalog");
     await evaluate(`[...document.querySelectorAll('article')].find(el => el.querySelector('a[href="/product/qa-cat"]')).querySelector('.sf-product-add').click()`);
     await go("/checkout");
     await until(() => evaluate("!!document.querySelector('#customerEmail')"), "checkout after guest add");
+    await textIncludes("1", "header .sf-cart-count");
+    assert.deepEqual(hydrationErrors, [], "direct checkout load with a persisted cart hydrates without a header mismatch");
   }
 
   async function deniedOrder(id, cookie) {
@@ -205,6 +235,7 @@ try {
   }
 
   async function viewport(width, locale) {
+    browserContext = { ...browserContext, width, locale };
     await send("Emulation.setDeviceMetricsOverride", { width, height: 880, deviceScaleFactor: 1, mobile: width <= 680 });
     await evaluate(`document.cookie = 'locale=${locale}; path=/'`);
   }
@@ -335,6 +366,35 @@ try {
     passes("UX-06 footer uses synthetic QA/Sort categories and shows only configured social links in both locales");
   }
 
+  async function verifyCurrencyHydration() {
+    for (const [width, locale, browserLocale, timezoneId] of [
+      [390, "ua", "en-US", "America/Los_Angeles"], [1280, "en", "uk-UA", "Europe/Kyiv"],
+    ]) {
+      browserContext = { authentication: "anonymous", browserLocale, timezoneId };
+      await send("Emulation.setLocaleOverride", { locale: browserLocale });
+      await send("Emulation.setTimezoneOverride", { timezoneId });
+      await viewport(width, locale);
+      const price = '.sf-product-card:has(a[href="/product/qa-cat"]) .sf-product-price span';
+      for (const [route, selector] of [["/", price], ["/product/qa-cat", '.sf-product-options p[aria-live="polite"]'], ["/catalog", price]]) {
+        await go(route);
+        await textIncludes(locale === "ua" ? "Увійти" : "Sign in", 'footer a[href="/account"]');
+        assert.deepEqual(hydrationErrors, []);
+        await textIncludes("100\u00a0₴", selector);
+      }
+      browserContext = { ...browserContext, route: "/product/qa-cat", navigation: "client from /catalog" };
+      await evaluate(`window.__batch19TestDocument = true; document.querySelector('.sf-product-card a[href="/product/qa-cat"]').click()`);
+      await path("/product/qa-cat");
+      assert.equal(await evaluate("window.__batch19TestDocument"), true);
+      await textIncludes("100\u00a0₴", '.sf-product-options p[aria-live="polite"]');
+      assert.deepEqual(hydrationErrors, []);
+    }
+    await send("Emulation.setLocaleOverride", { locale: "" });
+    await send("Emulation.setTimezoneOverride", { timezoneId: "" });
+    browserContext = { authentication: "anonymous" };
+    await viewport(1280, "en");
+    passes("deterministic storefront prices with differing browser currency data, locales and timezones across SSR and client navigation");
+  }
+
   async function verifyPublicAccountPages() {
     for (const width of [320, 390, 768, 1280]) for (const locale of ["ua", "en"]) {
       await viewport(width, locale);
@@ -383,6 +443,7 @@ try {
   assert.equal((await fetch(origin + "/api/customer-auth/start/google", {
     method: "POST", headers: { origin: "https://cross-origin.example.test" }, body: new URLSearchParams({ mode: "signin" }),
   })).status, 403);
+  await verifyCurrencyHydration();
   await verifyPublicAccountPages();
   await verifyFooterContent();
 
@@ -468,6 +529,8 @@ try {
   await textIncludes("Changes saved.", main);
   await go("/checkout");
   await until(() => evaluate("document.querySelector('#customerEmail')?.value === 'qa.customer@gmail.com'"), "checkout prefill and cart preservation");
+  await textIncludes("1", "header .sf-cart-count");
+  assert.deepEqual(hydrationErrors, [], "direct checkout load after sign-in preserves cart without a header mismatch");
   assert.equal(await evaluate("document.querySelector('#customerName').value"), "Profile");
   await checkout({ "#customerEmail": "", "#customerName": "Gift", "#customerSurname": "Recipient", "#customerPhone": "0502223344" });
   const gift = await db.order.findFirstOrThrow({ where: { customerName: "Gift Recipient" }, include: { items: true } });
@@ -549,6 +612,9 @@ try {
       novaPoshtaTtn: "20400000000000", novaPoshtaStatusCode: status === "COMPLETED" ? "9" : null, subtotal: 140, total: 140 } });
   }
   const pages = [["overview", "/account"], ["profile", "/account/profile"], ["favorites", "/account/favorites"], ["orders", "/account/orders"]];
+  browserContext = { authentication: "native customer", browserLocale: "en-US", timezoneId: "America/Los_Angeles" };
+  await send("Emulation.setLocaleOverride", { locale: "en-US" });
+  await send("Emulation.setTimezoneOverride", { timezoneId: "America/Los_Angeles" });
   for (const width of [320, 390, 768, 1280]) for (const locale of ["ua", "en"]) {
     await viewport(width, locale);
     for (const [name, route] of pages) {
@@ -585,6 +651,9 @@ try {
       }
     }
   }
+  assert.deepEqual(hydrationErrors, []);
+  await send("Emulation.setLocaleOverride", { locale: "" });
+  await send("Emulation.setTimezoneOverride", { timezoneId: "" });
 
   const longEmail = `${"wrapping-test".repeat(4)}@${"fixture".repeat(6)}.example.test`;
   const longName = "CustomerDisplayName".repeat(5);
@@ -704,6 +773,7 @@ try {
   await signIn("changed@example.test", newPassword);
   assert.equal(await db.account.count({ where: { user: { email: "changed@example.test" }, providerAccountId: "new" } }), 1);
   await signOut();
+  assert.deepEqual(hydrationErrors, []);
   passes("Google account adds native credentials, email change requires both addresses and keeps internal identity");
 
   const rateAddress = "qa.rate@example.test";
@@ -775,6 +845,7 @@ try {
   assert.equal(await db.account.count({ where: { provider: "google" } }), 2);
   assert.equal(await db.account.count({ where: { provider: "legacy", userId: "qa_existing_admin" } }), 1);
   assert.equal(interceptionFailure, undefined);
+  assert.deepEqual(hydrationErrors, []);
   passes("real admin credentials, mobile and desktop UA/EN storefront, clickable filament summaries, stable standard/custom option order");
 } finally {
   driver?.close();

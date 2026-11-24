@@ -51,6 +51,14 @@ let passed = 0;
 function pass(name: string) { passed++; console.log(`PASS ${name}`); }
 
 async function verify() {
+  assert.equal(utils.formatPrice(270), "270\u00a0₴");
+  assert.equal(utils.formatPrice("1234.50", "UAH", "ua"), "1\u00a0234,50\u00a0₴");
+  assert.equal(utils.formatPrice("1234.50", "UAH", "en"), "₴1,234.50");
+  assert.equal(utils.formatPrice(-1.005, "UAH", "en"), "-₴1.01");
+  assert.equal(utils.formatPrice(1234.5, "USD"), "$1,234.50");
+  assert.equal(utils.formatPrice(Number.NaN), "0\u00a0₴");
+  pass("stable UAH and USD display patterns preserve locale, grouping, sign and rounding");
+
   for (const version of [0, 1]) {
     const persisted = { ...item, id: "p1-small", quantity: 3, image: "https://oldstore.public.blob.vercel-storage.com/retired.webp", variant: { id: "small", labelUa: "S", labelEn: "Small" } };
     storageValues.set("stikr-cart-v2", JSON.stringify({ state: { items: [persisted], verification: "verified", verifiedRevision: 42, checkoutRevision: 42 }, version }));
