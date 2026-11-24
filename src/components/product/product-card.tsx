@@ -39,15 +39,17 @@ type Props = {
   hasOptions?: boolean;
   hasColorOptions?: boolean;
   isOrderable: boolean;
+  localizePrice?: boolean;
 };
 
-export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, images, hoverGifUrl, isNew, hasOptions = false, hasColorOptions = false, isOrderable }: Props) {
+export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, images, hoverGifUrl, isNew, hasOptions = false, hasColorOptions = false, isOrderable, localizePrice = false }: Props) {
   const router = useRouter();
   const addItem  = useCartStore((s) => s.addItem);
   const items = useCartStore((s) => s.items);
   const { locale, t } = useLangStore();
   const localizedName = getProductName({ name, nameEn }, locale);
   const currency = "UAH";
+  const priceLocale = localizePrice ? locale : undefined;
   const candidate = { id, productId: id, name: localizedName, slug, price: price ?? 0, image, quantity: 1 };
   const atLimit = !hasOptions && cartAfterAddition(items, candidate) === null;
   const animationAllowed = useSyncExternalStore(subscribeAnimationPreference, canAnimate, staticOnServer);
@@ -140,8 +142,8 @@ export function ProductCard({ id, slug, name, nameEn, price, oldPrice, image, im
         {isOrderable && atLimit && <p className="mt-2 text-xs text-ink/60">{t.cart.reconciliation.limit}</p>}
         <div className="sf-product-bottom">
           <div className="sf-product-price">
-            <span>{hasOptions && price !== null && `${t.product.from} `}{price === null ? "—" : formatPrice(price, currency)}</span>
-            {oldPrice && <del>{formatPrice(oldPrice, currency)}</del>}
+            <span>{hasOptions && price !== null && `${t.product.from} `}{price === null ? "—" : formatPrice(price, currency, priceLocale)}</span>
+            {oldPrice && <del>{formatPrice(oldPrice, currency, priceLocale)}</del>}
           </div>
           <button type="button" className="sf-product-add disabled:opacity-50" disabled={!isOrderable || atLimit} onClick={handleQuickAdd} aria-label={`${!isOrderable ? t.product.unavailable : atLimit ? t.cart.reconciliation.limit : hasOptions ? (hasColorOptions ? t.variantConfig.choose : t.product.chooseSize) : t.product.addToCart}: ${localizedName}`} aria-disabled={!isOrderable || atLimit}>
             <ShoppingBag size={20} aria-hidden="true" />

@@ -2,6 +2,8 @@ export const customerCopy = {
   ua: {
     title: "Особистий кабінет", overview: "Огляд", profile: "Профіль", favorites: "Обране", orders: "Історія замовлень",
     signIn: "Увійти", signOut: "Вийти", google: "Увійти через Google", register: "Створити акаунт", reset: "Відновити пароль",
+    googleRegister: "Зареєструватися через Google", googleContinue: "Продовжити через Google",
+    showPassword: "Показати пароль", hidePassword: "Приховати пароль",
     linkGoogle: "Підключити Google", addPassword: "Додати пароль", changeEmail: "Змінити email", verifyEmail: "Підтвердити email",
     firstName: "Ім’я", lastName: "Прізвище", phone: "Телефон", email: "Email", password: "Пароль", newPassword: "Новий пароль",
     optionalEmail: "Email (необов’язково)", phoneHint: "Телефон використовується для контактів і не підтверджений.",
@@ -47,6 +49,8 @@ export const customerCopy = {
   en: {
     title: "My account", overview: "Overview", profile: "Profile", favorites: "Favorites", orders: "Order history",
     signIn: "Sign in", signOut: "Sign out", google: "Sign in with Google", register: "Create an account", reset: "Reset password",
+    googleRegister: "Sign up with Google", googleContinue: "Continue with Google",
+    showPassword: "Show password", hidePassword: "Hide password",
     linkGoogle: "Connect Google", addPassword: "Add a password", changeEmail: "Change email", verifyEmail: "Verify email",
     firstName: "First name", lastName: "Last name", phone: "Phone", email: "Email", password: "Password", newPassword: "New password",
     optionalEmail: "Email (optional)", phoneHint: "Your phone is used for contact and has not been verified.",

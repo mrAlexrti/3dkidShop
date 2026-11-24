@@ -123,7 +123,7 @@ try {
     })()`);
   }
   async function submit(selector = "main form") {
-    await until(() => evaluate(`!!document.querySelector(${JSON.stringify(selector)})?.querySelector('button:not(:disabled)')`), selector);
+    await until(() => evaluate(`document.querySelector(${JSON.stringify(selector)})?.querySelector('button[type=submit]')?.matches(':enabled')`), selector);
     await evaluate(`document.querySelector(${JSON.stringify(selector)}).requestSubmit()`);
   }
   async function textIncludes(value, selector = "body") {
@@ -155,11 +155,15 @@ try {
     await textIncludes("you’ll receive an email", main);
     return before;
   }
-  async function confirm(link, password, expected = "Changes saved.") {
+  async function confirm(link, password, expected = "Changes saved.", review) {
     await send("Page.navigate", { url: "about:blank" });
     await until(() => evaluate("location.href === 'about:blank'"), "fresh confirmation navigation");
     await go(link);
     await until(() => evaluate("document.querySelector('input[name=token]')?.value.length === 43 && !location.hash"), "token form");
+    if (review) {
+      await verifyPasswordToggle("en", "new-password");
+      await captureUX06(review);
+    }
     if (password) await fill("main input[name=password]", password);
     await submit();
     await textIncludes(expected, main);
@@ -245,27 +249,127 @@ try {
     writeFileSync(join(folder, `${name}.png`), Buffer.from(data, "base64"));
   }
 
+  const googleForm = 'main form[action="/api/customer-auth/start/google"]';
+  async function verifyGoogleButton(label, mode) {
+    const button = `${googleForm} button[type=submit]`;
+    await textIncludes(label, button);
+    const details = await until(() => evaluate(`(async () => {
+      const btn = document.querySelector(${JSON.stringify(button)});
+      const logo = btn?.querySelector('img');
+      if (!logo?.naturalWidth) return null;
+      await document.fonts.ready;
+      const text = btn.querySelector('span');
+      const { backgroundColor, borderColor } = getComputedStyle(btn);
+      const { fontFamily, fontWeight } = getComputedStyle(text);
+      return {
+        text: text.textContent.trim(),
+        logo: decodeURIComponent(logo.currentSrc).includes('/identity/google-g.png') && logo.alt === '',
+        mode: btn.form.elements.mode.value, backgroundColor, borderColor, fontWeight,
+        loadedFont: fontFamily.includes('Google Sans') && document.fonts.check('500 14px "Google Sans"', text.textContent),
+      };
+    })()`), "loaded Google light button");
+    assert.deepEqual(details, { text: label, logo: true, mode, backgroundColor: "rgb(255, 255, 255)",
+      borderColor: "rgb(116, 119, 117)", fontWeight: "500", loadedFont: true });
+  }
+
+  async function pressEnter() {
+    await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  }
+
+  async function verifyPasswordToggle(locale, autocomplete) {
+    const input = "main input[name=password]";
+    const show = locale === "ua" ? "Показати пароль" : "Show password";
+    const hide = locale === "ua" ? "Приховати пароль" : "Hide password";
+    const initial = await evaluate(`(() => {
+      const field = document.querySelector(${JSON.stringify(input)});
+      const button = field.parentElement.querySelector('button');
+      return { type: field.type, autocomplete: field.autocomplete, maxLength: field.maxLength, required: field.required, id: field.id,
+        control: button.getAttribute('aria-controls'), buttonType: button.type, label: button.getAttribute('aria-label'),
+        width: button.offsetWidth, height: button.offsetHeight };
+    })()`);
+    const { id, width, height, ...attributes } = initial;
+    assert.ok(id && width >= 44 && height >= 44, "labeled input and usable password touch target");
+    assert.deepEqual(attributes, { type: "password", autocomplete, maxLength: 72, required: true, control: id, buttonType: "button", label: show });
+    const location = await evaluate("location.href");
+    await fill(input, "LocalPassword!123");
+    await evaluate("document.querySelector('main .ac-password-toggle').focus()");
+    await pressEnter();
+    await until(() => evaluate(`document.querySelector(${JSON.stringify(input)}).type === 'text'`), "keyboard shows password");
+    assert.equal(await evaluate("document.activeElement?.getAttribute('aria-label')"), hide);
+    assert.equal(await evaluate("getComputedStyle(document.activeElement).outlineStyle"), "solid");
+    assert.equal(await evaluate(`document.querySelector(${JSON.stringify(input)}).value`), "LocalPassword!123");
+    await pressEnter();
+    await until(() => evaluate(`document.querySelector(${JSON.stringify(input)}).type === 'password'`), "keyboard hides password");
+    assert.equal(await evaluate("document.activeElement?.getAttribute('aria-label')"), show);
+    assert.equal(await evaluate(`document.querySelector(${JSON.stringify(input)}).value`), "LocalPassword!123");
+    await pressEnter();
+    await until(() => evaluate(`document.querySelector(${JSON.stringify(input)}).type === 'text'`), "show password before reset");
+    await evaluate(`document.querySelector(${JSON.stringify(input)}).form.reset()`);
+    await until(() => evaluate(`document.querySelector(${JSON.stringify(input)}).type === 'password'`), "form reset conceals password");
+    assert.equal(await evaluate(`document.querySelector(${JSON.stringify(input)}).value`), "");
+    assert.equal(await evaluate("location.href"), location, "visibility control stays on its form");
+    await evaluate("document.activeElement?.blur()");
+  }
+
+  async function verifyFooterContent() {
+    const category = (slug) => `footer a[href="/catalog?category=${slug}"]`;
+    const hasCommerceFixtures = await db.category.findUnique({ where: { slug: "native-sort-fixture" } });
+    await textIncludes(hasCommerceFixtures ? "QA" : "Test", category("qa"));
+    if (hasCommerceFixtures) await textIncludes("Sort", category("native-sort-fixture"));
+    assert.equal(await evaluate("document.querySelectorAll('footer .sf-social-icons a').length"), 0);
+    const socials = ["Instagram", "Telegram", "TikTok", "YouTube"].map((name) => ({
+      name, key: "social_" + name.toLowerCase(), value: `https://${name.toLowerCase()}.example.test/3dkid`,
+    }));
+    await db.siteContent.createMany({ data: socials.map(({ key, value }) => ({ key, value })) });
+    try {
+      for (const locale of ["ua", "en"]) {
+        await viewport(1280, locale);
+        await go("/account/sign-in");
+        assert.deepEqual(await evaluate("[...document.querySelectorAll('footer .sf-social-icons a')].map(a => [a.getAttribute('aria-label'), a.href, a.rel])"),
+          socials.map(({ name, value }) => [name, value, "noopener noreferrer"]));
+      }
+    } finally {
+      await db.siteContent.deleteMany({ where: { OR: socials.map(({ key, value }) => ({ key, value })) } });
+    }
+    passes("UX-06 footer uses synthetic QA/Sort categories and shows only configured social links in both locales");
+  }
+
   async function verifyPublicAccountPages() {
-    for (const width of [320, 768, 1280]) for (const locale of ["ua", "en"]) {
+    for (const width of [320, 390, 768, 1280]) for (const locale of ["ua", "en"]) {
       await viewport(width, locale);
-      for (const route of ["/account/sign-in", "/account/sign-in?mode=register", "/account/sign-in?mode=reset", "/account/confirm?mode=verify"]) {
+      for (const [name, route] of [
+        ["sign-in", "/account/sign-in"], ["register", "/account/sign-in?mode=register"],
+        ["forgot-password", "/account/sign-in?mode=reset"], ["verify", "/account/confirm?mode=verify"],
+      ]) {
         await go(route);
+        await until(() => evaluate(`location.search === ${JSON.stringify(new URL(route, origin).search)}`), name);
         await verifyAccountShell(width, locale, false);
-        if (width === 1280 && locale === "ua" && route === "/account/sign-in") await captureUX06("desktop-ua-sign-in");
+        if (name === "sign-in") {
+          await verifyGoogleButton(locale === "ua" ? "Увійти через Google" : "Sign in with Google", "signin");
+          if (width === 320) await verifyPasswordToggle(locale, "current-password");
+        } else if (name === "register") {
+          await verifyGoogleButton(locale === "ua" ? "Зареєструватися через Google" : "Sign up with Google", "signin");
+        } else {
+          assert.equal(await evaluate(`!!document.querySelector(${JSON.stringify(googleForm)})`), false);
+        }
+        if ((width === 1280 && locale === "ua") || (width === 390 && locale === "en")) {
+          if (name !== "verify") await captureUX06(`${width === 1280 ? "desktop" : "mobile"}-${locale}-${name}`);
+        }
       }
       await go("/");
-      assert.equal(await evaluate("!!document.querySelector('.sf-categories--home')"), true);
+      await until(() => evaluate("!!document.querySelector('.sf-categories--home')"), "homepage categories");
       await go("/catalog");
-      assert.equal(await evaluate("!!document.querySelector('.sf-primary-category-chips, .sf-mobile-category-filter')"), true);
+      await until(() => evaluate("!!document.querySelector('.sf-primary-category-chips, .sf-mobile-category-filter')"), "catalog category filters");
       await go("/product/qa-cat");
-      assert.equal(await evaluate("!!document.querySelector('header + .sf-categories')"), true);
+      await until(() => evaluate("!!document.querySelector('header + .sf-categories')"), "product page categories");
       if (width <= 680) {
         await evaluate("document.querySelector('#store-menu-toggle').click()");
         await until(() => evaluate("!!document.querySelector('#store-mobile-nav a[href*=category]')"), "storefront mobile category menu");
       }
     }
     await viewport(1280, "en");
-    passes("UX-06 route-aware header and public category navigation across UA/EN desktop, tablet and mobile");
+    passes("UX-06 light Google branding, password visibility and contextual navigation across UA/EN desktop, tablet and mobile");
   }
 
   const outside = await request("/account/orders/claim_order");
@@ -280,6 +384,7 @@ try {
     method: "POST", headers: { origin: "https://cross-origin.example.test" }, body: new URLSearchParams({ mode: "signin" }),
   })).status, 403);
   await verifyPublicAccountPages();
+  await verifyFooterContent();
 
   await go("/catalog");
   await evaluate("document.cookie = 'locale=en; path=/'");
@@ -308,7 +413,7 @@ try {
   await addCart();
   const index = await emailForm("register", credentials.email);
   const registration = await messageLink("register", index);
-  await confirm(registration, credentials.password);
+  await confirm(registration, credentials.password, "Changes saved.", "desktop-en-registration-confirmation");
   await confirm(registration, credentials.password, "Check your details.");
   const duplicateIndex = await emailForm("register", credentials.email);
   await signIn(credentials.email, credentials.password);
@@ -408,6 +513,13 @@ try {
   await textIncludes("Historic recipient", main);
   await textIncludes("Recorded address", main);
   await textIncludes("Cash on Delivery", main);
+  await textIncludes("₴37", ".ac-detail-total strong");
+  await captureUX06("desktop-en-order-details");
+  await viewport(390, "ua");
+  await go("/account/orders/claim_order");
+  await textIncludes("37\u00a0₴", ".ac-detail-total strong");
+  await captureUX06("mobile-ua-order-details");
+  await viewport(1280, "en");
   assert.equal(await db.order.count({ where: { customerId: user.id, id: "claim_order", total: 37 } }), 1);
   await go("/account/favorites");
   await textIncludes("haven’t saved any favorites", main);
@@ -417,7 +529,9 @@ try {
   await viewport(390, "ua");
   await go("/account");
   await textIncludes("3 замовлення", ".ac-shortcuts");
-  await db.product.update({ where: { id: savedId }, data: { name: "Кишеньковий кролик", nameEn: "Pocket bunny" } });
+  await db.product.update({ where: { id: savedId }, data: {
+    name: "Кишеньковий кролик", nameEn: "Pocket bunny", price: 429.50, oldPrice: 499.50,
+  } });
   await db.productImage.updateMany({ where: { productId: savedId }, data: { url: "/hero/bunny-v1.webp" } });
   for (const [slug, name, nameEn, image, price] of [
     ["qa-saved-dragon", "Міні-дракон", "Pocket dragon", "/hero/dragon-v1.webp", 245],
@@ -448,10 +562,23 @@ try {
         await textIncludes(locale === "ua" ? "5 замовлень" : "5 orders", ".ac-shortcuts");
         await textIncludes(locale === "ua" ? "3 збережені товари" : "3 saved products", ".ac-shortcuts");
       }
-      if (name === "favorites") assert.equal(await evaluate("document.querySelectorAll('.ac-favorites .sf-product-card').length"), 3);
+      if (name === "profile") {
+        await verifyGoogleButton(locale === "ua" ? "Продовжити через Google" : "Continue with Google", "link");
+      }
+      if (name === "favorites") {
+        assert.equal(await evaluate("document.querySelectorAll('.ac-favorites .sf-product-card').length"), 3);
+        const prices = '.sf-product-card:has(a[href="/product/qa-cat"]) .sf-product-price';
+        await textIncludes(locale === "ua" ? "429,50\u00a0₴" : "₴429.50", `${prices} span`);
+        await textIncludes(locale === "ua" ? "499,50\u00a0₴" : "₴499.50", `${prices} del`);
+      }
       if (name === "orders") {
         await textIncludes("20400000000000", ".ac-order-list");
         assert.equal(await evaluate("document.querySelectorAll('.ac-order-link').length"), 5);
+      }
+      if (name === "overview" || name === "orders") {
+        const totals = await evaluate("[...document.querySelectorAll('.ac-order-result > strong')].map(el => el.innerText)");
+        assert.ok(totals.includes(locale === "ua" ? "140\u00a0₴" : "₴140"));
+        assert.ok(totals.every((total) => locale === "ua" ? total.endsWith("\u00a0₴") : total.startsWith("₴")));
       }
       if ((width === 1280 && locale === "ua") || (width === 390 && locale === "en")) {
         await captureUX06(`${width === 1280 ? "desktop" : "mobile"}-${locale}-${name}`);
@@ -483,8 +610,7 @@ try {
   await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
   assert.equal(await evaluate("document.activeElement?.getAttribute('href')"), "/account/profile");
   assert.equal(await evaluate("getComputedStyle(document.activeElement).outlineStyle"), "solid");
-  await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
-  await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  await pressEnter();
   await path("/account/profile");
   await go("/account");
   const recentRoute = await evaluate("document.querySelector('.ac-recent .ac-order-link').getAttribute('href')");
@@ -505,7 +631,9 @@ try {
   const freshRecovery = await messageLink("reset", resetAgain);
   await signIn(credentials.email, credentials.password);
   const beforeReset = await accountCookie();
-  await confirm(freshRecovery, newPassword);
+  await viewport(390, "en");
+  await confirm(freshRecovery, newPassword, "Changes saved.", "mobile-en-password-reset");
+  await viewport(1280, "en");
   assert.equal((await (await request(favoritesApi, beforeReset)).json()).ids, null);
   await confirm(freshRecovery, newPassword, "Check your details.");
   await signIn(credentials.email, credentials.password, "Sign-in failed.");
@@ -515,21 +643,22 @@ try {
   // Protected linking uses the existing password, OAuth state and the same signed-in customer.
   await go("/account/profile");
   selectedGoogle = "same";
+  await verifyPasswordToggle("en", "current-password");
   await fill("main [name=password]", newPassword);
   await submit("main form:has(input[name=password])");
   await path("/account");
   assert.equal(providerFailure, undefined);
   assert.equal((await db.account.findFirstOrThrow({ where: { providerAccountId: "same" } })).userId, user.id);
   await signOut();
-  async function googleSignIn(identity, expected, forgedState = false) {
+  async function googleSignIn(identity, expected, { forgedState = false, register = false } = {}) {
     selectedGoogle = identity;
     badState = forgedState;
-    await go("/account/sign-in");
-    await submit('main form[action="/api/customer-auth/start/google"]');
+    await go(register ? "/account/sign-in?mode=register" : "/account/sign-in");
+    await submit(googleForm);
     await path(expected);
     await pause(250);
   }
-  await googleSignIn("same", "/account/sign-in", true);
+  await googleSignIn("same", "/account/sign-in", { forgedState: true });
   await textIncludes("Google sign-in could not continue", main);
   await googleSignIn("unverified", "/account/sign-in");
   await googleSignIn("unhosted", "/account/sign-in");
@@ -541,7 +670,7 @@ try {
   await googleSignIn("same", "/account");
   assert.equal(await db.user.count({ where: { email: credentials.email } }), 1);
   await signOut();
-  await googleSignIn("new", "/account");
+  await googleSignIn("new", "/account", { register: true });
   const other = await accountCookie();
   assert.deepEqual((await (await request(favoritesApi, other)).json()).ids, []);
   await deniedOrder(gift.id, other);
@@ -562,7 +691,7 @@ try {
   const addPasswordIndex = currentMail().length;
   await submit("main section form:has(button):not(:has(input:not([type=hidden])))");
   const add = await messageLink("addPassword", addPasswordIndex);
-  await confirm(add, newPassword);
+  await confirm(add, newPassword, "Changes saved.", "desktop-en-add-password");
   await signIn("google.only@gmail.com", newPassword);
   const emailChangeIndex = currentMail().length;
   await go("/account/profile");
@@ -585,6 +714,8 @@ try {
 
   await go("/login");
   await until(() => evaluate('!!document.querySelector("input[autocomplete=username]") && !!document.querySelector("input[autocomplete=current-password]")'), "admin credentials form");
+  assert.equal(await evaluate("document.querySelector('input[autocomplete=current-password]').type"), "password");
+  assert.equal(await evaluate("!!document.querySelector('.ac-password-toggle')"), false);
   assert.equal(await evaluate(`(async () => {
     const { csrfToken } = await (await fetch("/api/auth/csrf")).json();
     const result = await fetch("/api/auth/callback/credentials", {

@@ -20,7 +20,7 @@ export default async function CustomerFavorites() {
   }));
   return <section className="ac-favorites">
     <AccountIntro title={t.favorites} description={t.favoritesHint} />
-    {products.length ? <ProductGrid products={products} /> : <div className="ac-panel">
+    {products.length ? <ProductGrid products={products} localizePrice /> : <div className="ac-panel">
       <AccountEmpty title={t.emptyFavorites} description={t.emptyFavoritesHint} cta={t.continueShopping} icon={<Heart size={26} />} />
     </div>}
   </section>;

@@ -54,7 +54,7 @@ export default async function CustomerProfile() {
         </div>}
         {googleEnabled() && !!authentication.passwordHash && !connected && <div className="ac-security-action">
           <h3>{t.linkGoogle}</h3><p>{t.linkHint}</p>
-          <GoogleForm link />
+          <GoogleForm intent="link" />
         </div>}
       </>}
     </AccountPanel>

@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useActionState, useEffect, useId, useRef, useState, type ComponentPropsWithoutRef, type FormEvent, type ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CircleCheck, Globe } from "lucide-react";
+import { ArrowRight, CircleCheck, Eye, EyeOff } from "lucide-react";
 import { useLangStore } from "@/store/lang-store";
 import type { AccountResult } from "@/lib/customer/actions";
 import type { GoogleResult } from "@/lib/customer/google";
@@ -46,8 +47,10 @@ export function AccountForm({ action, button, children, token = false, done, ref
   </form>;
 }
 
-export function GoogleForm({ link = false }: { link?: boolean }) {
+export function GoogleForm({ intent = "signin" }: { intent?: "signin" | "register" | "link" }) {
   const { t } = useLangStore();
+  const link = intent === "link";
+  const label = link ? t.account.googleContinue : intent === "register" ? t.account.googleRegister : t.account.google;
   const inFlight = useRef(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<keyof typeof t.account.result>();
@@ -79,21 +82,49 @@ export function GoogleForm({ link = false }: { link?: boolean }) {
   return <form method="post" action="/api/customer-auth/start/google" onSubmit={submit} className="ac-form" aria-busy={pending}>
     <input type="hidden" name="mode" value={link ? "link" : "signin"} />
     {link && <AccountField name="password" label={t.account.password} type="password" autoComplete="current-password" maxLength={72} />}
-    <button type="submit" disabled={pending} className="ac-button ac-button--soft">
-      <Globe size={19} aria-hidden="true" />{pending ? t.common.loading : link ? t.account.linkGoogle : t.account.google}
+    <button type="submit" disabled={pending} className="ac-google-button">
+      <Image src="/identity/google-g.png" width={200} height={204} sizes="18px" alt="" />
+      <span>{label}</span>
     </button>
     {error && <p className="ac-feedback" role="alert">{t.account.result[error]}</p>}
   </form>;
+}
+
+function PasswordInput(props: ComponentPropsWithoutRef<"input">) {
+  const { t } = useLangStore();
+  const [revealed, setRevealed] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const label = revealed ? t.account.hidePassword : t.account.showPassword;
+  const Icon = revealed ? EyeOff : Eye;
+
+  useEffect(() => {
+    const form = input.current?.form;
+    if (!form) return;
+    const conceal = () => setRevealed(false);
+    form.addEventListener("submit", conceal);
+    form.addEventListener("reset", conceal);
+    return () => {
+      form.removeEventListener("submit", conceal);
+      form.removeEventListener("reset", conceal);
+    };
+  }, []);
+
+  return <div className="ac-password">
+    <input {...props} ref={input} type={revealed ? "text" : "password"} />
+    <button type="button" className="ac-password-toggle" aria-label={label} title={label} aria-controls={props.id}
+      onClick={() => setRevealed((visible) => !visible)}><Icon size={19} aria-hidden="true" /></button>
+  </div>;
 }
 
 export function AccountField({ label, name, type = "text", defaultValue, autoComplete, required = true, maxLength, help }: {
   label: string; name: string; type?: string; defaultValue?: string | null; autoComplete?: string; required?: boolean; maxLength?: number; help?: string;
 }) {
   const id = useId();
+  const props = { id, name, defaultValue: defaultValue ?? undefined, autoComplete, required, maxLength,
+    "aria-describedby": help ? `${id}-help` : undefined };
   return <div className="ac-field">
     <label htmlFor={id}>{label}</label>
-    <input id={id} name={name} type={type} defaultValue={defaultValue ?? undefined} autoComplete={autoComplete} required={required} maxLength={maxLength}
-      aria-describedby={help ? `${id}-help` : undefined} />
+    {type === "password" ? <PasswordInput {...props} /> : <input {...props} type={type} />}
     {help && <small id={`${id}-help`}>{help}</small>}
   </div>;
 }

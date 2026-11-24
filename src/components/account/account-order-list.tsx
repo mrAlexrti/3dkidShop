@@ -29,7 +29,7 @@ export function AccountOrderList({ orders, locale }: { orders: readonly (Preview
         </span>
         <span className="ac-order-result">
           <span className="ac-badge" data-stage={normalizeOrderStage(order.status)}>{getOrderStatusLabel(order.status, locale)}</span>
-          <strong>{formatPrice(Number(order.total), "UAH")}</strong>
+          <strong>{formatPrice(Number(order.total), "UAH", locale)}</strong>
         </span>
         <ChevronRight className="ac-order-chevron" size={19} aria-hidden="true" />
         {labels && <dl className="ac-order-meta">

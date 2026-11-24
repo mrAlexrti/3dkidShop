@@ -19,7 +19,7 @@ type GridProduct = {
   isOrderable: boolean;
 };
 
-export function ProductGrid({ products }: { products: GridProduct[] }) {
+export function ProductGrid({ products, localizePrice = false }: { products: GridProduct[]; localizePrice?: boolean }) {
   const { t } = useLangStore();
 
   if (products.length === 0) {
@@ -29,7 +29,7 @@ export function ProductGrid({ products }: { products: GridProduct[] }) {
   return (
     <div className="sf-product-grid">
       {products.map((p) => (
-        <ProductCard key={p.id} {...p} />
+        <ProductCard key={p.id} {...p} localizePrice={localizePrice} />
       ))}
     </div>
   );

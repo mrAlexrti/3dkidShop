@@ -21,8 +21,8 @@ export default async function CustomerSignIn({ searchParams }: { searchParams: P
           <AccountField label={t.email} name="email" type="email" autoComplete="email" maxLength={254} />
           {!mailMode && <AccountField label={t.password} name="password" type="password" autoComplete="current-password" maxLength={72} />}
         </AccountForm>
-        {!mailMode && googleEnabled() && <div className="ac-auth-google">
-          <GoogleForm />
+        {mailMode !== "reset" && googleEnabled() && <div className="ac-auth-google">
+          <GoogleForm intent={mailMode === "register" ? "register" : "signin"} />
           <p>{t.googleHint}</p>
         </div>}
         <nav className="ac-auth-links" aria-label={t.title}>

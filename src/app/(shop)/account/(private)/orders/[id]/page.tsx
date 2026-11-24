@@ -38,7 +38,7 @@ export default async function CustomerOrderDetails({ params }: { params: Promise
   const paymentLabels = { card_online: checkout.payment.card, cash_on_delivery: checkout.payment.cash, pay_on_pickup: checkout.payment.onPickup };
   const deliveryLabels = { np_warehouse: checkout.delivery.warehouse, np_parcel_locker: checkout.delivery.locker, np_courier: checkout.delivery.courier };
   const date = new Intl.DateTimeFormat(locale === "ua" ? "uk-UA" : "en-GB", { dateStyle: "long", timeZone: "Europe/Kyiv" });
-  const price = (value: { toString(): string }) => formatPrice(Number(value.toString()), "UAH");
+  const price = (value: { toString(): string }) => formatPrice(Number(value.toString()), "UAH", locale);
   return <article className="ac-detail" aria-label={t.orderDetails}>
     <Link href="/account/orders" className="ac-text-link" prefetch={false}><ArrowLeft size={18} aria-hidden="true" />{t.backToOrders}</Link>
     <header className="ac-intro ac-detail-header">
