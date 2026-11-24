@@ -60,6 +60,7 @@ export function AdminSidebar() {
   const links = [
     { href: "/admin", label: t.admin.nav.dashboard, icon: LayoutDashboard },
     { href: "/admin/products", label: t.admin.nav.products, icon: Package },
+    { href: "/admin/filaments", label: t.filaments.title, icon: Package },
     { href: "/admin/categories", label: t.admin.nav.categories, icon: FolderTree },
     { href: "/admin/orders", label: t.admin.nav.orders, icon: ShoppingCart },
     { href: "/admin/payment-attempts", label: t.admin.nav.paymentAttempts, icon: CreditCard },

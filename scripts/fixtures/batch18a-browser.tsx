@@ -7,6 +7,7 @@ import { ProductForm } from "../../src/components/admin/product-form";
 import { LangStoreContext, createLangStore } from "../../src/store/lang-store";
 import { useCartStore } from "../../src/store/cart-store";
 import { formatPrice } from "../../src/lib/utils";
+import { cartProducts } from "./gallery-admin-environment";
 import { photos, ids, configuration, url } from "./batch18a-data";
 import type { AdminFormResult } from "../../src/lib/admin-form-validation";
 import type { CartItem } from "../../src/types";
@@ -29,6 +30,7 @@ async function run(locale: "ua" | "en") {
   useCartStore.setState({ addItem: (item) => { candidate = item; return addItem(item); } });
   const render = (node: React.ReactNode) => root.render(<LangStoreContext.Provider value={language}>{node}</LangStoreContext.Provider>);
   function store(key: string, images = photos, config = configuration) {
+    cartProducts.set("color_photo_fixture", { id: "color_photo_fixture", name: "Synthetic product", nameEn: null, slug: "fixture", price: 1, image: images[0]?.url ?? "/images/placeholder.svg", images, isOrderable: true, optionMode: config.mode, configuration: config, variants: [] });
     render(<div className="container-shop py-4"><ProductSelectionProvider key={key} images={images}><div className="grid gap-6 md:grid-cols-2">
       <ProductGallery images={images} name="Synthetic product" /><div><h1>Synthetic product</h1><ProductOptions productId="color_photo_fixture" name="Synthetic product" slug="fixture" basePrice={1} image={images[0]?.url ?? "/images/placeholder.svg"} variants={[]} configuration={config} isOrderable /></div>
     </div></ProductSelectionProvider></div>);

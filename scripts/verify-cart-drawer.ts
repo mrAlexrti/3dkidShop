@@ -29,6 +29,10 @@ async function verify() {
   const server = createServer((request, response) => {
     response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; connect-src 'none'; img-src 'self'; style-src 'unsafe-inline'");
     if (request.url === "/qa.js") { response.setHeader("Content-Type", "text/javascript"); response.end(bundle.outputFiles[0].contents); }
+    else if (request.url === "/qa-preview.gif") {
+      response.setHeader("Content-Type", "image/gif");
+      response.end(Buffer.from("47494638396101000100800000000000ffffff21ff0b4e45545343415045322e30030100000021f904000a0000002c000000000100010000020244010021f904000a0000002c00000000010001000002024c01003b", "hex"));
+    }
     else if (request.url === "/placeholder.svg") { response.setHeader("Content-Type", "image/svg+xml"); response.end('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"/>'); }
     else { response.setHeader("Content-Type", "text/html"); response.end(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>
       ${galleryAdmin || addendum || variants || colorImages ? actualStyles : `body{margin:0} #root>div:not(:last-child){margin:4px} img{width:40px;height:40px} button{min-height:24px}
@@ -91,6 +95,18 @@ async function verify() {
       if (addendum) {
         await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
         assert.equal(await evaluate("window.addendumQA.reduced()"), true);
+        if (width < 700) {
+          const target = await evaluate("window.addendumQA.realTouchTarget()") as { x: number; y: number };
+          await send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [target] });
+          await send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+          for (let attempt = 0; attempt < 20 && !await evaluate("window.addendumQA.navigated()"); attempt++) await pause(50);
+          assert.equal(await evaluate("window.addendumQA.navigated()"), true, JSON.stringify(await evaluate("window.addendumQA.touchTrace")));
+        } else {
+          assert.equal(await evaluate("window.addendumQA.focusNext()"), true);
+          await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r", unmodifiedText: "\r" });
+          await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+          assert.equal(await evaluate("new Promise(r => requestAnimationFrame(() => r(window.addendumQA.secondPhoto())))"), true);
+        }
         assert.equal(await evaluate("window.addendumQA.openDialog()"), true);
         await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
         await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });

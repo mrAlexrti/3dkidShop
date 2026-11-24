@@ -4,6 +4,7 @@ export type Locale = "ua" | "en";
 
 export const translations = {
   ua: {
+    filaments: {"title":"Філаменти","create":"Додати філамент","edit":"Редагувати філамент","manufacturer":"Виробник","series":"Серія","material":"Матеріал","color":"Колір","hex":"HEX кольору","availability":"Доступність","available":"Доступний","unavailable":"Недоступний","enable":"Зробити доступним","disable":"Зробити недоступним","search":"Пошук","all":"Усі","filter":"Фільтрувати","empty":"Філаменти не знайдено.","requirements":"Філаменти для варіантів","help":"Кожна група має містити хоча б один доступний філамент. Філаменти в межах однієї групи взаємозамінні.","blocked":"Немає доступного філаменту в цій групі","ready":"У групі є доступний філамент","manual":"Варіант вимкнено вручну","productDisabled":"Товар приховано або вимкнено для замовлення","addGroup":"Додати групу","removeGroup":"Прибрати групу","alternative":"Альтернативні філаменти","addAlternative":"Додати альтернативу","removeAlternative":"Прибрати альтернативу","choose":"Оберіть філамент","copy":"Скопіювати вимоги з варіанта","none":"Вимоги до філаментів не задано"},
     // Optional editor values are text; the UI never interprets them as markup.
     materials: {"heading":"Матеріали:","adminTitle":"Матеріали та роздільник","ua":"Матеріали (UA)","en":"Матеріали (EN)","motif":"Символ або візерунок роздільника","help":"Необов’язково. Зміни застосовуються після збереження товару. Порожній EN використовує український текст.","preview":"Попередній перегляд роздільника","invalid":"Використайте короткий візерунок (до 8 символів), без перенесення рядка."},
     adminSafety: {"categoryMissing":"Категорію «{name}» не знайдено. Оновіть список.","categoryFailed":"Не вдалося видалити категорію «{name}». Повторіть спробу.","categoryReference":"Категорія «{name}» має захищені залежності. Пов’язані дані не змінено.","cancel":"Скасувати","delete":"Видалити","product":"Ви впевнені, що хочете видалити товар «{name}»?","category":"Ви впевнені, що хочете видалити категорію «{name}»?","archive":"Приховати товар «{name}»? Дані та історія залишаться збереженими.","savedRemoval":"Прибрати «{name}» після збереження? Зміна застосовується лише після успішного збереження товару.","retire":"Прибрати з продажу «{name}» після збереження? Ідентифікатор та історія залишаться збереженими.","mode":"Зміна конфігурації прибере несумісні збережені варіанти з продажу після збереження. Продовжити?","apply":"Підтвердити","photo":"Фото","allSizes":"Усі збережені розміри"},
@@ -108,7 +109,7 @@ export const translations = {
     // Товар
     product: {
       viewImage: "Переглянути зображення",
-      gallery: { previous: "Попереднє фото", next: "Наступне фото", open: "Збільшити фото", close: "Закрити перегляд фото", zoomIn: "Збільшити масштаб", zoomOut: "Зменшити масштаб", position: "Фото {current} з {total}", hint: "Стрілки — змінити фото, Escape — закрити. Збільшене фото можна прокручувати." },
+      gallery: { playAnimation: "Відтворити анімацію", pauseAnimation: "Зупинити анімацію", previous: "Попереднє фото", next: "Наступне фото", open: "Збільшити фото", close: "Закрити перегляд фото", zoomIn: "Збільшити масштаб", zoomOut: "Зменшити масштаб", position: "Фото {current} з {total}", hint: "Стрілки — змінити фото, Escape — закрити. Збільшене фото можна прокручувати." },
       optionLabels: { "Розмір": "Розмір", "Маленький": "Маленький", "Середній": "Середній", "Великий": "Великий" },
       addToCart:       "Додати до кошика",
       characteristics:"Характеристики",
@@ -455,6 +456,7 @@ export const translations = {
   },
 
   en: {
+    filaments: {"title":"Filaments","create":"Add filament","edit":"Edit filament","manufacturer":"Manufacturer","series":"Series","material":"Material","color":"Color","hex":"Color HEX","availability":"Availability","available":"Available","unavailable":"Unavailable","enable":"Make available","disable":"Make unavailable","search":"Search","all":"All","filter":"Filter","empty":"No filaments found.","requirements":"Variant filament requirements","help":"Every group needs at least one available filament. Filaments within a group are alternatives.","blocked":"No available filament in this group","ready":"An alternative is available","manual":"Variant disabled manually","productDisabled":"Product is hidden or unavailable to order","addGroup":"Add group","removeGroup":"Remove group","alternative":"Alternative filaments","addAlternative":"Add alternative","removeAlternative":"Remove alternative","choose":"Choose a filament","copy":"Copy requirements from a variant","none":"No filament requirements"},
     materials: {"heading":"Materials:","adminTitle":"Materials and divider","ua":"Materials (UA)","en":"Materials (EN)","motif":"Divider symbol or motif","help":"Optional. Changes apply after saving the product. Empty English content falls back to Ukrainian.","preview":"Live divider preview","invalid":"Use a short motif (up to 8 symbols), without line breaks."},
     adminSafety: {"categoryMissing":"Category “{name}” was not found. Refresh the list.","categoryFailed":"Could not delete category “{name}”. Try again.","categoryReference":"Category “{name}” has protected dependencies. Related data was preserved.","cancel":"Cancel","delete":"Delete","product":"Are you sure you want to delete product “{name}”?","category":"Are you sure you want to delete category “{name}”?","archive":"Hide product “{name}”? Data and history will be preserved.","savedRemoval":"Remove “{name}” when saved? This change applies only after the product is successfully saved.","retire":"Retire “{name}” when saved? Its identity and history will be preserved.","mode":"Changing configuration will retire incompatible saved variants when saved. Continue?","apply":"Confirm","photo":"Photo","allSizes":"All saved sizes"},
     variantConfig: {
@@ -554,7 +556,7 @@ export const translations = {
     },
     product: {
       viewImage: "View image",
-      gallery: { previous: "Previous photo", next: "Next photo", open: "Enlarge photo", close: "Close photo viewer", zoomIn: "Zoom in", zoomOut: "Zoom out", position: "Photo {current} of {total}", hint: "Arrow keys change photos; Escape closes. Scroll or pan a zoomed photo." },
+      gallery: { playAnimation: "Play animation", pauseAnimation: "Stop animation", previous: "Previous photo", next: "Next photo", open: "Enlarge photo", close: "Close photo viewer", zoomIn: "Zoom in", zoomOut: "Zoom out", position: "Photo {current} of {total}", hint: "Arrow keys change photos; Escape closes. Scroll or pan a zoomed photo." },
       optionLabels: { "Розмір": "Size", "Маленький": "Small", "Середній": "Medium", "Великий": "Large" },
       addToCart:       "Add to Cart",
       characteristics: "Specifications",

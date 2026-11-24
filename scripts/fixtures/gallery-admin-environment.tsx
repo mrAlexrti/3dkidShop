@@ -1,5 +1,6 @@
 // Isolated browser environment: no Next server, database or live Blob operations.
 import * as React from "react";
+import type { CartProduct } from "../../src/lib/cart-reconciliation";
 import type { UploadOptions } from "@vercel/blob/client";
 import { MEDIA_UPLOAD_URL, MEDIA_PREFIX } from "../../src/lib/media-upload";
 
@@ -7,14 +8,17 @@ export const fixture = { uploads: 0, finish: (() => {}) as (success: boolean) =>
 export const toast = { success: () => {}, error: () => {}, message: () => {} };
 export const usePathname = () => "/catalog";
 export const useRouter = () => ({ push: (path: string) => { fixture.pushes.push(path); }, refresh: () => { fixture.refreshes++; } });
-export async function lookupCartProducts() { return []; }
+export const cartProducts = new Map<string, CartProduct>();
+export async function lookupCartProducts(input: { lines: { productId: string }[] }) {
+  return input.lines.flatMap(({ productId }) => cartProducts.get(productId) ?? []);
+}
 export function Link({ href, children, onClick, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
   return <a {...props} href={href} onClick={(event) => { onClick?.(event); if (!event.defaultPrevented) { event.preventDefault(); fixture.pushes.push(href!); } }}>{children}</a>;
 }
 export function Image({ fill: _fill, sizes: _sizes, unoptimized: _unoptimized, priority: _priority, ...props }: React.ImgHTMLAttributes<HTMLImageElement> & { fill?: boolean; unoptimized?: boolean; priority?: boolean }) {
   void _fill; void _sizes; void _unoptimized; void _priority;
   // eslint-disable-next-line @next/next/no-img-element -- Preserve requested source metadata, keep actual traffic local.
-  return <img {...props} style={_fill ? { ...props.style, position: "absolute", inset: 0, width: "100%", height: "100%" } : props.style} data-media-source={props.src} src="/placeholder.svg" alt={props.alt ?? ""} />;
+  return <img {...props} style={_fill ? { ...props.style, position: "absolute", inset: 0, width: "100%", height: "100%" } : props.style} data-media-source={props.src} src={props.src?.startsWith("https://example.invalid/card-") ? "/qa-preview.gif" : "/placeholder.svg"} alt={props.alt ?? ""} />;
 }
 const originalMatchMedia = window.matchMedia.bind(window); const mediaListeners = new Set<() => void>();
 window.matchMedia = (query) => {

@@ -5,7 +5,7 @@ import { ProductCard } from "../../src/components/product/product-card";
 import { ProductForm } from "../../src/components/admin/product-form";
 import { createLangStore, LangStoreContext } from "../../src/store/lang-store";
 import { useCartStore } from "../../src/store/cart-store";
-import { fixture } from "./gallery-admin-environment";
+import { cartProducts, fixture } from "./gallery-admin-environment";
 import type { ProductConfiguration } from "../../src/lib/product-configuration";
 import type { AdminFormResult } from "../../src/lib/admin-form-validation";
 import { formatPrice } from "../../src/lib/utils";
@@ -27,6 +27,10 @@ async function run(locale:"ua"|"en"){
   const language=createLangStore(locale), t=language.getState().t;useCartStore.getState().clear();let calls=0;let failure:"field"|"stale"|"network"="field";
   const save=async():Promise<AdminFormResult>=>{calls++;if(failure==="network")throw new Error("SYNTHETIC_NETWORK_FAILURE");return {error:"validation",fieldErrors:failure==="stale"?{configuration:"stale"}:{"configuration.values.0.labelUa":"invalid"}};};
   const render=(node:React.ReactNode)=>root.render(<LangStoreContext.Provider value={language}>{node}</LangStoreContext.Provider>);
+  function stock(id: string, configuration: ProductConfiguration) {
+    cartProducts.set(id, { id, name: "Fixture", nameEn: null, slug: "fixture", price: 1, image: "/placeholder.svg", isOrderable: true, optionMode: configuration.mode, configuration, variants: [] });
+  }
+  stock("native", config);
   render(<div className="p-3"><ProductCard id="native" name="Fixture" slug="fixture" price={199} image="/placeholder.svg" isOrderable hasOptions hasColorOptions/><ProductOptions productId="native" name="Fixture" slug="fixture" image="/placeholder.svg" basePrice={1} variants={[]} isOrderable configuration={config}/></div>);
   await until(()=>Boolean(document.querySelector(".sf-product-options")));
   const card=document.querySelector(".sf-product-card")!, detail=document.querySelector(".sf-product-options")!;
@@ -37,13 +41,19 @@ async function run(locale:"ua"|"en"){
   button(detail,locale==="ua"?"Червоний":"Red").click();await settle();
   check(button(detail,locale==="ua"?"Великий":"Large").disabled,"Missing red/large pair was selectable");
   button(detail,locale==="ua"?"Малий":"Small").click();await settle();check(!add().disabled,"Valid red/small stayed blocked");
-  add().click();add().click();await settle();check(useCartStore.getState().items[0].quantity===2,"Same combination did not merge");
+  stock("native", { ...config, combinations: config.combinations.map((row) => ({ ...row, isAvailable: false })) });
+  add().click();await until(()=>fixture.refreshes>0);check(!useCartStore.getState().items.length,"Stale unavailable variant was added");
+  stock("native", config);
+  await until(()=>!add().disabled);
+  add().click();await until(()=>useCartStore.getState().items[0]?.quantity===1 && !add().disabled);
+  add().click();await until(()=>useCartStore.getState().items[0]?.quantity===2);check(useCartStore.getState().items[0].quantity===2,"Same combination did not merge");
   button(detail,locale==="ua"?"Білий":"White").click();await settle();check(button(detail,t.variantConfig.choose).disabled&&detail.textContent?.includes(t.variantConfig.cleared),"Incompatible size was silently substituted");
   button(detail,locale==="ua"?"Великий":"Large").click();await settle();
   (detail.querySelector(`[aria-label="${t.cart.increase}"]`) as HTMLButtonElement).click();await settle();check(detail.textContent?.includes(formatPrice(598,"UAH")),"Quantity total did not update");
   add().click();await settle();check(useCartStore.getState().items.length===2&&useCartStore.getState().items[1].quantity===2,"Colors merged or quantity was lost");
   for(const mode of ["SIZE","COLOR"] as const){
     const one:ProductConfiguration={...config,mode,values:config.values.filter((v)=>v.kind===mode),combinations:[{...config.combinations[0],values:mode==="SIZE"?{SIZE:ids.small}:{COLOR:ids.red}}]};
+    stock(`native_${mode}`, one);
     render(<ProductOptions key={mode} productId={`native_${mode}`} name="Fixture" slug="fixture" image="/placeholder.svg" basePrice={1} variants={[]} isOrderable configuration={one}/>);await settle();
     const area=document.querySelector(".sf-product-options")!;check(area.querySelectorAll("fieldset").length===1,"Wrong dimension displayed");
     button(area,mode==="COLOR"?(locale==="ua"?"Червоний":"Red"):(locale==="ua"?"Малий":"Small")).click();await settle();button(area,t.product.addToCart).click();await settle();

@@ -21,6 +21,12 @@ export async function catalogProducts(input: { where: Prisma.ProductWhereInput; 
         WHEN p."optionMode"='SIMPLE' THEN CASE WHEN p."price">0 AND p."price"<=99999999.99 THEN p."price" END
         ELSE (SELECT min(v."price") FROM public."ProductVariant" v WHERE v."productId"=p."id"
           AND v."isAvailable" AND v."retiredAt" IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM public."VariantFilamentGroup" g WHERE g."variantId"=v."id"
+              AND NOT EXISTS (
+                SELECT 1 FROM public."VariantFilamentAlternative" a
+                JOIN public."Filament" f ON f."id"=a."filamentId"
+                WHERE a."groupId"=g."id" AND f."isAvailable"))
           AND NOT EXISTS (SELECT 1 FROM public."ProductVariantSelection" s JOIN public."ProductOptionValue" x ON x."id"=s."valueId" WHERE s."variantId"=v."id" AND x."retiredAt" IS NOT NULL)) END AS price
       ) offer ON TRUE
       WHERE p."isActive" ${category} ${search}

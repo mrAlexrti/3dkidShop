@@ -1,4 +1,5 @@
 "use server";
+import { availabilityVariantInclude } from "@/lib/product-query";
 import { getSizeVariants, snapshotSize } from "@/lib/product-variants";
 import { requestedSizeId } from "@/lib/cart-items";
 import { getOnlinePaymentConfig } from "@/lib/payments/online-payment";
@@ -51,10 +52,19 @@ async function priceOrderItems(tx: Prisma.TransactionClient, items: CartItem[], 
   // Actual PostgreSQL shared row locks coordinate acceptance with Admin updates.
   // Concurrent manufacture orders can share these locks. No product is mutated.
   await tx.$queryRaw(Prisma.sql`SELECT "id" FROM public."Product" WHERE "id" IN (${Prisma.join(productIds)}) ORDER BY "id" FOR SHARE`);
+  // Checkout and directory edits serialize on the referenced filament rows.
+  await tx.$queryRaw(Prisma.sql`
+    SELECT f."id" FROM public."Filament" f WHERE EXISTS (
+      SELECT 1 FROM public."VariantFilamentAlternative" a
+      JOIN public."VariantFilamentGroup" g ON g."id"=a."groupId"
+      JOIN public."ProductVariant" v ON v."id"=g."variantId"
+      WHERE a."filamentId"=f."id" AND v."retiredAt" IS NULL
+        AND v."productId" IN (${Prisma.join(productIds)})
+    ) ORDER BY f."id" FOR SHARE`);
   const products = await tx.product.findMany({
     where: { id: { in: productIds }, isActive: true, isOrderable: true },
     include: {
-      variants: { include: { selections: true } },
+      variants: { include: availabilityVariantInclude },
       options: {
         include: { values: true },
       },

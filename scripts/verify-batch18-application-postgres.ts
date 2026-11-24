@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import * as crypto from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { verifyFilamentFlow } from "./verify-batch181-filament-flow";
 import { sourceModule } from "./source-module";
 import * as configuration from "../src/lib/product-configuration";
 import * as admin from "../src/lib/product-configuration-admin";
@@ -26,7 +27,7 @@ import { translations } from "../src/lib/i18n";
 import type { CartItem } from "../src/types";
 import { z } from "zod";
 
-export async function verifyApplication(db: PrismaClient) {
+export async function verifyApplication(db: PrismaClient, verifyFilaments = false) {
   assert.equal(new URL(process.env.BATCH18_QA_DATABASE_URL!).hostname,"127.0.0.1");
   let passed=0;
   const pass=(text:string)=>console.log(`PASS APP-PG ${++passed}: ${text}`);
@@ -146,6 +147,7 @@ export async function verifyApplication(db: PrismaClient) {
     const cod=await checkoutAction.createOrder({...data,paymentMethod:"cash_on_delivery"},[{...line,price:0.01}],"en");
     assert.equal(cod.success,true);assert.equal(invoiceCount,1);assert.equal(notifications,1);
     pass("actual COD accepts native selection at authoritative DB price without changing Mono invoice count; notification delivery mocked");
+    if (verifyFilaments) await verifyFilamentFlow({ db, line: { ...line, price: 219 }, lookup: lookup.lookupCartProducts, createOrder: checkoutAction.createOrder, data, listing: listing.catalogProducts });
     const legacySeed=await db.product.create({data:{name:"Legacy compatibility",nameEn:"Legacy compatibility",slug:"legacy-application-fixture",description:"Legacy fixture",descriptionEn:"Legacy fixture",price:1,categoryId:"qa_category",isActive:true,isOrderable:true,
       images:{create:{url:"https://res.cloudinary.com/fixture/legacy.webp"}},options:{create:{name:"Size",values:{create:{value:"Малий",valueEn:"Small",price:"199.00",priceModifier:"987.65"}}}}}});
     const legacyProduct=await db.product.findUniqueOrThrow({where:{id:legacySeed.id},include});const legacyValue=legacyProduct.options[0].values[0];

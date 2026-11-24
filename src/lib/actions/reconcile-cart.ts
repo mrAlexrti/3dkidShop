@@ -1,4 +1,5 @@
 "use server";
+import { availabilityVariantInclude } from "@/lib/product-query";
 
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -20,7 +21,7 @@ export async function lookupCartProducts(input: unknown): Promise<CartProduct[]>
     select: { id: true, name: true, nameEn: true, slug: true, price: true, isOrderable: true, optionMode: true,
       images: { select: { url: true, colorValueId: true }, orderBy: [{ order: "asc" }, { id: "asc" }], take: 10 },
       options: { select: { id: true, kind: true, name: true, values: { select: { id: true, value: true, valueEn: true, price: true, note: true, noteEn: true, retiredAt: true } } } },
-      variants: { where: request ? { OR: [{ id: { in: variantIds } }, { selections: { some: { valueId: { in: sizeIds } } } }] } : {}, include: { selections: true } },
+      variants: { where: request ? { OR: [{ id: { in: variantIds } }, { selections: { some: { valueId: { in: sizeIds } } } }] } : {}, include: availabilityVariantInclude },
     },
   }), { isolationLevel: "RepeatableRead" });
   return products.map((product) => {

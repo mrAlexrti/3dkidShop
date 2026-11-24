@@ -27,7 +27,7 @@ async function run(locale: "ua" | "en") {
       <div id="delete-probe"><DeleteButton recordName="Печивко Oreo" action={async () => { deleteCalls++; if(resultMode === "deferred") await new Promise<void>((done)=>{release=done;}); return resultMode === "failure" ? {error:"orderHistory"} : undefined; }} archiveAction={async()=>{archiveCalls++;}} /></div>
       <div id="category-probe"><DeleteButton recordKind="category" recordName="Брелоки" disabledReason={t.admin.deletion.categoryProducts.replace("{name}","Брелоки")} action={async()=>{throw Error("DISABLED_ACTION_REACHED");}} /></div>
       <div style={{height:950}} />
-      <div id="cards-probe" className="sf-product-grid">{Array.from({length:8},(_,i)=><ProductCard key={i} id={`mobile_${i}`} slug={`mobile_${i}`} name={`Card ${i}`} price={10} image="https://res.cloudinary.com/fixture/static.webp" hoverGifUrl={`https://example.invalid/card-${i}.gif`} isOrderable />)}</div>
+      <div id="cards-probe" className="sf-product-grid">{Array.from({length:8},(_,i)=><ProductCard key={i} id={`mobile_${i}`} slug={`mobile_${i}`} name={`Card ${i}`} price={10} image="https://res.cloudinary.com/fixture/static.webp" images={[1, 2, 4].includes(i) ? [{ id: "first", url: "https://res.cloudinary.com/fixture/first.webp" }, { id: "second", url: "https://res.cloudinary.com/fixture/second.webp" }] : undefined} hoverGifUrl={[0, 1, 3, 4].includes(i) ? `https://example.invalid/card-${i}.gif` : null} isOrderable />)}</div>
       <div style={{height:950}} />
     </div>
   </LangStoreContext.Provider></React.StrictMode>);
@@ -70,23 +70,55 @@ async function run(locale: "ua" | "en") {
   press(t.admin.deletion.archive,document.querySelector('#delete-probe')!); await until(()=>Boolean(modal())); press(t.admin.deletion.archive,modal()!); await until(()=>!modal()); check(archiveCalls===1,"Explicit archive confirmation failed");
   check(document.querySelector<HTMLButtonElement>('#category-probe button')!.disabled,"Known category dependency not disabled");
   check(!document.querySelector('img[data-media-source$=".gif"]'),"GIF downloaded before viewport eligibility");
-  const cards=[...document.querySelectorAll<HTMLElement>('#cards-probe article')]; cards[0].scrollIntoView({block:'center'}); await pause();
+  const cards=[...document.querySelectorAll<HTMLElement>('#cards-probe article')]; cards[0].scrollIntoView({block:'center', behavior:'instant'}); await pause();
   const touch=matchMedia('(hover: none) and (pointer: coarse)').matches;
+  const gif = (index: number) => cards[index].querySelector<HTMLImageElement>('img[data-media-source$=".gif"]');
+  const cardControl = (index: number, label: string) => cards[index].querySelector<HTMLButtonElement>(`[aria-label="${label}: Card ${index}"]`)!;
+  const next = cardControl(1, t.product.gallery.next);
+  check(next.offsetWidth === 44 && next.offsetHeight === 44, "Arrow target is smaller than 44 px");
+  check((next.firstElementChild as HTMLElement).offsetWidth === (innerWidth < 640 ? 24 : 32), "Visible arrow circle has incorrect size");
+  check(next.querySelector("svg")?.getAttribute("width") === "16", "Chevron size incorrect");
   if(touch) {
-    await until(()=>document.querySelectorAll('img[data-media-source$=".gif"]').length===1);
-    cards[4].scrollIntoView({block:'center'}); await until(()=>Boolean(document.querySelector('img[data-media-source="https://example.invalid/card-4.gif"]')));
-    check(document.querySelectorAll('img[data-media-source$=".gif"]').length===1,"Multiple mobile GIFs active");
-    cards[4].querySelector<HTMLAnchorElement>('a')!.click(); await pause(); check(fixture.pushes.at(-1)==='/product/mobile_4',"Single tap does not navigate");
-    Object.defineProperty(document,'hidden',{configurable:true,value:true}); document.dispatchEvent(new Event('visibilitychange')); await until(()=>!document.querySelector('img[data-media-source$=".gif"]'));
-    Object.defineProperty(document,'hidden',{configurable:true,value:false}); document.dispatchEvent(new Event('visibilitychange')); await until(()=>document.querySelectorAll('img[data-media-source$=".gif"]').length===1);
-    document.querySelector('#materials-probe')!.scrollIntoView(); await until(()=>!document.querySelector('img[data-media-source$=".gif"]'));
+    await until(() => gif(0)?.naturalWidth === 1 && gif(1)?.naturalWidth === 1);
+    check(cards[0].offsetTop === cards[1].offsetTop && cards[0].offsetLeft < cards[1].offsetLeft, "Fixture is not a two-column row");
+    cards[3].scrollIntoView({block:'center', behavior:'instant'});
+    await until(() => gif(3)?.naturalWidth === 1);
+    check(!gif(2), "GIF appeared on an unconfigured left card");
+    cards[4].scrollIntoView({block:'center', behavior:'instant'});
+    await until(() => gif(4)?.naturalWidth === 1);
+    check(!gif(5), "GIF appeared on an unconfigured right card");
+    cards[1].scrollIntoView({block:'center', behavior:'instant'});
+    await until(() => Boolean(gif(0) && gif(1)));
+    cardControl(1, t.product.gallery.pauseAnimation).click();
+    await until(() => !gif(1));
+    check(gif(0), "Pausing the right card affected the left card");
+    cardControl(1, t.product.gallery.playAnimation).click();
+    await until(() => Boolean(gif(1)));
+    next.click();
+    await until(() => !gif(1));
+    check(cards[1].querySelector('[data-media-source$="second.webp"]') && fixture.pushes.length === 0, "Gallery arrow navigated or kept the GIF");
+    cardControl(1, t.product.gallery.previous).click();
+    await until(() => Boolean(gif(1)));
+    const link = cards[1].querySelector("a")!;
+    link.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", clientX: 120, clientY: 60 }));
+    link.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch", clientX: 50, clientY: 61 }));
+    link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+    await until(() => !gif(1));
+    check(!fixture.pushes.length && cards[1].querySelector('[data-media-source$="second.webp"]'), "Swipe leaked into product navigation");
+    link.click();
+    check(fixture.pushes.at(-1) === "/product/mobile_1", "Keyboard-style click was swallowed");
+    Object.defineProperty(document,'hidden',{configurable:true,value:true}); document.dispatchEvent(new Event('visibilitychange'));
+    await until(()=>!document.querySelector('img[data-media-source$=".gif"]'));
+    Object.defineProperty(document,'hidden',{configurable:true,value:false}); document.dispatchEvent(new Event('visibilitychange'));
+    await until(()=>Boolean(gif(0)));
+    document.querySelector('#materials-probe')!.scrollIntoView({ behavior: 'instant' }); await until(()=>!document.querySelector('img[data-media-source$=".gif"]'));
   } else {
     await new Promise((done)=>setTimeout(done,180)); check(!document.querySelector('img[data-media-source$=".gif"]'),"Desktop auto-animated without hover");
     cards[0].dispatchEvent(new PointerEvent('pointerover',{bubbles:true,pointerType:'mouse'})); await until(()=>Boolean(cards[0].querySelector('img[data-media-source$=".gif"]')));
     cards[0].dispatchEvent(new PointerEvent('pointerout',{bubbles:true,pointerType:'mouse'})); await until(()=>!cards[0].querySelector('img[data-media-source$=".gif"]'));
   }
   check(document.documentElement.scrollWidth<=innerWidth,"Responsive addendum layout overflow");
-  return `${locale}: Materials Unicode/paragraphs/live preview, preserved validation/network/gallery state, confirmation cancel/close/double-submit/archive, category feedback, ${touch?'touch single-GIF center switching/navigation/visibility':'desktop hover without autoplay'} PASS`;
+  return `${locale}: Materials Unicode/paragraphs/live preview, preserved validation/network/gallery state, confirmation cancel/close/double-submit/archive, category feedback, ${touch?'independent touch GIFs with single/multiple photos, pause, arrows, swipe and navigation':'desktop hover without autoplay'} PASS`;
 }
 async function reduced() {
   document.querySelectorAll<HTMLElement>('#cards-probe article')[4].scrollIntoView({block:'center'});
@@ -94,4 +126,25 @@ async function reduced() {
 }
 async function openDialog() { document.querySelector<HTMLButtonElement>('#delete-probe button')!.click(); await until(()=>Boolean(modal())); return document.activeElement?.textContent === language.getState().t.adminSafety.cancel; }
 async function closedByKeyboard() { await until(()=>!modal()); return document.activeElement === document.querySelector('#delete-probe button'); }
-Object.assign(window,{addendumQA:{run,reduced,openDialog,closedByKeyboard}});
+const touchTrace: string[] = [];
+async function realTouchTarget() {
+  for (const type of ["pointerdown", "pointercancel", "pointerup", "click", "touchstart", "touchend"]) {
+    document.addEventListener(type, (event) => touchTrace.push(`${type} ${(event.target as Element).closest("a")?.getAttribute("href")}`), { capture: true });
+  }
+  const card = document.querySelector<HTMLElement>('#cards-probe article')!;
+  card.scrollIntoView({ block: "center", behavior: "instant" });
+  await pause();
+  const rect = card.querySelector("a")!.getBoundingClientRect();
+  const x = Math.round(rect.left + rect.width / 2), y = Math.round(rect.top + rect.height / 2);
+  check(document.elementFromPoint(x, y)?.closest("a") === card.querySelector("a"), "Touch target is not the card link");
+  return { x, y };
+}
+function focusNext() {
+  const card = document.querySelectorAll('#cards-probe article')[1];
+  const label = language.getState().t.product.gallery.next;
+  const button = card.querySelector<HTMLButtonElement>(`[aria-label="${label}: Card 1"]`)!;
+  button.focus();
+  return document.activeElement === button;
+}
+const secondPhoto = () => Boolean(document.querySelectorAll('#cards-probe article')[1].querySelector('[data-media-source$="second.webp"]'));
+Object.assign(window,{addendumQA:{run,reduced,openDialog,closedByKeyboard,realTouchTarget,focusNext,secondPhoto,touchTrace,navigated: () => fixture.pushes.at(-1) === "/product/mobile_0"}});

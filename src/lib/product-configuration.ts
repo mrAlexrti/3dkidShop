@@ -6,7 +6,7 @@ export const optionModes = ["LEGACY", "SIMPLE", "SIZE", "COLOR", "COLOR_SIZE"] a
 export type OptionMode = typeof optionModes[number];
 export type OptionKind = "COLOR" | "SIZE";
 export type OptionValue = { id: string; optionId: string; kind: OptionKind; labelUa: string; labelEn: string | null; noteUa: string | null; noteEn: string | null; retired: boolean };
-export type Combination = { id: string; values: { COLOR?: string; SIZE?: string }; price: string; isAvailable: boolean; retired: boolean };
+export type Combination = { id: string; values: { COLOR?: string; SIZE?: string }; price: string; isAvailable: boolean; manufacturable?: boolean; retired: boolean };
 export type ProductConfiguration = { mode: OptionMode; values: OptionValue[]; combinations: Combination[] };
 const id = z.string().regex(/^[a-zA-Z0-9_]{1,128}$/);
 export const combinationSelectionSchema = z.object({ version: z.literal(2), variantId: id,
@@ -24,7 +24,7 @@ export function matchesMode(mode: OptionMode, values: { COLOR?: string; SIZE?: s
   return Boolean(values.COLOR) === needsColor(mode) && Boolean(values.SIZE) === needsSize(mode) && mode !== "SIMPLE" && mode !== "LEGACY";
 }
 export function usableCombination(config: ProductConfiguration, row: Combination) {
-  return !row.retired && row.isAvailable && matchesMode(config.mode, row.values) &&
+  return !row.retired && row.isAvailable && row.manufacturable !== false && matchesMode(config.mode, row.values) &&
     Object.entries(row.values).every(([kind, valueId]) => config.values.some((value) => value.id === valueId && value.kind === kind && !value.retired)) &&
     (moneyMinorUnits(row.price) ?? 0) > 0;
 }
@@ -40,9 +40,9 @@ export function selectedCombination(config: ProductConfiguration, sizeId?: strin
 }
 
 type Price = number | string | { toString(): string };
-export type ConfigurationProduct = { optionMode?: OptionMode; price: Price; isOrderable?: boolean; oldPrice?: Price | null;
+export type ConfigurationProduct = { optionMode?: OptionMode; price: Price; isActive?: boolean; isOrderable?: boolean; oldPrice?: Price | null;
   options: { id?: string; kind?: OptionKind | null; name: string; values: { id?: string; value?: string; valueEn?: string | null; price?: Price | null; note?: string | null; noteEn?: string | null; retiredAt?: unknown }[] }[];
-  variants?: { id: string; price: Price; isAvailable: boolean; retiredAt?: unknown; selections: { optionId: string; valueId: string }[] }[];
+  variants?: { id: string; price: Price; isAvailable: boolean; retiredAt?: unknown; filamentGroups?: { id: string }[]; selections: { optionId: string; valueId: string }[] }[];
 };
 export function productConfiguration(product: ConfigurationProduct): ProductConfiguration {
   const mode = product.optionMode ?? "LEGACY";
@@ -54,13 +54,13 @@ export function productConfiguration(product: ConfigurationProduct): ProductConf
       const group = product.options.find((option) => option.id === selection.optionId);
       if (group?.kind) choices[group.kind] = selection.valueId;
     }
-    return { id: row.id, price: row.price.toString(), isAvailable: row.isAvailable, retired: Boolean(row.retiredAt), values: choices };
+    return { id: row.id, price: row.price.toString(), isAvailable: row.isAvailable, ...(row.filamentGroups?.length ? { manufacturable: false } : {}), retired: Boolean(row.retiredAt), values: choices };
   });
   return { mode, values, combinations };
 }
 export function publicConfiguration(product: ConfigurationProduct): ProductConfiguration {
   const config = productConfiguration(product);
-  const combinations = config.combinations.filter((row) => !row.retired);
+  const combinations = config.combinations.filter((row) => !row.retired).map(({ manufacturable, ...row }) => ({ ...row, isAvailable: row.isAvailable && manufacturable !== false }));
   const ids = new Set(combinations.flatMap((row) => Object.values(row.values)));
   return { ...config, combinations, values: config.values.filter((v) => !v.retired && ids.has(v.id)) };
 }
@@ -71,7 +71,7 @@ export function productOffer(product: ConfigurationProduct) {
   const price = legacy ? startingPrice(product.price, product.options) : config.mode === "SIMPLE" ? Number(product.price) :
     available.length ? Math.min(...available.map((row) => Number(row.price))) : null;
   return { price, hasColorOptions: needsColor(config.mode), hasOptions: legacy ? hasConfiguredSizes(product.options) : config.mode !== "SIMPLE",
-    isOrderable: Boolean(product.isOrderable) && price !== null && price > 0,
+    isOrderable: product.isActive !== false && Boolean(product.isOrderable) && price !== null && price > 0,
     oldPrice: legacy || config.mode === "SIMPLE" ? product.oldPrice == null ? null : Number(product.oldPrice) : null };
 }
 export function snapshotCombination(config: ProductConfiguration, row: Combination) {

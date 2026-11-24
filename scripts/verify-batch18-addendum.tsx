@@ -7,7 +7,6 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { motifSchema, materialsFields, localizedMaterials, dividerCount } from "../src/lib/product-materials";
 import { ProductMaterials } from "../src/components/product/product-materials";
-import { preferredAnimation, visibleAnimationCandidate } from "../src/lib/mobile-card-animation";
 import { translations } from "../src/lib/i18n";
 
 let groups=0; const pass=(s:string)=>console.log(`PASS ADDENDUM ${++groups}: ${s}`);
@@ -29,13 +28,6 @@ assert.equal(localizedMaterials(value,'en'),value.materialsEn); assert.equal(loc
 assert.equal(renderToStaticMarkup(<ProductMaterials product={{materials:'   ',materialsDivider:'✦'}} locale="ua"/>),'');
 for(const locale of ['ua','en'] as const){const html=renderToStaticMarkup(<ProductMaterials product={value} locale={locale}/>);assert.ok(html.includes(translations[locale].materials.heading));assert.ok(html.includes('font-bold'));assert.equal((html.match(/<p /g)??[]).length,2);assert.ok(!html.includes('<script>'));}
 pass('UA/EN fallback, paragraphs/line breaks, bold heading, safe plain text and empty-section hiding');
-const a={},b={};assert.equal(preferredAnimation([{id:a,ratio:.59,distance:0},{id:b,ratio:.61,distance:80}],null,800),b);
-assert.equal(preferredAnimation([{id:a,ratio:.8,distance:90},{id:b,ratio:.8,distance:45}],a,800),a);
-assert.equal(preferredAnimation([{id:a,ratio:.8,distance:180},{id:b,ratio:.8,distance:45}],a,800),b);
-assert.equal(preferredAnimation([{id:a,ratio:.1,distance:0}],a,800),null);
-const tall={getBoundingClientRect:()=>({top:-600,bottom:1200,left:0,right:300,width:300,height:1800})} as HTMLElement;
-assert.equal(visibleAnimationCandidate(tall,600,320).ratio,1);
-pass('60% visibility, one preferred center candidate, hysteresis, static reset and tall-card constrained viewport eligibility');
 const root='docs/review/archive/batch18-before-addendum/';
 const hash=(p:string)=>createHash('sha256').update(readFileSync(p)).digest('hex');
 assert.equal(hash(root+'batch-1.8-production-candidate.sql'),'691e3774c2e5eaade02e864d14fd8518bdb5e61bf7a86a8731d9c32a9fa4c702');

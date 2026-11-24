@@ -56,6 +56,19 @@ try {
   await sql('docs/release/batch-1.8a-color-images.sql', true);
   console.log('PASS empty-link rollback/reapply and injected DDL failure atomicity.');
   await sql('scripts/fixtures/batch18a-runtime-role.sql');
+  const filamentMigration = 'docs/release/batch-1.8.1-filaments.sql';
+  const filamentRollback = 'docs/release/batch-1.8.1-filaments-rollback.sql';
+  const filamentPreflight = 'docs/release/batch-1.8.1-filaments-preflight.sql';
+  const filamentVerify = 'docs/release/batch-1.8.1-filaments-verify.sql';
+  const operator = ['-c', "SET batch181.reviewed_execution='filaments-reviewed'"];
+  await run(exe('psql'), [...connection, '-c', 'CREATE ROLE app_3dkid LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS']);
+  await assert.rejects(sql(filamentMigration), /B181_REVIEW_OR_BASELINE_GUARD_MISSING/);
+  await run(exe('psql'), [...connection, ...operator, '-f', resolve(root, filamentMigration)]);
+  await run(exe('psql'), [...connection, ...operator, '-f', resolve(root, filamentRollback)]);
+  await run(exe('psql'), [...connection, ...operator, '-f', resolve(root, filamentMigration)]);
+  await sql(filamentVerify);
+  await run(exe('psql'), [...connection, '-c', 'GRANT SELECT ON public."Filament", public."VariantFilamentGroup", public."VariantFilamentAlternative" TO app_3dkid_fixture']);
+  console.log('PASS Batch 1.8.1 migration guard, empty rollback, reapply and read-only verification on the catalog fixture.');
   const url = `postgresql://app_3dkid_fixture@127.0.0.1:${port}/${database}?schema=public&connection_limit=4`;
   const missingRevisionUrl = `postgresql://batch18a_missing_revision@127.0.0.1:${port}/${database}?schema=public&connection_limit=2`;
   const applicationEnv = { ...env, DATABASE_URL: url, BATCH18A_QA_DATABASE_URL: url, BATCH18A_QA_DIRECTORY: directory, BATCH18A_QA_MARKER: marker, BATCH18A_QA_MISSING_REVISION_URL: missingRevisionUrl };
@@ -67,6 +80,43 @@ try {
   console.log('PASS contraction refuses to discard existing links.');
   await sql('docs/release/batch-1.8a-color-images-verify.sql');
   console.log('PASS read-only rollout verification SQL executes against the expanded synthetic schema.');
+  if (process.argv.includes('--filaments')) {
+    const fullDatabase = `batch18_review_${randomBytes(8).toString('hex')}`;
+    await run(exe('psql'), [...connection, '-c', `CREATE DATABASE ${fullDatabase}`]);
+    const full = [...connection.slice(0, -1), fullDatabase];
+    const baseline = await run('git', ['-C', root, 'show', '76621cf01ebe482bfee9a80aaed4a4b5b9dfed22:prisma/schema.prisma']);
+    const schema = join(directory, 'checkout-baseline.prisma');
+    writeFileSync(schema, baseline);
+    const baselineSql = await run(process.execPath, [resolve(root, 'node_modules/prisma/build/index.js'),
+      'migrate', 'diff', '--from-empty', '--to-schema-datamodel', schema, '--script']);
+    writeFileSync(join(directory, 'checkout-baseline.sql'), baselineSql);
+    await run(exe('psql'), [...full, '-f', join(directory, 'checkout-baseline.sql')]);
+    await run(exe('psql'), [...full, '-c', "SET batch18.disposable_review='synthetic-fixtures-only'", '-f', resolve(root, 'docs/review/batch-1.8-variants.sql')]);
+    await run(exe('psql'), [...full, '-c', "SET batch18a.reviewed_execution='color-images-reviewed'", '-f', resolve(root, 'docs/release/batch-1.8a-color-images.sql')]);
+    await assert.rejects(run(exe('psql'), [...full, '-f', resolve(root, filamentPreflight)]), /B181_PREFLIGHT_RUNTIME_PRIVILEGES/);
+    await run(exe('psql'), [...full, '-c', `
+      REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+      GRANT USAGE ON SCHEMA public TO app_3dkid;
+      GRANT SELECT ON public."Product", public."ProductVariant" TO app_3dkid;
+      GRANT UPDATE ("name") ON public."Product" TO app_3dkid;
+      INSERT INTO "Category" (id,name,"nameEn",slug) VALUES ('qa_category','QA','QA','qa');
+      INSERT INTO "Product" (id,name,slug,description,price,"categoryId","updatedAt","isOrderable")
+      VALUES ('legacy_simple','QA Simple','legacy-simple','Synthetic',123.45,'qa_category',now(),true);`]);
+    await run(exe('psql'), [...full, '-f', resolve(root, filamentPreflight)]);
+    await run(exe('psql'), [...full, ...operator, '-f', resolve(root, filamentMigration)]);
+    await assert.rejects(run(exe('psql'), [...full, '-f', resolve(root, filamentPreflight)]), /B181_PREFLIGHT_OBJECTS_ALREADY_PRESENT/);
+    console.log('PASS Batch 1.8.1 preflight checks the old guards and ACLs, and rejects an already expanded schema.');
+    const fullUrl = `postgresql://batch18a_qa@127.0.0.1:${port}/${fullDatabase}?schema=public&connection_limit=6`;
+    const fullEnv = { ...applicationEnv, DATABASE_URL: fullUrl, BATCH18_QA_DATABASE_URL: fullUrl };
+    process.stdout.write(await run(process.execPath, [resolve(root, 'node_modules/tsx/dist/cli.mjs'),
+      resolve(root, 'scripts/verify-batch181-postgres.ts')], { cwd: root, env: fullEnv }));
+    await assert.rejects(run(exe('psql'), [...full, ...operator, '-f', resolve(root, filamentRollback)]), /B181_USE_FORWARD_RECOVERY/);
+    await run(exe('psql'), [...full, '-f', resolve(root, filamentVerify)]);
+    if (process.argv.includes('--build')) {
+      const buildEnv = { ...fullEnv, NODE_OPTIONS: '--use-system-ca', NEXT_TELEMETRY_DISABLED: '1' };
+      process.stdout.write(await run(process.execPath, [resolve(root, 'node_modules/next/dist/bin/next'), 'build'], { cwd: root, env: buildEnv }));
+    }
+  }
 } finally {
   if ((started || existsSync(join(data, 'postmaster.pid'))) && readFileSync(join(directory, 'qa-marker'), 'utf8') === marker)
     await run(exe('pg_ctl'), ['-D', data, '-m', 'fast', '-w', 'stop'], { stdio: 'ignore' });

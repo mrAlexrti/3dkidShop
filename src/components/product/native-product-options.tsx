@@ -1,12 +1,16 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { lookupCartProducts } from "@/lib/actions/reconcile-cart";
+import { reconcileCart } from "@/lib/cart-reconciliation";
 import { Minus, Plus, ShoppingBag } from "lucide-react";
 import { useCartStore } from "@/store/cart-store";
 import { useLangStore } from "@/store/lang-store";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/utils";
 import { productLineId, sizeLabel } from "@/lib/product-variants";
-import { cartAfterAddition } from "@/lib/cart-items";
+import { cartAfterAddition, requestedSizeId } from "@/lib/cart-items";
 import { cartTotalMinor } from "@/lib/cart-limits";
 import { needsColor, needsSize, usableCombination, type ProductConfiguration, type OptionValue } from "@/lib/product-configuration";
 import type { CartItem } from "@/types";
@@ -16,6 +20,9 @@ export function NativeProductOptions({ productId, name, slug, image, isOrderable
   productId: string; name: string; slug: string; image: string; isOrderable: boolean; configuration: ProductConfiguration;
 }) {
   const selection = useProductSelection();
+  const router = useRouter();
+  const submitting = useRef(false);
+  const [pending, startTransition] = useTransition();
   const [localColor, setLocalColor] = useState("");
   const color = selection?.color ?? localColor, setColor = selection?.setColor ?? setLocalColor;
   const [size, setSize] = useState(""); const [quantity, setQuantity] = useState(1); const [notice, setNotice] = useState(false);
@@ -35,6 +42,26 @@ export function NativeProductOptions({ productId, name, slug, image, isOrderable
     return { ...base, id: productLineId(productId, size || undefined), ...(sizeValue ? { variant: { id: sizeValue.id, labelUa: sizeValue.labelUa, labelEn: sizeValue.labelEn } } : {}) };
   }
   const within = (count: number) => price !== null && cartAfterAddition(items, candidate(count)) !== null;
+  function addSelection() {
+    if (submitting.current || !isOrderable || !row || !within(quantity)) return;
+    const item = candidate(quantity);
+    submitting.current = true;
+    startTransition(async () => {
+      try {
+        const products = await lookupCartProducts({ version: 2, lines: [{
+          productId, selection: item.selection, sizeId: requestedSizeId(item),
+        }] });
+        const verified = reconcileCart([item], products, locale);
+        if (verified.issues[item.id] || verified.changed.length) {
+          toast.error(verified.issues[item.id] ? t.product.unavailable : t.checkout.errors.priceChanged);
+          router.refresh();
+          return;
+        }
+        if (!addItem(item)) toast.error(t.cart.reconciliation.limit);
+      } catch { toast.error(t.cart.reconciliation.failed); }
+      finally { submitting.current = false; }
+    });
+  }
   const label = (v: OptionValue) => v.kind === "SIZE" ? sizeLabel(v, locale) : locale === "en" ? v.labelEn?.trim() || v.labelUa : v.labelUa;
   const total = price === null ? null : cartTotalMinor([{ price, quantity }]);
   return <div className="sf-product-options mt-6 space-y-5">
@@ -56,6 +83,6 @@ export function NativeProductOptions({ productId, name, slug, image, isOrderable
     </div><p className="text-2xl text-pink-600" aria-live="polite" aria-atomic="true">{!complete && price !== null && <span className="mr-2 text-sm">{t.product.from}</span>}{price === null ? t.product.unavailable : total === null ? "—" : formatPrice(total / 100, "UAH")}</p></div>
     {!available.length && <p role="status" className="text-sm">{text.empty}</p>}
     {price !== null && !within(quantity) && <p role="status">{t.cart.reconciliation.limit}</p>}
-    <Button type="button" size="lg" className="w-full text-base" disabled={!isOrderable || !row || !within(quantity)} onClick={() => { if (isOrderable && row && within(quantity)) addItem(candidate(quantity)); }}><ShoppingBag size={18} />{!isOrderable ? t.product.unavailable : !complete ? text.choose : t.product.addToCart}</Button>
+    <Button type="button" size="lg" className="w-full text-base" disabled={pending || !isOrderable || !row || !within(quantity)} onClick={addSelection}><ShoppingBag size={18} />{!isOrderable ? t.product.unavailable : !complete ? text.choose : t.product.addToCart}</Button>
   </div>;
 }
