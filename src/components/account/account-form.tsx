@@ -8,13 +8,17 @@ import { ArrowRight, CircleCheck, Eye, EyeOff } from "lucide-react";
 import { useLangStore } from "@/store/lang-store";
 import type { AccountResult } from "@/lib/customer/actions";
 import type { GoogleResult } from "@/lib/customer/google";
+import type { EmailPurpose } from "@/lib/customer/challenges";
+import { passwordCreationError } from "@/lib/customer/password";
 
 type Action = (state: AccountResult | null, data: FormData) => Promise<AccountResult>;
-export function AccountForm({ action, button, children, token = false, done, refresh = false }: {
-  action: Action; button: string; children?: ReactNode; token?: boolean; done?: string; refresh?: boolean;
+export function AccountForm({ action, button, children, token = false, done, refresh = false, confirmMode }: {
+  action: Action; button: string; children?: ReactNode; token?: boolean; done?: string; refresh?: boolean; confirmMode?: EmailPurpose;
 }) {
   const [result, submit, pending] = useActionState(action, null);
   const [proof, setProof] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<ReturnType<typeof passwordCreationError>>(null);
+  const submitting = useRef(false);
   const { t } = useLangStore();
   const router = useRouter();
   useEffect(() => {
@@ -29,9 +33,39 @@ export function AccountForm({ action, button, children, token = false, done, ref
   useEffect(() => {
     if (refresh && result === "ok") router.refresh();
   }, [refresh, result, router]);
+  useEffect(() => { if (!pending) submitting.current = false; }, [pending, result]);
+  const passwordMode = confirmMode === "register" || confirmMode === "reset" || confirmMode === "addPassword" ? confirmMode : null;
+  const completion = result === "ok" && passwordMode ? t.account.completion[passwordMode] : null;
+  if (completion) return <div className="ac-auth-state" role="status">
+    <CircleCheck size={32} aria-hidden="true" />
+    <h2>{completion.title}</h2>
+    <p>{completion.detail}</p>
+    <Link className="ac-button" href="/account/sign-in" prefetch={false}>{t.account.signIn}<ArrowRight size={16} aria-hidden="true" /></Link>
+  </div>;
+
+  function validate(event: FormEvent<HTMLFormElement>) {
+    if (submitting.current || (token && !proof)) {
+      event.preventDefault();
+      return;
+    }
+    if (passwordMode) {
+      const data = new FormData(event.currentTarget);
+      const problem = passwordCreationError(data.get("password"), data.get("confirmPassword"));
+      setFieldError(problem);
+      if (problem) {
+        event.preventDefault();
+        event.currentTarget.querySelector<HTMLInputElement>(problem === "passwordMismatch" ? '[name="confirmPassword"]' : '[name="password"]')?.focus();
+        return;
+      }
+    }
+    submitting.current = true;
+  }
   const finished = !!done && (result === "ok" || (token && result === "sent"));
   const successful = result === "ok" || result === "sent";
-  return <form action={submit} className="ac-form" aria-busy={pending}>
+  const shown = fieldError || result;
+  const invalidLink = token && (proof === "" || (result === "invalid" && !fieldError));
+  const recovery = confirmMode === "register" || confirmMode === "reset" ? `/account/sign-in?mode=${confirmMode}` : "/account/profile";
+  return <form action={submit} onSubmit={validate} className="ac-form" aria-busy={pending}>
     <fieldset disabled={pending || finished}>
       {children}
       {token && <input type="hidden" name="token" value={proof ?? ""} />}
@@ -39,10 +73,10 @@ export function AccountForm({ action, button, children, token = false, done, ref
         {pending ? t.common.loading : button}
       </button>
     </fieldset>
-    {token && proof === "" && <p className="ac-feedback" role="alert">{t.account.result.invalid}</p>}
-    {typeof result === "string" && <p role={successful ? "status" : "alert"} className={`ac-feedback${successful ? " ac-feedback--success" : ""}`}>
-      {successful && <CircleCheck size={19} aria-hidden="true" />}{t.account.result[result]}
+    {(shown || invalidLink) && <p role={successful ? "status" : "alert"} className={`ac-feedback${successful ? " ac-feedback--success" : ""}`}>
+      {successful && <CircleCheck size={19} aria-hidden="true" />}{t.account.result[shown || "invalid"]}
     </p>}
+    {invalidLink && <Link className="ac-text-link" href={recovery} prefetch={false}>{t.account.requestNewLink}<ArrowRight size={16} aria-hidden="true" /></Link>}
     {finished && <Link className="ac-text-link" href={done} prefetch={false}>{done === "/account/sign-in" ? t.account.signIn : t.account.title}<ArrowRight size={16} aria-hidden="true" /></Link>}
   </form>;
 }

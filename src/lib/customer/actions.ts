@@ -11,15 +11,16 @@ import { prisma } from "@/lib/prisma";
 import { customerVisibleOrder } from "./pages";
 import { customerSignInUrl } from "./auth";
 import { consumeChallenge, sendChallenge, type EmailPurpose } from "./challenges";
+import { emailPurposes } from "./email-template";
 import { activeCustomerSession, customerSession, lockCustomer, revokeCustomerSession } from "./session";
-import { customerOrigin, customerPost, emailInput, hashPassword, identifier, passwordFits, passwordInput, rateLimit, tokenHash, tokenInput } from "./security";
+import { customerOrigin, customerPost, emailInput, hashPassword, identifier, passwordFits, rateLimit, tokenHash, tokenInput } from "./security";
+import { passwordCreationError } from "./password";
 
-export type AccountResult = "ok" | "sent" | "invalid" | "failed" | "signinError" | "rate" | "unavailable";
+export type AccountResult = "ok" | "sent" | "invalid" | "failed" | "signinError" | "rate" | "unavailable" | "passwordRequirements" | "passwordMismatch";
 const profileInput = z.object({
   firstName: z.string().trim().max(100), lastName: z.string().trim().max(100),
   phone: z.string().trim().max(32).refine((value) => !value || (/^[+\d\s()-]+$/.test(value) && /^\d{10,15}$/.test(value.replace(/\D/g, "")))),
 });
-const emailModes = ["register", "reset", "verify", "addPassword", "emailOld", "emailNew", "claim"] as const;
 const needsPassword = new Set(["register", "reset", "addPassword"]);
 
 function resetContext(user: { passwordHash: string | null; emailVerified: Date | null }) {
@@ -121,10 +122,14 @@ export async function requestAccountEmail(mode: "register" | "reset" | "verify" 
 export async function confirmAccountEmail(mode: EmailPurpose, _: AccountResult | null, data: FormData): Promise<AccountResult> {
   if (!await customerPost()) return "unavailable";
   if (!(data instanceof FormData)) return "invalid";
-  const purpose = z.enum(emailModes).safeParse(mode);
+  const purpose = z.enum(emailPurposes).safeParse(mode);
   const token = tokenInput.safeParse(data.get("token"));
-  const password = passwordInput.safeParse(data.get("password"));
-  if (!purpose.success || !token.success || (needsPassword.has(mode) && !password.success)) return "invalid";
+  if (!purpose.success || !token.success) return "invalid";
+  const password = needsPassword.has(mode) ? data.get("password") : null;
+  if (needsPassword.has(mode)) {
+    const error = passwordCreationError(password, data.get("confirmPassword"));
+    if (error) return error;
+  }
   const publicProof = mode === "register" || mode === "reset";
   const session = publicProof ? null : await customerSession();
   if (!publicProof && !session) return "invalid";
@@ -135,7 +140,7 @@ export async function confirmAccountEmail(mode: EmailPurpose, _: AccountResult |
   if (needsPassword.has(mode) && !await prisma.customerChallenge.findFirst({
     where: { tokenHash: digest, purpose: mode, expires: { gt: new Date() }, userId: owner?.id, context: owner?.context }, select: { tokenHash: true },
   })) return "invalid";
-  const hash = needsPassword.has(mode) && password.success ? await hashPassword(password.data) : null;
+  const hash = typeof password === "string" ? await hashPassword(password) : null;
   let destination: string | undefined;
   let outcome: boolean;
   try {

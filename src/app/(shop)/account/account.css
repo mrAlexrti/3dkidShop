@@ -287,6 +287,12 @@
 .ac-auth-google { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid #f1dce4; }
 .ac-auth-google > p { color: var(--sf-muted); font-size: .77rem; }
 .ac-auth-links { display: flex; flex-wrap: wrap; gap: 2px 13px; }
+.ac-auth-state { display: grid; justify-items: start; gap: 10px; padding-top: 4px; }
+.ac-auth-state > svg { color: var(--sf-accent); }
+.ac-auth-state h2 { font-size: clamp(1.3rem, 3vw, 1.75rem); }
+.ac-auth-state p { color: var(--sf-muted); font-size: .9rem; }
+.ac-sent-address { overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
+.ac-auth-state-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
 .ac-state { justify-items: center; text-align: center; color: var(--sf-accent); }
 
 @media (max-width: 860px) {

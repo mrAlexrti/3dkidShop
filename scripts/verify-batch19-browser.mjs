@@ -23,7 +23,7 @@ const browser = spawn(process.env.BATCH19_EDGE || "C:/Program Files (x86)/Micros
 let driver;
 let selectedGoogle = "new";
 let badState = false;
-const credentials = { email: "qa.customer@gmail.com", password: "Registration!123" };
+const credentials = { email: "qa.customer@gmail.com", password: "  Registration 🔑 +&%  " };
 const main = "main";
 const newPassword = "Recovery!123";
 const savedId = "qa_product";
@@ -166,7 +166,12 @@ try {
     const target = new URL(url, origin);
     assert.equal(target.origin, origin);
     browserContext = { ...browserContext, route: expected, navigation: "direct" };
-    await send("Page.navigate", { url: target.href });
+    const { loaderId } = await send("Page.navigate", { url: target.href });
+    if (loaderId) {
+      // The old document can still have the target pathname on a direct reload.
+      await until(async () => (await send("Page.getFrameTree")).frameTree.frame.loaderId === loaderId,
+        "committed document for " + expected);
+    }
     await path(expected);
   }
   async function fill(selector, value) {
@@ -203,12 +208,16 @@ try {
     assert.equal(new URL(match[1]).origin, origin);
     return match[1];
   }
-  async function emailForm(mode, email) {
+  async function emailForm(mode, email, locale = "en") {
     const before = currentMail().length;
     await go("/account/sign-in?mode=" + mode);
     await fill("main [name=email]", email);
     await submit();
-    await textIncludes("you’ll receive an email", main);
+    await textIncludes(locale === "en" ? "Check your email" : "Перевірте пошту", "main .ac-auth-state");
+    await textIncludes(email, ".ac-sent-address");
+    assert.equal(await evaluate("!!document.querySelector('main input[name=email]')"), false);
+    assert.equal(await evaluate("document.querySelector('.ac-auth-state button.ac-button')?.disabled"), true);
+    if (email === credentials.email || locale === "ua") await captureUX08(mode + "-check-email-" + locale);
     return before;
   }
   async function confirm(link, password, expected = "Changes saved.", review) {
@@ -219,10 +228,15 @@ try {
     if (review) {
       await verifyPasswordToggle("en", "new-password");
       await captureUX06(review);
+      await captureUX08(review);
     }
-    if (password) await fill("main input[name=password]", password);
+    if (password) {
+      await fill("main input[name=password]", password);
+      await fill("main input[name=confirmPassword]", password);
+    }
     await submit();
     await textIncludes(expected, main);
+    if (review) await captureUX08(review + "-done");
   }
   async function signIn(email, password, expected = "/account") {
     await go("/account/sign-in");
@@ -241,6 +255,45 @@ try {
     await submit("main nav form");
     await path("/account/sign-in");
     browserContext = { ...browserContext, authentication: "anonymous" };
+  }
+  async function verifyMobileRegistration() {
+    const email = "qa.mobile@example.test";
+    const password = "  Mobile пароль 🔑 +&%  ";
+    await viewport(390, "ua");
+    const first = await emailForm("register", email, "ua");
+    const link = await messageLink("register", first);
+    await evaluate("Date.now = (() => { const clock = Date.now; return () => clock() + 61000; })()");
+    await until(() => evaluate("!!document.querySelector('.ac-auth-state button.ac-button:enabled')"), "resend cooldown expires");
+    await evaluate("document.querySelector('.ac-auth-state button.ac-button').click()");
+    await until(() => currentMail().filter(message => message.to === email).length === 2, "mocked resend");
+    await until(() => evaluate("document.querySelector('.ac-auth-state button.ac-button')?.disabled"), "resend cooldown restarts");
+    await evaluate("document.querySelector('.ac-auth-state button.ac-text-link').click()");
+    await until(() => evaluate("document.querySelector('main input[name=email]')?.value === " + JSON.stringify(email)), "change email returns to the form");
+    await go(link);
+    await until(() => evaluate("document.querySelector('input[name=token]')?.value.length === 43 && !location.hash"), "mobile password setup");
+    await verifyPasswordToggle("ua", "new-password", "confirmPassword");
+    await captureUX08("registration-mobile-ua-passwords");
+    await fill("main [name=password]", password);
+    await fill("main [name=confirmPassword]", password.trim());
+    await submit();
+    await textIncludes("Паролі не збігаються", "main [role=alert]");
+    assert.equal(await db.user.count({ where: { email } }), 0);
+    await fill("main [name=password]", "short");
+    await fill("main [name=confirmPassword]", "short");
+    await submit();
+    await textIncludes("щонайменше 12 символів", "main [role=alert]");
+    await fill("main [name=password]", password);
+    await fill("main [name=confirmPassword]", password);
+    await evaluate("const form = document.querySelector('main form'); form.requestSubmit(); form.requestSubmit()");
+    await textIncludes("Акаунт створено", "main [role=status]");
+    await captureUX08("registration-mobile-ua-complete");
+    assert.equal(await db.user.count({ where: { email, role: "CUSTOMER", emailVerified: { not: null } } }), 1);
+    await signIn(email.toUpperCase(), password.trim(), "Не вдалося увійти");
+    await signIn(email.toUpperCase(), password);
+    await accountCookie();
+    await signOut();
+    await viewport(1280, "en");
+    passes("UX-08 mobile Ukrainian email, resend and change address, independent password buttons, rejected mismatch and short password, rapid repeat, exact password sign-in");
   }
   async function addCart() {
     await go("/catalog");
@@ -301,6 +354,10 @@ try {
   async function captureUX06(name) {
     if (!process.argv.includes("--ux06-screenshots")) return;
     await capture("ux-06", name);
+  }
+
+  async function captureUX08(name) {
+    if (process.argv.includes("--ux08-screenshots")) await capture("ux-08", name);
   }
 
   async function capture(suite, name, section) {
@@ -441,11 +498,19 @@ try {
     await go("/account/sign-in");
     const tablet = await shown(authImg, firstAuth);
     assert.ok(tablet > 200 && tablet < 300);
-    await viewport(390, "en");
+    const authenticationRoutes = ["/account/sign-in", "/account/sign-in?mode=register",
+      "/account/sign-in?mode=reset", "/account/confirm?mode=register", "/account/confirm?mode=reset", "/account/confirm?mode=addPassword"];
+    for (const [width, locale] of [[680, "ua"], [390, "en"]]) {
+      await viewport(width, locale);
+      for (const route of authenticationRoutes) {
+        await go(route);
+        await until(() => evaluate(`location.pathname + location.search === ${JSON.stringify(route)} && document.readyState === 'complete'`), "mobile illustration route");
+        await verifyAccountShell(width, locale, false);
+        assert.equal(await evaluate("getComputedStyle(document.querySelector('.ac-auth-art')).display"), "none");
+        assert.equal(await evaluate(`performance.getEntriesByType('resource').some(entry => decodeURIComponent(entry.name).includes(${JSON.stringify(firstAuth)}))`), false);
+      }
+    }
     await go("/account/sign-in");
-    await verifyAccountShell(390, "en", false);
-    assert.equal(await evaluate("getComputedStyle(document.querySelector('.ac-auth-art')).display"), "none");
-    assert.equal(await evaluate(`performance.getEntriesByType('resource').some(entry => decodeURIComponent(entry.name).includes(${JSON.stringify(firstAuth)}))`), false);
     await capture("ux-07", "sign-in-mobile-en");
     await signIn(credentials.email, newPassword);
     assert.equal(await shown(welcomeImg, firstWelcome), 78);
@@ -521,8 +586,9 @@ try {
     await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
   }
 
-  async function verifyPasswordToggle(locale, autocomplete) {
-    const input = "main input[name=password]";
+  async function verifyPasswordToggle(locale, autocomplete, name = "password") {
+    const input = `main input[name=${name}]`;
+    const toggle = `main .ac-password:has(input[name=${name}]) .ac-password-toggle`;
     const show = locale === "ua" ? "Показати пароль" : "Show password";
     const hide = locale === "ua" ? "Приховати пароль" : "Hide password";
     const initial = await evaluate(`(() => {
@@ -534,12 +600,14 @@ try {
     })()`);
     const { id, width, height, ...attributes } = initial;
     assert.ok(id && width >= 44 && height >= 44, "labeled input and usable password touch target");
-    assert.deepEqual(attributes, { type: "password", autocomplete, maxLength: 72, required: true, control: id, buttonType: "button", label: show });
+    assert.deepEqual(attributes, { type: "password", autocomplete, maxLength: (await evaluate("location.pathname")) === "/account/profile" ? 72 : 128,
+      required: true, control: id, buttonType: "button", label: show });
     const location = await evaluate("location.href");
     await fill(input, "LocalPassword!123");
-    await evaluate("document.querySelector('main .ac-password-toggle').focus()");
+    await evaluate(`document.querySelector(${JSON.stringify(toggle)}).focus()`);
     await pressEnter();
     await until(() => evaluate(`document.querySelector(${JSON.stringify(input)}).type === 'text'`), "keyboard shows password");
+    assert.equal(await evaluate(`[...document.querySelectorAll('main .ac-password input')].filter(field => field.type === 'text').length`), 1);
     assert.equal(await evaluate("document.activeElement?.getAttribute('aria-label')"), hide);
     assert.equal(await evaluate("getComputedStyle(document.activeElement).outlineStyle"), "solid");
     assert.equal(await evaluate(`document.querySelector(${JSON.stringify(input)}).value`), "LocalPassword!123");
@@ -687,7 +755,7 @@ try {
   await addCart();
   const index = await emailForm("register", credentials.email);
   const registration = await messageLink("register", index);
-  await confirm(registration, credentials.password, "Changes saved.", "desktop-en-registration-confirmation");
+  await confirm(registration, credentials.password, "Account created", "desktop-en-registration-confirmation");
   await confirm(registration, credentials.password, "Check your details.");
   const duplicateIndex = await emailForm("register", credentials.email);
   await signIn(credentials.email, credentials.password);
@@ -914,7 +982,7 @@ try {
   await signIn(credentials.email, credentials.password);
   const beforeReset = await accountCookie();
   await viewport(390, "en");
-  await confirm(freshRecovery, newPassword, "Changes saved.", "mobile-en-password-reset");
+  await confirm(freshRecovery, newPassword, "Password changed", "mobile-en-password-reset");
   await viewport(1280, "en");
   assert.equal((await (await request(favoritesApi, beforeReset)).json()).ids, null);
   await confirm(freshRecovery, newPassword, "Check your details.");
@@ -973,7 +1041,7 @@ try {
   const addPasswordIndex = currentMail().length;
   await submit("main section form:has(button):not(:has(input:not([type=hidden])))");
   const add = await messageLink("addPassword", addPasswordIndex);
-  await confirm(add, newPassword, "Changes saved.", "desktop-en-add-password");
+  await confirm(add, newPassword, "Password sign-in is set up", "desktop-en-add-password");
   await signIn("google.only@gmail.com", newPassword);
   const emailChangeIndex = currentMail().length;
   await go("/account/profile");
@@ -994,6 +1062,7 @@ try {
   await until(() => currentMail().filter((mail) => mail.to === rateAddress).length === 5, "registration email cap");
   assert.equal(currentMail().filter((mail) => mail.to === rateAddress).length, 5);
   passes("database-backed registration throttle limits delivery while preserving the generic response");
+  await verifyMobileRegistration();
 
   await go("/login");
   await until(() => evaluate('!!document.querySelector("input[autocomplete=username]") && !!document.querySelector("input[autocomplete=current-password]")'), "admin credentials form");

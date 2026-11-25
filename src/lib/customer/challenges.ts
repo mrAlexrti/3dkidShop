@@ -1,10 +1,11 @@
 import { Prisma, type CustomerChallenge } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isEmailConfigured, sendEmail } from "@/lib/notifications/email";
-import { translations, type Locale } from "@/lib/i18n";
+import type { Locale } from "@/lib/i18n";
 import { customerOrigin, newToken, tokenHash } from "./security";
+import { challengeMinutes, renderChallengeEmail, type EmailPurpose } from "./email-template";
 
-export type EmailPurpose = "register" | "reset" | "verify" | "addPassword" | "emailOld" | "emailNew" | "claim";
+export type { EmailPurpose } from "./email-template";
 type Challenge = { purpose: EmailPurpose | "linkGoogle"; email: string; userId?: string; orderId?: string; context?: string };
 
 export async function issueChallenge(db: Prisma.TransactionClient, data: Challenge, minutes = 30) {
@@ -15,12 +16,9 @@ export async function issueChallenge(db: Prisma.TransactionClient, data: Challen
 
 export async function sendChallenge(data: Challenge & { purpose: EmailPurpose }, locale: Locale) {
   if (!isEmailConfigured()) return false;
-  const token = await issueChallenge(prisma, data, data.purpose === "claim" ? 30 : 20);
+  const token = await issueChallenge(prisma, data, challengeMinutes(data.purpose));
   const url = `${customerOrigin()}/account/confirm?mode=${data.purpose}#${token}`;
-  const copy = translations[locale].account;
-  // These messages contain static, localized copy and an internally generated URL.
-  const result = await sendEmail({ to: data.email, subject: copy.emailSubject[data.purpose],
-    html: `<p>${copy.emailSubject[data.purpose]}</p><p><a href="${url}">${copy.openLink}</a></p><p>${copy.emailFooter}</p>` });
+  const result = await sendEmail({ to: data.email, ...renderChallengeEmail(data.purpose, locale, url) });
   // A timeout or 5xx can arrive after Resend accepted the email.
   if (!result.sent && result.outcome !== "unknown") await prisma.customerChallenge.deleteMany({ where: { tokenHash: tokenHash(token) } });
   return result.sent;

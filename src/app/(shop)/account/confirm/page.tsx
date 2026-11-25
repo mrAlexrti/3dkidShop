@@ -9,8 +9,11 @@ export default async function ConfirmAccount({ searchParams }: { searchParams: P
   if (mode !== "register" && mode !== "reset" && mode !== "verify" && mode !== "addPassword" && mode !== "emailOld" && mode !== "emailNew" && mode !== "claim") notFound();
   const needsPassword = mode === "register" || mode === "reset" || mode === "addPassword";
   return <AccountAuthFrame title={t.emailSubject[mode]} description={t.confirmHint}>
-    <AccountForm action={confirmAccountEmail.bind(null, mode)} button={t.confirm} token done={needsPassword || mode === "emailNew" ? "/account/sign-in" : "/account"}>
-      {needsPassword && <AccountField label={t.newPassword} type="password" name="password" autoComplete="new-password" maxLength={72} help={t.passwordHint} />}
+    <AccountForm key={mode} action={confirmAccountEmail.bind(null, mode)} button={t.confirm} confirmMode={mode} token done={needsPassword || mode === "emailNew" ? "/account/sign-in" : "/account"}>
+      {needsPassword && <>
+        <AccountField label={t.newPassword} type="password" name="password" autoComplete="new-password" maxLength={128} help={t.passwordHint} />
+        <AccountField label={t.confirmPassword} type="password" name="confirmPassword" autoComplete="new-password" maxLength={128} />
+      </>}
     </AccountForm>
   </AccountAuthFrame>;
 }

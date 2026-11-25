@@ -6,11 +6,12 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { readServerEnv } from "@/lib/server-env";
+import { passwordFits } from "./password";
+export { passwordFits } from "./password";
 
 export const sessionSeconds = 60 * 60 * 24 * 14;
 export const customerSecret = () => readServerEnv("CUSTOMER_AUTH_SECRET");
 export const emailInput = z.string().trim().max(254).email().toLowerCase();
-export const passwordInput = z.string().min(12).refine(passwordFits);
 export const tokenInput = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 export const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 
@@ -43,10 +44,6 @@ export async function customerPost() {
   const origin = new URL(customerOrigin());
   const request = await headers();
   return request.get("origin") === origin.origin && request.get("host") === origin.host;
-}
-
-export function passwordFits(password: string) {
-  return password.length <= 72 && Buffer.byteLength(password) <= 72 && !password.includes("\0");
 }
 
 export function hashPassword(password: string) {

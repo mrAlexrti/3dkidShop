@@ -9,6 +9,7 @@ import { isCodActionEligible, isGenuineCod } from "@/lib/orders/cod-eligibility"
 import { formatManagerDateTime } from "@/lib/date-time";
 import type { TelegramInlineKeyboard } from "./telegram";
 import { formatOrderReference } from "@/lib/order-reference";
+import { renderBrandedEmail } from "./branded-email";
 
 type Money = number | string | { toString(): string };
 export type OrderForNotification = StatusSnapshot & {
@@ -19,7 +20,6 @@ export type OrderForNotification = StatusSnapshot & {
   paymentMode?: string | null;
   items: { productName: string; optionsJson: string | null; quantity: number; price: Money }[];
 };
-const escape = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]!));
 function siteUrl() {
   return (readServerEnv("NEXT_PUBLIC_SITE_URL") || readServerEnv("SITE_URL") || readServerEnv("NEXTAUTH_URL") || "https://www.3dkid.shop").replace(/\/$/, "");
 }
@@ -60,6 +60,9 @@ export function renderNotification(event: NotificationEvent, order: OrderForNoti
     telegram: [title, ...context, order.customerName, order.customerPhone, order.city, order.shippingAddress, ...lines].join("\n").slice(0, 3600) + `\n${adminUrl}`,
     telegramKeyboard,
     // Result capabilities are generated only for customer email, never Telegram.
-    html: channel !== "email" ? "" : `<!doctype html><html lang="${locale === "ua" ? "uk" : "en"}"><meta charset="utf-8"><body style="font-family:Arial,sans-serif;color:#24191f;background:#fff7fb;padding:24px"><main style="max-width:640px;margin:auto;background:white;border-radius:24px;padding:28px"><p style="color:#f94f8e;font-weight:bold">3D Kid</p><h1>${escape(title)}</h1><p>${escape(order.customerName)}</p>${context.map((line) => `<p>${escape(line)}</p>`).join("")}<h2>${escape(t.items)}</h2><ul>${lines.map((line) => `<li>${escape(line)}</li>`).join("")}</ul><p>${escape(order.city)}, ${escape(order.shippingAddress)}</p><a href="${escape(siteUrl() + getOrderResultPath(order.number))}" style="color:#d13070">${escape(t.view)}</a></main></body></html>`,
+    html: channel !== "email" ? "" : renderBrandedEmail({
+      locale, title, intro: order.customerName, details: context, items: { title: t.items, lines },
+      address: `${order.city}, ${order.shippingAddress}`, action: { label: t.view, url: siteUrl() + getOrderResultPath(order.number) },
+    }),
   };
 }
