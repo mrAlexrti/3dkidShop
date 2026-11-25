@@ -23,8 +23,12 @@ CREATE TABLE public."CustomerCartImport" (
 CREATE INDEX "CustomerCartImport_userId_idx" ON public."CustomerCartImport"("userId");
 CREATE TABLE public."CustomerCartPurchase" (
   "orderId" TEXT PRIMARY KEY REFERENCES public."Order"(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  "reconcileUntil" TIMESTAMP(3),
+  "supersededByOrderId" TEXT REFERENCES public."Order"(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CHECK ("supersededByOrderId" <> "orderId"),
   lines JSONB NOT NULL CHECK (CASE WHEN jsonb_typeof(lines) = 'array' THEN jsonb_array_length(lines) BETWEEN 1 AND 100 ELSE false END)
 );
+CREATE INDEX "CustomerCartPurchase_supersededByOrderId_idx" ON public."CustomerCartPurchase"("supersededByOrderId");
 
 CREATE FUNCTION public.ux0910_require_customer_cart_owner() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
@@ -40,5 +44,8 @@ REVOKE ALL ON FUNCTION public.ux0910_require_customer_cart_owner() FROM PUBLIC;
 REVOKE ALL ON public."CustomerCart", public."CustomerCartImport", public."CustomerCartPurchase" FROM PUBLIC;
 GRANT SELECT, INSERT ON public."CustomerCart", public."CustomerCartImport", public."CustomerCartPurchase" TO app_3dkid;
 GRANT UPDATE (revision, lines) ON public."CustomerCart" TO app_3dkid;
+GRANT UPDATE ("reconcileUntil", "supersededByOrderId") ON public."CustomerCartPurchase" TO app_3dkid;
 GRANT DELETE ON public."CustomerCartPurchase" TO app_3dkid;
+-- Required by the existing hosted-payment handoff. Keep this grant on rollback.
+GRANT UPDATE ("paymentPageUrl") ON public."Order" TO app_3dkid;
 COMMIT;

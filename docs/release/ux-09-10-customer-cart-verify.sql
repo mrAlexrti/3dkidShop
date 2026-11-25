@@ -15,9 +15,14 @@ BEGIN
      OR has_column_privilege('app_3dkid', 'public."CustomerCart"', 'userId', 'UPDATE')
      OR has_table_privilege('app_3dkid', 'public."CustomerCartImport"', 'DELETE')
      OR NOT has_table_privilege('app_3dkid', 'public."CustomerCartPurchase"', 'DELETE')
+     OR NOT has_column_privilege('app_3dkid', 'public."CustomerCartPurchase"', 'reconcileUntil', 'UPDATE')
+     OR NOT has_column_privilege('app_3dkid', 'public."CustomerCartPurchase"', 'supersededByOrderId', 'UPDATE')
+     OR has_column_privilege('app_3dkid', 'public."CustomerCartPurchase"', 'lines', 'UPDATE')
+     OR NOT has_column_privilege('app_3dkid', 'public."Order"', 'paymentPageUrl', 'UPDATE')
+     OR to_regclass('public."CustomerCartPurchase_supersededByOrderId_idx"') IS NULL
      OR to_regclass('public."CustomerCartImport_userId_idx"') IS NULL
      OR (SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND convalidated AND
-          conrelid IN ('public."CustomerCart"'::regclass,'public."CustomerCartImport"'::regclass,'public."CustomerCartPurchase"'::regclass)) <> 3
+          conrelid IN ('public."CustomerCart"'::regclass,'public."CustomerCartImport"'::regclass,'public."CustomerCartPurchase"'::regclass)) <> 4
   THEN RAISE EXCEPTION 'UX0910_CART_INTEGRITY_REQUIRED'; END IF;
 END $$;
 SELECT (SELECT count(*) FROM public."CustomerCart") AS carts,

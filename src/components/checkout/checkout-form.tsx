@@ -81,7 +81,7 @@ const inp =
 
 const NUM_STYLES = "flex h-7 w-7 items-center justify-center rounded-full bg-pink-500 text-xs font-bold text-white";
 
-export function CheckoutForm({ onlineCardEnabled, contact, customerScope }: { onlineCardEnabled: boolean; contact?: import("@/lib/validations/checkout").CheckoutContact; customerScope?: string }) {
+export function CheckoutForm({ onlineCardEnabled, contact }: { onlineCardEnabled: boolean; contact?: import("@/lib/validations/checkout").CheckoutContact }) {
   const { t, locale } = useLangStore();
   const c = t.checkout;
   const schema = useMemo(() => getCheckoutSchema(locale), [locale]);
@@ -165,10 +165,11 @@ export function CheckoutForm({ onlineCardEnabled, contact, customerScope }: { on
       if (!verified) return;
       const items = snapshot.items;
       const checkoutRevision = snapshot.checkoutRevision;
-      const retryKey = data.paymentMethod === "card_online" ? await onlineCheckoutKey(data, items, checkoutRevision, customerScope) : undefined;
+      const retryKey = data.paymentMethod === "card_online" && !snapshot.accountScope
+        ? await onlineCheckoutKey(data, items, checkoutRevision) : undefined;
       if (!useCartStore.getState().ready() || useCartStore.getState().checkoutRevision !== checkoutRevision || useCartStore.getState().items !== items) return;
       const proof = snapshot.accountScope ? { scope: snapshot.accountScope, revision: snapshot.accountRevision } : undefined;
-      const result = await createOrder(data, items, locale, retryKey, checkoutRetrySource(retryKey), true, proof);
+      const result = await createOrder(data, items, locale, retryKey, proof ? undefined : checkoutRetrySource(retryKey), true, proof);
       if (snapshot.accountScope !== useCartStore.getState().accountScope) return;
       if (result.success) {
         if (retryKey) rememberCheckoutResult(retryKey, result.resultUrl);
@@ -181,7 +182,7 @@ export function CheckoutForm({ onlineCardEnabled, contact, customerScope }: { on
           window.location.assign(result.payment.pageUrl);
           return;
         }
-        if (retryKey) { router.push(result.resultUrl); return; }
+        if (data.paymentMethod === "card_online") { router.push(result.resultUrl); return; }
         if (!proof && useCartStore.getState().accountScope === null && useCartStore.getState().checkoutRevision === checkoutRevision && useCartStore.getState().items === items) clear();
         toast.success(result.emailSent ? c.feedback.emailed : c.feedback.created);
         router.push(result.resultUrl);

@@ -1,6 +1,7 @@
 // Focused browser tests against the rehearsal's production build and mock providers.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHmac, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
@@ -433,6 +434,26 @@ try {
     const first = "ux0910-cart-a@example.test", second = "ux0910-cart-b@example.test";
     const passwordHash = await bcrypt.hash(secret, 12);
     for (const email of [first, second]) await db.user.create({ data: { email, emailVerified: new Date(), role: "CUSTOMER", passwordHash } });
+    const account = await db.user.findUniqueOrThrow({ where: { email: first }, select: { id: true } });
+    const attemptPath = (reference) => {
+      const issued = Date.now();
+      const signature = createHmac("sha256", process.env.AUTH_SECRET).update(`payment-attempt:v2:${reference}:${issued}`).digest("hex");
+      return `/checkout/success?attempt=${reference}&token=${issued}.${signature}`;
+    };
+    const enReference = "pay_" + "e".repeat(32), uaReference = "pay_" + "a".repeat(32);
+    for (const [locale, reference] of [["en", enReference], ["ua", uaReference]]) {
+      const invoiceId = "cart_browser_" + locale;
+      await db.order.create({ data: { customerId: account.id, paymentReference: reference, checkoutAcceptance: "PROVISIONAL",
+        customerName: "Browser Fixture", customerPhone: "0501112222", shippingAddress: "Fixture", city: "Fixture", postalCode: "0",
+        paymentMethod: "online", total: 100, subtotal: 100, paymentProvider: "mono", paymentMode: "sandbox", paymentStatus: "PENDING",
+        paymentInvoiceId: invoiceId, paymentPageUrl: "https://pay.mbnk.biz/" + invoiceId, paymentExpiresAt: new Date(Date.now() + 600000),
+        cartPurchase: { create: { lines: [{ generation: randomUUID(), removed: 0, quantity: 1 }] } } } });
+    }
+    const clickPaymentStatus = async (label) => {
+      const button = `Array.from(document.querySelectorAll('main button')).find(el => el.textContent.trim() === ${JSON.stringify(label)})`;
+      await until(() => evaluate(`!!${button}`), "localized payment status button");
+      await evaluate(`${button}.click()`);
+    };
     const authPaths = (name) => `main input[name=${name}]`;
     const compare = (email, password) => evaluate(`document.querySelector('${authPaths("email")}').value === ${JSON.stringify(email)} &&
       document.querySelector('${authPaths("password")}').value === ${JSON.stringify(password)}`);
@@ -468,6 +489,9 @@ try {
     assert.equal(await evaluate("!document.querySelector('main input[autocomplete=current-password]')"), true);
     assert.equal(await stored(secret), true);
     const desktop = await accountCookie();
+    await go(attemptPath(enReference));
+    await clickPaymentStatus("Check status");
+    await until(() => evaluate("[...document.querySelectorAll('main a')].some(el => el.textContent === 'Continue payment' && el.href === 'https://pay.mbnk.biz/cart_browser_en')"), "authenticated hosted payment resume on desktop");
     await go("/catalog");
     await badge(0);
     await until(() => evaluate("!!document.querySelector('.sf-product-card:has(a[href=\"/product/qa-cat\"]) .sf-product-add')"), "desktop add");
@@ -494,6 +518,11 @@ try {
     await path("/account");
     const mobile = await accountCookie();
     assert.ok(desktop !== mobile, "Desktop and mobile use independent sessions");
+    await go(attemptPath(uaReference));
+    await clickPaymentStatus("Перевірити статус");
+    await until(() => evaluate("[...document.querySelectorAll('main button')].some(el => el.textContent === 'Почати нову спробу оплати')"), "expired payment recovery on mobile in Ukrainian");
+    await clickPaymentStatus("Почати нову спробу оплати");
+    await path("/checkout");
     await go("/cart");
     await badge(1);
     assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true);
@@ -536,12 +565,19 @@ try {
     const desktopScope = (await (await request(favoritesApi, mobile)).json()).version;
     const wrongScope = await fetch(origin + "/api/customer-cart", { headers: { cookie: await accountCookie(), "x-cart-scope": desktopScope } });
     assert.equal(wrongScope.status, 401);
+    await go(attemptPath(enReference));
+    await clickPaymentStatus("Check status");
+    assert.equal(await evaluate("![...document.querySelectorAll('main a')].some(el => el.href === 'https://pay.mbnk.biz/cart_browser_en')"), true);
     await signOut();
     await signIn(first, secret);
     await badge(1);
     await signOut();
     await badge(0);
     assert.equal((await request("/api/customer-cart")).status, 401);
+    await go(attemptPath(enReference));
+    await clickPaymentStatus("Check status");
+    assert.equal(await evaluate("![...document.querySelectorAll('main a')].some(el => el.href === 'https://pay.mbnk.biz/cart_browser_en')"), true);
+    passes("authorized cross-device payment status, localized resume and expired-invoice recovery, hosted URL isolation");
     const setup = await send("Page.addScriptToEvaluateOnNewDocument", { source: `
       (() => {
         if (location.origin !== ${JSON.stringify(origin)}) return;

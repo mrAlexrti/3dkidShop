@@ -9,16 +9,17 @@ import type { PaymentResultState } from "@/lib/payments/payment-state";
 import { formatOrderReference } from "@/lib/order-reference";
 import { refreshAccountCart, useCartStore } from "@/store/cart-store";
 import { broadcastCart, CART_SYNC_KEY } from "@/lib/customer/guest-cart";
-import { completeCheckoutCart, explicitPaymentRetry } from "@/lib/payments/checkout-session";
-import { preparePaymentRetry } from "@/lib/actions/retry-payment";
+import { clearAccountPaymentMarker, completeCheckoutCart, explicitPaymentRetry } from "@/lib/payments/checkout-session";
+import { checkOwnedPayment, preparePaymentRetry } from "@/lib/actions/retry-payment";
 
-export function OrderResult({ initialState, number: initialNumber, token, attempt = "", canRetry: initialCanRetry = false }: { initialState: PaymentResultState; number: string; token: string; attempt?: string; canRetry?: boolean }) {
+export function OrderResult({ initialState, number: initialNumber, token, attempt = "", canRetry: initialCanRetry = false, ownsAttempt = false }: { initialState: PaymentResultState; number: string; token: string; attempt?: string; canRetry?: boolean; ownsAttempt?: boolean }) {
   const { t, locale } = useLangStore();
   const [state, setState] = useState(initialState);
   const [number, setNumber] = useState(initialNumber);
   const [canRetry, setCanRetry] = useState(initialCanRetry);
   const [starting, setStarting] = useState(false);
   const [retryError, setRetryError] = useState(false);
+  const [verifiedPage, setVerifiedPage] = useState<string>();
   useEffect(() => {
     if (attempt && state === "paid") {
       const cart = useCartStore.getState();
@@ -69,8 +70,21 @@ export function OrderResult({ initialState, number: initialNumber, token, attemp
       {number && <p className="mt-3 text-sm text-ink/60">{formatOrderReference(number, locale)}</p>}
       <p className="mt-3 max-w-md text-ink/70">{copy[1]}</p>
     </div>
-    {(state === "pending" || state === "unknown") && <Button className="mt-6" variant="outline" onClick={() => setRetry((value) => value + 1)}>{t.success.checkAgain}</Button>}
-    {canRetry && attempt && ["failed", "cancelled", "expired"].includes(state) && <Button className="mt-6" disabled={starting} onClick={async () => {
+    {(state === "pending" || state === "unknown") && <Button className="mt-6" variant="outline" disabled={starting} onClick={async () => {
+      if (!ownsAttempt) { setRetry((value) => value + 1); return; }
+      setStarting(true); setRetryError(false); setVerifiedPage(undefined);
+      try {
+        const result = await checkOwnedPayment(attempt, token);
+        if (!result || result.retry) { setRetryError(true); return; }
+        setState(result.state);
+        if (result.number) setNumber(result.number);
+        setVerifiedPage(result.pageUrl);
+      } catch { setRetryError(true); }
+      finally { setStarting(false); }
+    }}>{t.success.checkAgain}</Button>}
+    {ownsAttempt && state === "pending" && verifiedPage && <a className="mt-4 text-pink-700 underline" href={verifiedPage}>{t.success.resumePayment}</a>}
+    {(ownsAttempt || canRetry) && attempt && ["failed", "cancelled", "expired"].includes(state) && <Button className="mt-6" disabled={starting} onClick={async () => {
+      if (ownsAttempt) { clearAccountPaymentMarker(); window.location.assign("/checkout"); return; }
       if (starting) return;
       setStarting(true); setRetryError(false);
       try {

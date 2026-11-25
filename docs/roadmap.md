@@ -10,8 +10,10 @@
 | UX-07 — Customer Account Content Management | Deployed at `1b4563ca8bfde35872fd39a16bdcc3cea6712e25`. All 66 read-only Production checks passed with zero hydration errors or warnings. The operator confirmed both Site Content controls. Live Blob upload, replacement, persistence and reset QA await final illustration files. |
 | UX-08 — Customer registration and authentication flow, with UX-05 branded email | Deployed. Registration and password recovery manual QA passed. Authorized Gmail and Outlook coverage across all templates is still pending. |
 | SEO-01 — Search appearance, brand identity and indexing | Deployed at `80af0d512f2f8a7c2a6c2e8889b9690e78bd4e84`. Google Search Console accepted the homepage reindexing request. Search appearance refresh is pending. |
-| UX-09 / UX-10 — Account cart and sign-in form corrections | P1 pre-launch review. Account-bound cart persistence, guest merge and retained rejected sign-in fields are implemented locally. Migration and Production QA require separate approval. |
-| PERF-01 — Storefront Performance & Navigation Optimization | P1 pre-launch, queued. Navigation and search latency predate SEO-01. Profile category switching, product navigation, filtering, autocomplete, authenticated cart SQL, database workload, caching, prefetching, browser performance, and Vercel/Neon infrastructure. |
+| UX-09 / UX-10 — Account cart and sign-in form corrections | P1 pre-launch review. Account-bound cart, guest merge and retained sign-in fields are implemented locally. The operator approved automatic reconciliation and safe replacement of superseded unpaid Mono attempts, including switches to COD and checkout from another device, without an account-wide restriction. Migration and Production payment QA require separate approval. |
+| QA-05 — Favorites | Operator manual QA passed 12/12. No defects. |
+| UX-11 — Localization of Form Validation Messages | P2, pending. |
+| PERF-01 — Storefront Performance & Navigation Optimization | P1 pre-launch, next major development batch. Storefront navigation and search latency predate SEO-01. Profile category switching, product navigation, filtering, autocomplete, authenticated cart SQL, database workload, caching, prefetching, browser performance, and Vercel/Neon infrastructure. |
 | Batch 2.0 — Promo Codes | Pending UX-09 / UX-10 review. |
 | Launch Fixes | Legal pages, Google OAuth publication, Telegram customer comment and cancelled-order revenue analytics. |
 | Final QA | November 29–30, 2026. Comprehensive end-to-end QA and launch-blocking fixes. |

@@ -9,6 +9,10 @@ import { consumePaidCart, matchesCart, mutateCart, projectCart, readCart } from 
 import * as sessions from "../src/lib/customer/session";
 import * as security from "../src/lib/customer/security";
 import * as transitions from "../src/lib/payments/transitions";
+import * as cartContract from "../src/lib/customer/cart-contract";
+import * as mono from "../src/lib/payments/mono";
+import * as monoState from "../src/lib/payments/mono-state";
+import * as initialization from "../src/lib/payments/initialization";
 import * as money from "../src/lib/payments/money";
 import * as checkout from "../src/lib/validations/checkout";
 import * as orderResult from "../src/lib/payments/order-result";
@@ -22,7 +26,7 @@ import * as productVariants from "../src/lib/product-variants";
 import { ownedOrders } from "../src/lib/customer/pages";
 import * as crypto from "node:crypto";
 import * as prismaExports from "@prisma/client";
-import { translations } from "../src/lib/i18n";
+import { translations, type Locale } from "../src/lib/i18n";
 import { sourceModule } from "./source-module";
 
 const runtime = new URL(process.env.DATABASE_URL ?? "");
@@ -35,6 +39,7 @@ assert.equal(runtime.pathname, "/batch18_review_" + marker);
 assert.equal(runtime.username, "app_3dkid");
 assert.equal(ownerUrl.host + ownerUrl.pathname, runtime.host + runtime.pathname);
 assert.equal(ownerUrl.username, "batch18a_qa");
+globalThis.fetch = async () => { throw new Error("EXTERNAL_PROVIDER_FORBIDDEN_IN_CART_QA"); };
 const db = new PrismaClient({ datasourceUrl: runtime.href, log: [{ emit: "event", level: "query" }] });
 const owner = new PrismaClient({ datasourceUrl: ownerUrl.href });
 let count = 0;
@@ -169,6 +174,47 @@ async function run() {
   const expires = new Date(Date.now() + 86400000);
   let invoices = 0;
   let notified = 0;
+  let providerClock = Date.now();
+  let createUncertain: "with-id" | "without-id" | undefined;
+  let statusError: mono.MonoError | undefined;
+  let onRemove: ((id: string) => Promise<void>) | undefined;
+  const merchant = new Map<string, mono.MonoSnapshot>();
+  const calls: string[] = [];
+  const put = (id: string, status: string, finalAmount = 0) => {
+    const current = merchant.get(id)!;
+    const updated = { ...current, status, finalAmount, modifiedDate: new Date(++providerClock).toISOString() };
+    merchant.set(id, updated);
+    return updated;
+  };
+  const provider = {
+    ...mono, logMonoInitializationError: () => {},
+    async createMonoInvoice({ number, amount }: { number: string; amount: number }) {
+      const invoiceId = "ux0910_invoice_" + ++invoices;
+      calls.push("create " + invoiceId);
+      const createdDate = new Date(++providerClock).toISOString();
+      merchant.set(invoiceId, { invoiceId, reference: number, amount, ccy: 980, status: "created", modifiedDate: createdDate, createdDate, finalAmount: amount });
+      if (createUncertain) throw new mono.MonoError("MONO_UNAVAILABLE", { endpoint: "invoice/create", category: "timeout",
+        invoiceId: createUncertain === "with-id" ? invoiceId : undefined });
+      return { invoiceId, pageUrl: "https://pay.mbnk.biz/" + invoiceId };
+    },
+    async queryMonoInvoice(id: string) {
+      calls.push("status " + id);
+      if (statusError) throw statusError;
+      const snapshot = merchant.get(id);
+      if (!snapshot) throw new mono.MonoError("MONO_HTTP_REJECTED", { endpoint: "invoice/status", httpStatus: 404 });
+      return snapshot;
+    },
+    async invalidateUnpaidMonoInvoice(id: string) {
+      calls.push("remove " + id);
+      await onRemove?.(id);
+      assert.ok(["created", "failure"].includes(merchant.get(id)?.status ?? ""), "Paid and processing invoices must never be removed");
+      merchant.delete(id);
+    },
+  };
+  const cartCheckout = sourceModule<typeof import("../src/lib/payments/cart-checkout")>("src/lib/payments/cart-checkout.ts", {
+    "@/lib/prisma": { prisma: db }, "@/lib/customer/session": sessions, "@/lib/customer/cart-contract": cartContract,
+    "./initialization-state": initializationState, "./mono": provider, "./mono-state": monoState, "./money": money, "./transitions": transitions,
+  });
   const { createOrder } = sourceModule<typeof import("../src/lib/actions/create-order")>("src/lib/actions/create-order.ts", {
     "node:crypto": crypto, "@prisma/client": prismaExports, "@/lib/prisma": { prisma: db }, "@/lib/cart-items": cartItems,
     "@/lib/product-variants": productVariants,
@@ -178,100 +224,228 @@ async function run() {
     "@/lib/payments/money": money, "@/lib/variant-transaction": variantTransaction,
     "@/lib/customer/session": { ...sessions, customerSession: async () => ({ id: first, binding, expires }) },
     "@/lib/customer/security": { ...security, customerPost: async () => true },
-    "@/lib/payments/initialization-state": initializationState,
+    "@/lib/payments/initialization-state": initializationState, "@/lib/payments/cart-checkout": cartCheckout,
     "@/lib/payments/retry": { verifiedPaymentRetry: async () => "e".repeat(64) },
-    "@/lib/payments/initialization": { recoverUnacceptedInvoice: () => assert.fail("unexpected provider recovery") },
+    "@/lib/payments/initialization": initialization,
     "@/lib/notifications/orders": { notifyOrderCreated: async () => { notified++; return false; } },
-    "@/lib/payments/mono": { MONO_VALIDITY_SECONDS: 3600, logMonoInitializationError: () => {}, MonoError: class extends Error {},
-      createMonoInvoice: async () => ({ invoiceId: "ux0910_invoice_" + ++invoices, pageUrl: "https://pay.mbnk.biz/fixture" }) },
-    "@/lib/payments/transitions": { ...transitions, acceptPaymentInvoice: async (number: string, id: string, expiry: Date, pageUrl: string) => ({
-      order: await owner.order.update({ where: { paymentReference: number }, data: { paymentInvoiceId: id, paymentExpiresAt: expiry, paymentPageUrl: pageUrl } }),
-      notify: false,
-    }) },
+    "@/lib/payments/mono": provider, "@/lib/payments/transitions": transitions,
   });
   const details = { customerName: "Cart", customerSurname: "Fixture", customerPhone: "0501112222", deliveryType: "np_warehouse",
     npCityName: "Local city", npWarehouseRef: "fixture", npWarehouseAddress: "Fixture", paymentMethod: "cash_on_delivery" };
+  const submit = (items: CartItem[], revision: number, method = "cash_on_delivery", key = randomUUID(), locale: Locale = "en") =>
+    createOrder({ ...details, paymentMethod: method }, items, locale, key, undefined, true, { scope, revision });
+  const current = async (method = "cash_on_delivery", key = randomUUID(), locale: Locale = "en") => {
+    const cart = await read();
+    return submit(cart.items, cart.revision, method, key, locale);
+  };
+  const add = async (line = simple) => apply(first, { type: "add", line, revision: (await read()).revision });
+  const clear = async () => {
+    for (const line of (await read()).items) await apply(first, { type: "set", id: line.id, quantity: 0, revision: (await read()).revision });
+  };
+  const freshOrder = (id: string) => owner.order.findUniqueOrThrow({ where: { id }, include: { cartPurchase: true } });
+  const findInvoice = (id: string) => owner.order.findFirstOrThrow({ where: { paymentInvoiceId: id }, include: { cartPurchase: true } });
+  const receipt = (resultUrl: string) => new URL(resultUrl, "http://localhost").searchParams.get("attempt");
+  const resetLease = (orderId: string) => owner.customerCartPurchase.update({ where: { orderId }, data: { reconcileUntil: null } });
+  const evidence = (snapshot: mono.MonoSnapshot) => transitions.applyPaymentEvidence(monoState.monoEvidence(snapshot));
+  const card = "card_online";
   const snapshot = await read();
-  const submit = (items: CartItem[], revision: number, method = "cash_on_delivery", retryKey?: string, retrySource?: { reference: string; token: string }) =>
-    createOrder({ ...details, paymentMethod: method }, items, "en", retryKey, retrySource, true, { scope, revision });
   assert.equal((await submit([{ ...snapshot.items[0], price: 1 }, ...snapshot.items.slice(1)], snapshot.revision)).success, false);
   assert.equal((await submit(snapshot.items.slice(1), snapshot.revision)).success, false);
   assert.deepEqual((await read()).items, snapshot.items);
-  const [codA, codB] = await Promise.all([submit(snapshot.items, snapshot.revision), submit(snapshot.items, snapshot.revision)]);
+  const codKey = randomUUID();
+  const [codA, codB] = await Promise.all([submit(snapshot.items, snapshot.revision, undefined, codKey), submit(snapshot.items, snapshot.revision, undefined, codKey)]);
   assert.ok(codA.success && codB.success);
   assert.equal(codA.orderNumber, codB.orderNumber);
   assert.equal(notified, 1);
   assert.equal((await read()).items.length, 0);
 
-  await apply(first, { type: "add", line: { ...simple, quantity: 2 }, revision: (await read()).revision });
-  const card = await read();
-  const payment = await submit(card.items, card.revision, "card_online");
-  assert.ok(payment.success && payment.payment);
+  // Abandonment leaves the cart and reference intact; a different session and
+  // request key recover the same invoice using the authoritative provider.
+  await add({ ...simple, quantity: 2 });
+  const originalCheckout = await read();
+  const original = await current(card);
+  assert.ok(original.success && original.payment);
+  const firstInvoice = await findInvoice("ux0910_invoice_1");
+  assert.equal(await db.order.count({ where: { id: firstInvoice.id, ...ownedOrders(first) } }), 0);
   const otherDevice = await db.$transaction((tx) => sessions.issueSession(tx, first, binding));
   binding = security.tokenHash(otherDevice.sid);
   scope = sessions.favoritesVersion(binding);
-  const replay = await submit(card.items, card.revision, "card_online");
-  assert.ok(replay.success && replay.payment, "A new authorized session can resume the same hosted invoice");
-  const referenceOf = (url: string) => new URL(url, "http://localhost").searchParams.get("attempt");
-  assert.ok(referenceOf(payment.resultUrl) === referenceOf(replay.resultUrl), "Replay resolves to the same payment reference");
+  const replay = await current(card);
+  assert.ok(replay.success && replay.payment);
+  assert.equal(receipt(replay.resultUrl), receipt(original.resultUrl));
   assert.equal(invoices, 1);
-  assert.equal(quantity(await read(), "qa_product"), 2);
-  const original = await owner.order.findFirstOrThrow({ where: { paymentInvoiceId: "ux0910_invoice_1" } });
-  assert.equal(await db.order.count({ where: { id: original.id, ...ownedOrders(first) } }), 0, "Provisional attempt is absent from account history");
-  const applyEvidence = (reference: string, invoiceId: string, status: "PAID" | "FAILED" | "CANCELLED", modifiedAt = new Date()) =>
-    transitions.applyPaymentEvidence({ provider: "mono", invoiceId, reference, amount: 20000, currency: 980,
-      modifiedAt, status, providerStatus: status === "FAILED" ? "failure" : status === "CANCELLED" ? "expired" : "success",
-      errorCode: status === "FAILED" ? "PAYMENT_FAILED" : status === "CANCELLED" ? "INVOICE_EXPIRED" : null });
-  await apply(first, { type: "add", line: configured("v2", "medium"), revision: card.revision });
-  const changed = await read();
-  for (const method of ["card_online", "cash_on_delivery"]) {
-    const overlapping = await submit(changed.items, changed.revision, method);
-    assert.ok(!overlapping.success && overlapping.pendingPaymentUrl, "The owner can view the prior attempt while a second checkout is blocked");
-    assert.ok(referenceOf(overlapping.pendingPaymentUrl) === original.paymentReference);
-  }
-  assert.equal(invoices, 1);
-  assert.equal(await owner.order.count({ where: { customerId: first } }), 2, "No second order while first invoice is payable");
-  await apply(first, { type: "set", id: "qa_native:variant:v2", quantity: 0, revision: changed.revision });
-  const expiredAt = new Date();
-  assert.equal(await applyEvidence(original.paymentReference!, "ux0910_invoice_1", "FAILED", new Date(expiredAt.getTime() - 10)), "applied");
-  assert.equal(quantity(await read(), "qa_product"), 2);
-  assert.equal(await applyEvidence(original.paymentReference!, "ux0910_invoice_1", "CANCELLED", expiredAt), "applied");
-  assert.equal(quantity(await read(), "qa_product"), 2);
-  const afterExpiry = await read();
-  const source = { reference: original.paymentReference!, token: "fixture" };
-  assert.equal((await submit(afterExpiry.items, afterExpiry.revision, "card_online", "bad", source)).success, false);
-  const retry = await submit(afterExpiry.items, afterExpiry.revision, "card_online", "e".repeat(64), source);
-  assert.ok(retry.success && retry.payment);
-  assert.equal(invoices, 2);
-  assert.ok((await submit(afterExpiry.items, afterExpiry.revision, "card_online", "e".repeat(64), source)).success);
-  assert.equal(invoices, 2);
+  assert.deepEqual((await read()).items, originalCheckout.items);
 
-  await apply(first, { type: "set", id: "qa_product", quantity: 1, revision: afterExpiry.revision });
-  await apply(first, { type: "add", line: { ...simple, quantity: 3 }, revision: (await read()).revision });
-  await apply(first, { type: "add", line: configured("v2", "medium"), revision: (await read()).revision });
-  const paid = await owner.order.findFirstOrThrow({ where: { paymentInvoiceId: "ux0910_invoice_2" } });
-  const settledAt = new Date();
-  assert.equal(await applyEvidence(paid.paymentReference!, "ux0910_invoice_2", "PAID", settledAt), "applied");
-  assert.equal(await applyEvidence(paid.paymentReference!, "ux0910_invoice_2", "PAID", settledAt), "duplicate");
-  assert.equal(await applyEvidence(paid.paymentReference!, "ux0910_invoice_2", "FAILED", new Date(settledAt.getTime() - 1000)), "stale");
-  assert.equal(quantity(await read(), "qa_product"), 3, "Unpurchased new quantities stay");
-  assert.equal(quantity(await read(), "qa_native:variant:v2"), 1, "Other device's product stays");
-  assert.equal(await db.customerCartPurchase.count({ where: { orderId: paid.id } }), 0);
-  assert.equal(await applyEvidence(original.paymentReference!, "ux0910_invoice_1", "PAID", new Date(expiredAt.getTime() - 100)), "stale");
-  const late = await owner.order.findUniqueOrThrow({ where: { id: original.id } });
+  await add(configured("v2", "medium"));
+  const staleQuote = await read();
+  assert.ok(!(await submit(staleQuote.items.map((line) => ({ ...line, price: 1 })), staleQuote.revision, card)).success);
+  assert.equal(merchant.get("ux0910_invoice_1")?.status, "created", "Invalid quotes do not deactivate a valid invoice");
+  calls.length = 0;
+  const changed = await current(card);
+  assert.ok(changed.success && changed.payment);
+  assert.deepEqual(calls, ["status ux0910_invoice_1", "remove ux0910_invoice_1", "create ux0910_invoice_2"]);
+  const secondInvoice = await findInvoice("ux0910_invoice_2");
+  assert.equal((await freshOrder(firstInvoice.id)).cartPurchase?.supersededByOrderId, secondInvoice.id);
+
+  // A second tab cannot pass the outstanding removal. Switching to COD can
+  // create exactly one order after the confirmed deactivation.
+  let startedRemove!: () => void;
+  let permitRemove!: () => void;
+  const removing = new Promise<void>((resolve) => { startedRemove = resolve; });
+  const permitted = new Promise<void>((resolve) => { permitRemove = resolve; });
+  onRemove = async () => { startedRemove(); await permitted; };
+  const cod = current();
+  await Promise.race([removing, cod.then(() => assert.fail("Expected removal before COD"))]);
+  try {
+    const overlapping = await current();
+    assert.ok(!overlapping.success && overlapping.pendingPaymentUrl && receipt(overlapping.pendingPaymentUrl) === secondInvoice.paymentReference);
+  } finally { permitRemove(); }
+  const paidLater = await cod;
+  onRemove = undefined;
+  assert.ok(paidLater.success && paidLater.orderNumber);
+  assert.equal(invoices, 2);
+  assert.equal((await read()).items.length, 0);
+  const lateSuccess = { invoiceId: "ux0910_invoice_2", reference: secondInvoice.paymentReference!, ccy: 980,
+    status: "success", amount: money.moneyMinorUnits(secondInvoice.total.toString())!, modifiedDate: new Date(++providerClock).toISOString() };
+  await add();
+  assert.equal(await evidence(lateSuccess), "applied");
+  assert.equal(await evidence(lateSuccess), "duplicate");
+  const late = await freshOrder(secondInvoice.id);
   assert.equal(late.checkoutAcceptance, "REVIEW");
+  assert.equal(late.number, null);
+  assert.equal(late.paymentErrorCode, "SUPERSEDED_PAYMENT_PAID");
   assert.ok(late.paidAt);
-  assert.equal(quantity(await read(), "qa_product"), 3);
+  assert.equal(await evidence({ ...lateSuccess, status: "processing", modifiedDate: new Date(++providerClock).toISOString() }), "applied");
+  assert.equal((await freshOrder(secondInvoice.id)).paymentErrorCode, "SUPERSEDED_PAYMENT_PAID");
+  assert.equal(quantity(await read(), "qa_product"), 1);
+  console.log("PASS UX-09 abandoned invoice, other-device reuse, changed checkout, online-to-COD, concurrent checkout and superseded financial success audit");
+
+  // No expired webhook. Passing the local validity timestamp proves nothing.
+  const expiryKey = randomUUID();
+  assert.ok((await current(card, expiryKey)).success);
+  const expiring = await findInvoice("ux0910_invoice_3");
+  await owner.order.update({ where: { id: expiring.id }, data: { paymentExpiresAt: new Date(Date.now() - 1000) } });
+  const timeout = new mono.MonoError("MONO_UNAVAILABLE", { endpoint: "invoice/status", category: "timeout" });
+  statusError = timeout;
+  const unclear = await current(card, expiryKey, "ua");
+  assert.ok(!unclear.success && unclear.error === translations.ua.checkout.errors.paymentVerification);
+  assert.equal((await freshOrder(expiring.id)).paymentStatus, "PENDING");
+  assert.equal(invoices, 3);
+  statusError = new mono.MonoError("MONO_HTTP_REJECTED", { endpoint: "invoice/status", httpStatus: 429 });
+  await resetLease(expiring.id);
+  calls.length = 0;
+  const throttled = await current(card, expiryKey);
+  assert.ok(!throttled.success && throttled.error === translations.en.checkout.errors.paymentVerification);
+  await current(card, expiryKey);
+  assert.deepEqual(calls, ["status ux0910_invoice_3"]);
+  await resetLease(expiring.id);
+  statusError = undefined;
+  put("ux0910_invoice_3", "expired");
+  assert.ok((await current(card, expiryKey)).success);
+  assert.equal((await freshOrder(expiring.id)).paymentProviderStatus, "expired");
+  assert.equal(invoices, 4);
+  put("ux0910_invoice_4", "failure");
+  onRemove = async () => { throw new mono.MonoError("MONO_HTTP_REJECTED", { endpoint: "invoice/remove", httpStatus: 404 }); };
+  const failedButUnconfirmed = await current(card, expiryKey);
+  assert.ok(!failedButUnconfirmed.success && failedButUnconfirmed.error === translations.en.checkout.errors.paymentVerification);
+  assert.equal(invoices, 4, "Failure alone and an ambiguous removal cannot open a second payable invoice");
+  onRemove = undefined;
+  await resetLease((await findInvoice("ux0910_invoice_4")).id);
+  calls.length = 0;
+  assert.ok((await current(card, expiryKey)).success);
+  assert.equal((await findInvoice("ux0910_invoice_4")).paymentProviderStatus, "failure");
+  assert.deepEqual(calls, ["status ux0910_invoice_4", "remove ux0910_invoice_4", "create ux0910_invoice_5"]);
+  assert.equal(invoices, 5);
+
+  const processingInvoice = await findInvoice("ux0910_invoice_5");
+  put("ux0910_invoice_5", "processing");
+  calls.length = 0;
+  const processing = await current(undefined, undefined, "ua");
+  assert.ok(!processing.success && processing.error === translations.ua.checkout.errors.pendingPayment);
+  assert.deepEqual(calls, ["status ux0910_invoice_5"]);
+  put("ux0910_invoice_5", "created");
+  await resetLease(processingInvoice.id);
+  onRemove = async () => { throw new mono.MonoError("MONO_UNAVAILABLE", { endpoint: "invoice/remove", category: "timeout" }); };
+  const refused = await current();
+  assert.ok(!refused.success && refused.error === translations.en.checkout.errors.paymentVerification);
+  assert.equal(merchant.get("ux0910_invoice_5")?.status, "created");
+  assert.equal((await freshOrder(processingInvoice.id)).cartPurchase?.supersededByOrderId, null);
+  assert.equal(quantity(await read(), "qa_product"), 1);
+  console.log("PASS UX-09 expiration without a webhook, failed invoice replacement, processing, verification timeout and rate limit, and unknown deactivation in UA and EN");
+
+  // Success wins in the merchant race. The overlapping request must review the
+  // changed cart, and the old attempt must never be silently ignored.
+  await resetLease(processingInvoice.id);
+  await add({ ...simple, quantity: 2 });
+  await add(configured("v2", "medium"));
+  let settled!: mono.MonoSnapshot;
+  onRemove = async (id) => {
+    settled = put(id, "success", merchant.get(id)!.amount);
+    throw new mono.MonoError("MONO_HTTP_REJECTED", { endpoint: "invoice/remove", httpStatus: 400 });
+  };
+  const racing = await current();
+  assert.ok(!racing.success && racing.error === translations.en.cart.sync.conflict);
+  onRemove = undefined;
+  const accepted = await freshOrder(processingInvoice.id);
+  assert.equal(accepted.checkoutAcceptance, "ACCEPTED");
+  assert.ok(accepted.paidAt && accepted.number);
+  assert.equal(await evidence(settled), "duplicate");
+  assert.equal(await evidence({ ...settled, status: "failure", modifiedDate: new Date(Date.parse(settled.modifiedDate) - 1).toISOString() }), "stale");
   await db.$transaction(async (tx) => {
     assert.ok(await sessions.lockCustomer(tx, first));
-    await consumePaidCart(tx, paid.id, first);
+    await consumePaidCart(tx, accepted.id, first);
   });
-  assert.equal(quantity(await read(), "qa_product"), 3);
+  assert.equal(quantity(await read(), "qa_product"), 2);
+  assert.equal(quantity(await read(), "qa_native:variant:v2"), 1);
+
+  // Distinct unit generations permit a separate purchase. An old payment from
+  // another device may still be accepted independently without consuming it.
+  assert.ok((await current(card)).success);
+  const independent = await findInvoice("ux0910_invoice_6");
+  await clear();
+  await add(configured("v1", "small"));
+  calls.length = 0;
+  assert.ok((await current()).success);
+  assert.deepEqual(calls, []);
+  assert.equal((await freshOrder(independent.id)).cartPurchase?.supersededByOrderId, null);
+  await add();
+  assert.equal(await evidence(put("ux0910_invoice_6", "success", merchant.get("ux0910_invoice_6")!.amount)), "applied");
+  assert.equal((await freshOrder(independent.id)).checkoutAcceptance, "ACCEPTED");
+  assert.equal(quantity(await read(), "qa_product"), 1);
+  console.log("PASS UX-09 payment wins removal race, duplicate and out-of-order evidence, once-only quantity deduction and independent orders");
+
+  createUncertain = "without-id";
+  const uncertain = await current(card);
+  createUncertain = undefined;
+  assert.ok(!uncertain.success);
+  const unknown = await owner.order.findFirstOrThrow({ where: { paymentReference: merchant.get("ux0910_invoice_7")!.reference } });
+  assert.equal(unknown.paymentInvoiceId, null);
+  assert.equal(unknown.paymentPageUrl, null);
+  assert.equal(unknown.paymentErrorCode, initializationState.INVOICE_UNCERTAIN);
+  assert.ok((await current()).success);
+  assert.equal(await transitions.acceptPaymentInvoice(unknown.paymentReference!, "ux0910_invoice_7", new Date(), "https://pay.mbnk.biz/ux0910_invoice_7"), null);
+  const laterEvidence = monoState.monoEvidence(put("ux0910_invoice_7", "success", merchant.get("ux0910_invoice_7")!.amount));
+  assert.equal(await transitions.applyPaymentEvidence(laterEvidence, { authenticatedInvoiceBinding: true }), "applied");
+  assert.equal((await freshOrder(unknown.id)).paymentErrorCode, "SUPERSEDED_PAYMENT_PAID");
+  assert.equal((await freshOrder(unknown.id)).checkoutAcceptance, "REVIEW");
+
+  await add(configured("v2", "medium"));
+  const missingHandoffKey = randomUUID();
+  createUncertain = "with-id";
+  assert.ok(!(await current(card, missingHandoffKey)).success);
+  createUncertain = undefined;
+  const missingHandoff = await findInvoice("ux0910_invoice_8");
+  assert.equal(missingHandoff.paymentPageUrl, null);
+  calls.length = 0;
+  assert.ok((await current(card, missingHandoffKey)).success);
+  assert.deepEqual(calls, ["status ux0910_invoice_8", "remove ux0910_invoice_8", "create ux0910_invoice_9"]);
   await db.session.deleteMany({ where: { sessionToken: binding } });
+  calls.length = 0;
   const next = await read();
-  assert.equal((await submit(next.items, next.revision)).success, false);
+  assert.ok(!(await current()).success);
+  assert.deepEqual(calls, []);
   assert.deepEqual((await read()).items, next.items);
-  console.log("PASS UX-09 real order transaction and payment evidence, duplicate COD/card requests, failure and approved payment retry, isolated quantity deduction and revoked session");
+  console.log("PASS UX-09 unpublished create outcome, late handoff fence, early-bound financial success audit and revoked session");
 
   const readBefore = count;
   const started = performance.now();

@@ -23,7 +23,7 @@ const pg = (name) => join(pgBin, name + (process.platform === "win32" ? ".exe" :
 const env = { ...process.env, DATABASE_URL: "postgresql://unused@127.0.0.1:1/unused",
   NEXT_TELEMETRY_DISABLED: "1", PRODUCT_MEDIA_CLEANUP_ENABLED: "false", PRODUCT_VARIANTS_ENABLED: "true",
   BLOB_READ_WRITE_TOKEN: ux07 ? "vercel_blob_rw_ux07fixture_LOCAL_ONLY" : "", BATCH19_UX07: ux07 ? "1" : "",
-  ONLINE_PAYMENT_MODE: "disabled", TELEGRAM_BOT_TOKEN: "", TELEGRAM_ADMIN_CHAT_ID: "", NP_API_KEY: "", AUTH_DEBUG: "0",
+  ONLINE_PAYMENT_MODE: "disabled", MONO_ACQUIRING_TOKEN: "local-mock-only", TELEGRAM_BOT_TOKEN: "", TELEGRAM_ADMIN_CHAT_ID: "", NP_API_KEY: "", AUTH_DEBUG: "0",
   AUTH_SECRET: randomBytes(32).toString("hex"), CUSTOMER_AUTH_SECRET: randomBytes(32).toString("hex"),
   RESEND_API_KEY: "local-mock", EMAIL_FROM: "QA <qa@example.test>", CUSTOMER_GOOGLE_CLIENT_ID: "local-google-id",
   CUSTOMER_GOOGLE_CLIENT_SECRET: "local-google-secret", ADMIN_USERNAME: "local-admin",

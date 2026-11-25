@@ -57,7 +57,12 @@ model CustomerCartImport {
 model CustomerCartPurchase {
   orderId String @id
   lines   Json
-  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reconcileUntil DateTime?
+  supersededByOrderId String?
+  order   Order  @relation("CartPurchase", fields: [orderId], references: [id], onDelete: Cascade)
+  supersededBy Order? @relation("SupersededCartPurchase", fields: [supersededByOrderId], references: [id], onDelete: Restrict)
+
+  @@index([supersededByOrderId])
 }
 
 model Account {
@@ -260,7 +265,8 @@ enum CheckoutAcceptance {
 }
 
 model Order {
-  cartPurchase CustomerCartPurchase?
+  cartPurchase CustomerCartPurchase? @relation("CartPurchase")
+  supersededCartPurchases CustomerCartPurchase[] @relation("SupersededCartPurchase")
   id                      String      @id @default(cuid())
   number                  String?     @unique
   checkoutAcceptance      CheckoutAcceptance @default(LEGACY)

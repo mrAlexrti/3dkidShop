@@ -53,5 +53,13 @@ globalThis.fetch = async (input, init) => {
     appendFileSync(process.env.BATCH19_MAIL_LOG, JSON.stringify({ to: message.to, html: message.html, text: message.text }) + "\n");
     return Response.json({ id: "mock-resend" });
   }
+  if (target.origin === "https://api.monobank.ua" && target.pathname === "/api/merchant/invoice/status" && init?.headers?.["X-Token"] === "local-mock-only") {
+    const invoiceId = target.searchParams.get("invoiceId");
+    if (invoiceId === "cart_browser_en" || invoiceId === "cart_browser_ua") {
+      const en = invoiceId.endsWith("_en");
+      return Response.json({ invoiceId, reference: "pay_" + (en ? "e" : "a").repeat(32), status: en ? "created" : "expired",
+        amount: 10000, ccy: 980, modifiedDate: new Date().toISOString() });
+    }
+  }
   throw new Error(`B19_UNEXPECTED_EXTERNAL_FETCH ${target.origin}${target.pathname}`);
 };

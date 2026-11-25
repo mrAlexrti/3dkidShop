@@ -9,6 +9,7 @@ import * as configurationAdmin from "../src/lib/product-configuration-admin";
 import * as cartPersistence from "../src/lib/cart-persistence";
 import * as cartProducts from "../src/lib/cart-products";
 import * as cartContract from "../src/lib/customer/cart-contract";
+import * as cartLimits from "../src/lib/cart-limits";
 import * as accountCart from "../src/lib/customer/cart";
 import * as checkoutSession from "../src/lib/payments/checkout-session";
 import * as productQuery from "../src/lib/product-query";
@@ -39,10 +40,12 @@ export function sourceModule<T>(file: string, bindings: Record<string, unknown>)
     "@/lib/customer/security": { customerPost: () => false },
     "@/lib/cart-products": cartProducts,
     "@/lib/customer/cart-contract": cartContract,
+    "@/lib/cart-limits": cartLimits,
     "@/lib/customer/cart": accountCart,
     "@/lib/customer/cart-actions": { changeAccountCart: () => { throw new Error("Unexpected account cart mutation in guest fixture"); } },
     "@/lib/customer/guest-cart": { broadcastCart: () => {}, CART_SYNC_KEY: "fixture-cart-sync" },
     "@/lib/payments/checkout-session": checkoutSession,
+    "@/lib/payments/cart-checkout": {}, // Guest fixtures must not enter account payment reconciliation.
     "@/lib/actions/require-admin": { requireAdmin: async () => {} },
     "./favorite-button": { FavoriteButton: () => null },
     "@/components/product/favorite-button": { FavoriteButton: () => null },

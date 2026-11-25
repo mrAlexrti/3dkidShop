@@ -4,7 +4,7 @@ import type { PaymentStage } from "@/lib/status";
 import { moneyMinorUnits } from "@/lib/payments/money";
 import { getOrderStatusAfterPaymentReceived } from "@/lib/order-status";
 import { emitOrderEvents } from "@/lib/notifications/orders";
-import { INVOICE_INITIALIZING, isUnacceptedOnlineOrder } from "@/lib/payments/initialization-state";
+import { INVOICE_INITIALIZING, INVOICE_INVALIDATED, isUnacceptedOnlineOrder } from "@/lib/payments/initialization-state";
 import { paymentReferenceWhere } from "./acceptance";
 import { allocateOrderNumber, isOrderNumberCollision } from "@/lib/order-number";
 import { enqueueAcceptanceNotifications } from "@/lib/notifications/outbox";
@@ -53,13 +53,22 @@ export async function applyPaymentEvidence(evidence: PaymentEvidence, options: {
         // A signature/reference alone cannot bind a new invoice. The caller must
         // additionally query that invoice with this merchant's token first.
         if (!order.paymentInvoiceId && !options.authenticatedInvoiceBinding) return { outcome: "unbound" };
+        // A provider-confirmed removal is final for unpaid evidence. Record any
+        // later financial evidence through the usual acceptance and audit path.
+        if (order.paymentErrorCode === INVOICE_INVALIDATED && !["PAID", "REFUNDED"].includes(evidence.status)) return { outcome: "stale" };
+        let superseded = false;
+        if (order.customerId && evidence.status === "PAID" && ["PROVISIONAL", "REVIEW"].includes(order.checkoutAcceptance)) {
+          await lockCustomer(tx, order.customerId);
+          superseded = !!(await tx.customerCartPurchase.findUnique({ where: { orderId: order.id }, select: { supersededByOrderId: true } }))?.supersededByOrderId;
+        }
+        const latePaymentCode = superseded ? "SUPERSEDED_PAYMENT_PAID" : "LATE_PAYMENT_REVIEW";
         const previousTime = order.paymentModifiedAt?.getTime();
         if (previousTime !== undefined && evidence.modifiedAt.getTime() < previousTime) {
           // Even out-of-order financial success is an audit fact. Do not revive a
           // newer refund/cancellation, but never silently lose evidence of money.
           if (evidence.status === "PAID" && !order.paidAt) {
             const changed = await tx.order.updateMany({ where: paymentSnapshotWhere(order), data: {
-              paidAt: evidence.modifiedAt, paymentErrorCode: "LATE_PAYMENT_REVIEW",
+              paidAt: evidence.modifiedAt, paymentErrorCode: latePaymentCode,
               paymentNextCheckAt: new Date(Date.now() + 300000),
               ...(["PROVISIONAL", "REVIEW"].includes(order.checkoutAcceptance) ? { checkoutAcceptance: "REVIEW" as const } : {}),
             } });
@@ -75,7 +84,7 @@ export async function applyPaymentEvidence(evidence: PaymentEvidence, options: {
           if (!options.authoritativeSnapshot) {
             if (evidence.status === "PAID" && !order.paidAt) {
               const changed = await tx.order.updateMany({ where: paymentSnapshotWhere(order), data: {
-                paidAt: evidence.modifiedAt, paymentErrorCode: "LATE_PAYMENT_REVIEW", paymentNextCheckAt: new Date(Date.now() + 300000),
+                paidAt: evidence.modifiedAt, paymentErrorCode: latePaymentCode, paymentNextCheckAt: new Date(Date.now() + 300000),
                 ...(["PROVISIONAL", "REVIEW"].includes(order.checkoutAcceptance) ? { checkoutAcceptance: "REVIEW" as const } : {}),
               } });
               if (changed.count !== 1) return { outcome: "conflict" };
@@ -100,13 +109,15 @@ export async function applyPaymentEvidence(evidence: PaymentEvidence, options: {
             if (nextStatus !== order.status) data.status = nextStatus;
           }
           if (order.checkoutAcceptance === "PROVISIONAL" || order.checkoutAcceptance === "REVIEW") {
-            if (order.status === "PENDING" && !order.novaPoshtaTtn && !order.novaPoshtaDeliveredAt && order.paymentStatus !== "REFUNDED") {
-              // Use the same customer-before-order-number lock order as COD.
-              if (order.customerId) await lockCustomer(tx, order.customerId);
+            if (!superseded && order.status === "PENDING" && !order.novaPoshtaTtn && !order.novaPoshtaDeliveredAt && order.paymentStatus !== "REFUNDED") {
               data.number = order.number ?? await allocateOrderNumber(tx);
               data.checkoutAcceptance = "ACCEPTED";
               data.acceptedAt = new Date();
-            } else { data.checkoutAcceptance = "REVIEW"; data.paymentErrorCode = "LATE_PAYMENT_REVIEW"; }
+            } else {
+              data.checkoutAcceptance = "REVIEW";
+              data.status = order.status;
+              data.paymentErrorCode = latePaymentCode;
+            }
           }
         } else if (evidence.status === "FAILED" || evidence.status === "CANCELLED") {
           if (order.paidAt) {
@@ -130,6 +141,7 @@ export async function applyPaymentEvidence(evidence: PaymentEvidence, options: {
           data.checkoutAcceptance = "REVIEW";
           data.paymentErrorCode = "REFUND_BEFORE_ACCEPTANCE";
         }
+        if (order.paymentErrorCode === "SUPERSEDED_PAYMENT_PAID" && evidence.status !== "REFUNDED") data.paymentErrorCode = order.paymentErrorCode;
         // Payment processing has no Product writes. Refunds preserve historical paidAt.
         const changed = await tx.order.updateMany({ where: paymentSnapshotWhere(order), data });
         if (changed.count !== 1) return { outcome: "conflict" };
@@ -190,6 +202,11 @@ export async function acceptPaymentInvoice(number: string, invoiceId: string, ex
       // exclusively to verified PAID evidence, including PAID before attachment.
       if (order && ["PROVISIONAL", "REVIEW", "ACCEPTED"].includes(order.checkoutAcceptance)) {
         if (order.paymentProvider !== "mono" || (order.paymentInvoiceId && order.paymentInvoiceId !== invoiceId)) return null;
+        if (order.customerId) {
+          await lockCustomer(tx, order.customerId);
+          const plan = await tx.customerCartPurchase.findUnique({ where: { orderId: order.id }, select: { supersededByOrderId: true } });
+          if (plan?.supersededByOrderId || order.paymentErrorCode === INVOICE_INVALIDATED) return null;
+        }
         const changed = await tx.order.updateMany({ where: paymentSnapshotWhere(order), data: {
           paymentInvoiceId: invoiceId, paymentExpiresAt: expiresAt,
           ...(pageUrl ? { paymentPageUrl: pageUrl } : {}),

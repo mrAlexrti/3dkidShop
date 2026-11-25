@@ -5,6 +5,7 @@ import { paymentResultState } from "@/lib/payments/payment-state";
 import { canStartNewPayment } from "@/lib/payments/retry-state";
 import { OrderResult } from "@/components/checkout/order-result";
 import { getT } from "@/lib/i18n-server";
+import { customerSession } from "@/lib/customer/session";
 
 export async function generateMetadata(): Promise<Metadata> {
   return { title: (await getT()).success.resultTitle, robots: { index: false, follow: false }, referrer: "no-referrer" };
@@ -15,7 +16,8 @@ export default async function CheckoutSuccessPage({ searchParams }: { searchPara
   const reference = typeof query.attempt === "string" ? query.attempt : "";
   const token = typeof query.token === "string" ? query.token : "";
   const order = (reference ? validAttemptResultToken(reference, token) : validOrderResultToken(number, token)) ? await prisma.order.findUnique({
-    where: reference ? { paymentReference: reference } : { number }, select: { number: true, checkoutAcceptance: true, paymentProvider: true, paymentStatus: true, paymentMethod: true, status: true, paidAt: true, paymentProviderStatus: true, paymentErrorCode: true, paymentInvoiceId: true, novaPoshtaTtn: true, novaPoshtaDeliveredAt: true },
+    where: reference ? { paymentReference: reference } : { number }, select: { number: true, checkoutAcceptance: true, paymentProvider: true, paymentStatus: true, paymentMethod: true, status: true, paidAt: true, paymentProviderStatus: true, paymentErrorCode: true, paymentInvoiceId: true, novaPoshtaTtn: true, novaPoshtaDeliveredAt: true, customerId: true },
   }) : null;
-  return <OrderResult key={order ? `${reference || number}:${token}` : "unavailable"} initialState={order ? paymentResultState(order) : "unavailable"} number={order && (!reference || order.checkoutAcceptance === "ACCEPTED") ? order.number ?? "" : ""} attempt={order ? reference : ""} token={order ? token : ""} canRetry={!!reference && !!order && canStartNewPayment(order)} />;
+  const ownsAttempt = !!reference && !!order?.customerId && (await customerSession())?.id === order.customerId;
+  return <OrderResult key={order ? `${reference || number}:${token}` : "unavailable"} initialState={order ? paymentResultState(order) : "unavailable"} number={order && (!reference || order.checkoutAcceptance === "ACCEPTED") ? order.number ?? "" : ""} attempt={order ? reference : ""} token={order ? token : ""} canRetry={!!reference && !!order && canStartNewPayment(order)} ownsAttempt={ownsAttempt} />;
 }

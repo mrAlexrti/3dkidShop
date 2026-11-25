@@ -192,7 +192,7 @@ async function verify() {
     "react/jsx-runtime": jsx, "lucide-react": icons, "@/lib/utils": utils,
     "@/lib/validations/checkout": checkoutValidation, "@hookform/resolvers/zod": { zodResolver: () => ({}) },
     "react-hook-form": { useForm: () => ({ register: () => ({}), handleSubmit: (callback: unknown) => callback, setValue: () => {}, control: {}, formState: { errors: {} } }), useWatch: ({ name }: { name: string }) => name === "deliveryType" ? "np_warehouse" : "" },
-    "@/components/ui/button": { Button: "button" }, "@/store/cart-store": { useCartStore: formStore },
+    "@/components/ui/button": { Button: "button" }, "@/store/cart-store": { useCartStore: formStore, refreshAccountCart: async () => {} },
     "@/store/lang-store": { useLangStore: () => ({ t: translations.en, locale: "en" }) },
     "next/navigation": { useRouter: () => ({ push: () => {} }) }, sonner: { toast: { error: () => {}, success: () => {}, message: () => {} } },
     "./use-np-lookups": { useCitySearch: () => ({ cities: [], search: () => {}, clear: () => {} }), useWarehouses: () => ({ warehouses: [], search: () => {}, clear: () => {} }) },
@@ -219,6 +219,15 @@ async function verify() {
     } });
   await submit()(formData);
   assert.equal(orderCalls, 1, "The original click cannot order goods added on another device during verification");
+  useCartStore.setState({ verifyCart: async () => true });
+  for (const paymentMethod of ["cash_on_delivery", "card_online"] as const) {
+    const calls: number = orderCalls;
+    const start = submit()({ ...formData, paymentMethod });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(orderCalls, calls + 1, "Account checkout does not wait for a browser-local checkout identity");
+    releaseOrder!();
+    await start;
+  }
   useCartStore.setState(guestState);
   pass("account checkout requires explicit review when confirmation sees another device's change");
 

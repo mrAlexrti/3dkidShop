@@ -2,6 +2,7 @@
 import { availabilityVariantInclude } from "@/lib/product-query";
 import { getSizeVariants, snapshotSize } from "@/lib/product-variants";
 import { requestedSizeId } from "@/lib/cart-items";
+import { cartTotalMinor } from "@/lib/cart-limits";
 import { getOnlinePaymentConfig } from "@/lib/payments/online-payment";
 import { getOrderResultPath, getAttemptResultPath } from "@/lib/payments/order-result";
 import { createHmac, randomUUID } from "node:crypto";
@@ -30,6 +31,7 @@ import { customerPost, customerSecret } from "@/lib/customer/security";
 import { cartLineInput, cartProof } from "@/lib/customer/cart-contract";
 import { consumeCart, matchesCart, readCart } from "@/lib/customer/cart";
 import { colorGallery } from "@/lib/gallery";
+import { canReplaceCartPayment, findRelatedCartPayments, matchesPaymentPlan, reconcileCartPayment, type CartPayment } from "@/lib/payments/cart-checkout";
 
 export type CreateOrderResult =
   | { success: true; orderNumber: string | null; emailSent: boolean; resultUrl: string; payment?: HostedCheckout }
@@ -47,7 +49,7 @@ type PricedOrderItem = {
 
 class CheckoutInputError extends Error {}
 class PendingPaymentError extends Error {
-  constructor(readonly reference: string) { super("UNRESOLVED_PAYMENT_EXISTS"); }
+  constructor(readonly reference: string) { super("PAYMENT_CHANGED_DURING_CHECKOUT"); }
 }
 
 async function priceOrderItems(tx: Prisma.TransactionClient, items: CartItem[], errors: (typeof translations)[Locale]["checkout"]["errors"], requirePriceMatch: boolean) {
@@ -157,7 +159,7 @@ export async function createOrder(
   accountCart?: unknown
 ): Promise<CreateOrderResult> {
   const errors = translations[locale === "en" ? "en" : "ua"].checkout.errors;
-  const pendingPayment = (reference: string): CreateOrderResult => ({ success: false, error: errors.pendingPayment,
+  const pendingPayment = (reference: string, error: string = errors.pendingPayment): CreateOrderResult => ({ success: false, error,
     pendingPaymentUrl: getAttemptResultPath(reference) });
   const parsed = getCheckoutSchema(locale === "en" ? "en" : "ua").safeParse(data);
   if (!parsed.success) {
@@ -179,28 +181,50 @@ export async function createOrder(
     return { success: false, error: errors.invalid };
   }
   const revision = proof.success ? proof.data.revision : null;
-  const key = customer && revision !== null && !retrySource
-    ? createHmac("sha256", customerSecret()).update(JSON.stringify(["customer-cart-checkout", customer.id, revision])).digest("hex")
+  const cartCopy = translations[locale === "en" ? "en" : "ua"].cart.sync;
+  const requestKey = retryKey ?? "initial";
+  if (customer && !retrySource && retryKey !== undefined && !/^[a-f0-9-]{36,64}$/i.test(retryKey)) return { success: false, error: errors.invalid };
+  const accountKey = (material: unknown) => createHmac("sha256", customerSecret()).update(JSON.stringify(material)).digest("hex");
+  const rootKey = customer && revision !== null && !retrySource
+    ? accountKey(["customer-cart-checkout:v2", customer.id, revision, requestKey, d, cartTotalMinor(items)])
     : retryKey;
+  let key = rootKey;
 
-  // A retry is replayed before current pricing/config availability is checked.
-  // Its original server-priced snapshot remains immutable.
+  const knownResult = (order: CartPayment, reusable = false): CreateOrderResult => {
+    if (!order.paymentReference) return order.number ? { success: true, orderNumber: order.number, emailSent: false, resultUrl: getOrderResultPath(order.number) } : { success: false, error: errors.invalid };
+    return { success: true, orderNumber: order.number, emailSent: false, resultUrl: getAttemptResultPath(order.paymentReference),
+      ...(reusable && order.paymentPageUrl ? { payment: { provider: "mono" as const, pageUrl: order.paymentPageUrl } } : {}) };
+  };
+  const unresolved = (reference: string, kind: "processing" | "retry") =>
+    pendingPayment(reference, kind === "processing" ? errors.pendingPayment : errors.paymentVerification);
+
+  // Replay an exact submission before validating present-day pricing. A
+  // terminal invoice can have a deterministic successor with its own identity.
   let identity: ReturnType<typeof checkoutIdentity> | null = null;
   if (customer || d.paymentMethod === "card_online") {
-    try { identity = checkoutIdentity(key ?? "", d, items); }
-    catch { return { success: false, error: errors.invalid }; }
-    const existing = await prisma.order.findUnique({ where: { checkoutKeyHash: identity.checkoutKeyHash } });
-    if (existing) {
-      if ((existing.customerId ?? null) !== customerId) return { success: false, error: errors.invalid };
-      if (existing.checkoutPayloadHash !== identity.checkoutPayloadHash) {
-        if (customer && existing.paymentReference && existing.checkoutAcceptance === "PROVISIONAL" &&
-          (existing.paymentStatus === "PENDING" || existing.paymentStatus === "UNKNOWN")) return pendingPayment(existing.paymentReference);
-        return { success: false, error: errors.invalid };
+    for (;;) {
+      try { identity = checkoutIdentity(key ?? "", d, items); }
+      catch { return { success: false, error: errors.invalid }; }
+      const existing = await prisma.order.findUnique({ where: { checkoutKeyHash: identity.checkoutKeyHash }, include: { cartPurchase: true } });
+      if (!existing) break;
+      if ((existing.customerId ?? null) !== customerId || existing.checkoutPayloadHash !== identity.checkoutPayloadHash) return { success: false, error: errors.invalid };
+      if (!customer) {
+        if (!existing.paymentReference) return { success: false, error: errors.invalid };
+        return knownResult(existing, !existing.paidAt && existing.status !== "CANCELLED" && existing.paymentStatus === "PENDING" &&
+          (!existing.paymentExpiresAt || existing.paymentExpiresAt > new Date()));
       }
-      if (!existing.paymentReference) return existing.number && customer ? { success: true, orderNumber: existing.number, emailSent: false, resultUrl: getOrderResultPath(existing.number) } : { success: false, error: errors.invalid };
-      return { success: true, orderNumber: existing.number, emailSent: false, resultUrl: getAttemptResultPath(existing.paymentReference),
-        ...(!existing.paidAt && existing.status !== "CANCELLED" && existing.paymentStatus === "PENDING" && existing.paymentPageUrl && (!existing.paymentExpiresAt || existing.paymentExpiresAt.getTime() > Date.now())
-          ? { payment: { provider: "mono" as const, pageUrl: existing.paymentPageUrl } } : {}) };
+      if (!existing.cartPurchase || !existing.paymentReference) return knownResult(existing);
+      const nextKey = accountKey(["customer-cart-redo", rootKey, existing.id]);
+      if (existing.cartPurchase.supersededByOrderId) {
+        // An old submission cannot cancel a different successor checkout.
+        const successor = await prisma.order.findUnique({ where: { id: existing.cartPurchase.supersededByOrderId }, select: { checkoutKeyHash: true } });
+        if (successor?.checkoutKeyHash !== checkoutIdentity(nextKey, d, items).checkoutKeyHash) return knownResult(existing);
+      } else {
+        const resolution = await reconcileCartPayment(existing, "reuse", customer.binding);
+        if (resolution.kind === "settled" || resolution.kind === "reusable") return knownResult(resolution.order, resolution.kind === "reusable");
+        if (resolution.kind !== "terminal") return unresolved(existing.paymentReference, resolution.kind);
+      }
+      key = nextKey;
     }
   }
 
@@ -215,6 +239,31 @@ export async function createOrder(
       success: false,
       error: errors.payment,
     };
+  }
+
+  if (customer) {
+    const cart = await readCart(prisma, customer.id);
+    if (cart.revision !== revision || !matchesCart(cart.lines, items.map(cartLineInput))) return { success: false, error: cartCopy.conflict };
+    const related = (await findRelatedCartPayments(prisma, customer.id, cart.lines)).filter((order) => !canReplaceCartPayment(order));
+    // Reject a stale or invalid quote before removing an invoice the customer
+    // can still pay. The reservation transaction prices the new order again.
+    const quote = related.length ? await prisma.$transaction((tx) => priceOrderItems(tx, items, errors, true)) : null;
+    if (quote && !quote.success) return { success: false, error: quote.error };
+    for (const prior of related.slice(0, 3)) {
+      const sameCheckout = d.paymentMethod === "card_online" && prior.checkoutPayloadHash === identity?.checkoutPayloadHash
+        && quote?.subtotalMinor === moneyMinorUnits(prior.total.toString()) && matchesPaymentPlan(prior, cart.lines);
+      const resolved = await reconcileCartPayment(prior, sameCheckout ? "reuse" : "replace", customer.binding);
+      if (resolved.kind === "terminal") continue;
+      if (resolved.kind === "reusable") return knownResult(resolved.order, true);
+      if (resolved.kind === "settled") {
+        if (resolved.order.checkoutAcceptance === "ACCEPTED") return pendingPayment(prior.paymentReference!, cartCopy.conflict);
+        // A competing checkout already superseded this attempt. Inspect the
+        // current plan again inside the locked reservation transaction.
+        if (resolved.order.cartPurchase?.supersededByOrderId) continue;
+        return pendingPayment(prior.paymentReference!, errors.paymentReview);
+      }
+      return unresolved(prior.paymentReference!, resolved.kind);
+    }
   }
 
   let shippingAddress = `${DELIVERY_LABELS[d.deliveryType]}: ${d.npCityName}`;
@@ -242,17 +291,10 @@ export async function createOrder(
           if (identity && await tx.order.findUnique({ where: { checkoutKeyHash: identity.checkoutKeyHash }, select: { id: true } })) throw new CheckoutInputError("CHECKOUT_REPLAY");
           throw new CheckoutInputError(translations[locale === "en" ? "en" : "ua"].cart.sync.conflict);
         }
-        if (customer) {
-          // A cart edit must not open a second payable checkout for this account.
-          // Once an invoice exists, merchant evidence determines when it is terminal.
-          const open = await tx.order.findFirst({ where: { customerId: customer.id, paymentProvider: "mono", paymentReference: { not: null },
-            OR: [
-              { checkoutAcceptance: { in: ["PROVISIONAL", "REVIEW"] }, paymentStatus: { in: ["PENDING", "UNKNOWN"] } },
-              { checkoutAcceptance: "REVIEW", paidAt: { not: null }, paymentStatus: { not: "REFUNDED" } },
-            ] }, select: { paymentReference: true, checkoutKeyHash: true } });
-          if (open?.checkoutKeyHash === identity!.checkoutKeyHash) throw new CheckoutInputError("CHECKOUT_REPLAY");
-          if (open?.paymentReference) throw new PendingPaymentError(open.paymentReference);
-        }
+        const predecessors = customer && cart ? await findRelatedCartPayments(tx, customer.id, cart.lines) : [];
+        const open = predecessors.find((prior) => !canReplaceCartPayment(prior));
+        if (open?.checkoutKeyHash === identity?.checkoutKeyHash && open) throw new CheckoutInputError("CHECKOUT_REPLAY");
+        if (open?.paymentReference) throw new PendingPaymentError(open.paymentReference);
         const priced = await priceOrderItems(tx, items, errors, requirePriceMatch || !!customer);
         if (!priced.success) throw new CheckoutInputError(priced.error);
         orderNumber = onlineConfig ? null : await allocateOrderNumber(tx);
@@ -309,6 +351,10 @@ export async function createOrder(
         await flushVariantConstraints(tx);
         if (customer && cart) {
           const plan = cart.lines.map(({ generation, removed, quantity }) => ({ generation, removed, quantity }));
+          if (predecessors.length) await tx.customerCartPurchase.updateMany({
+            where: { orderId: { in: predecessors.map((prior) => prior.id) }, supersededByOrderId: null },
+            data: { supersededByOrderId: created.id, reconcileUntil: null },
+          });
           if (onlineConfig) await tx.customerCartPurchase.create({ data: { orderId: created.id, lines: plan } });
           else await consumeCart(tx, customer.id, plan);
         }
