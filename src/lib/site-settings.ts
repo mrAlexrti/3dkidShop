@@ -2,6 +2,7 @@ import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { resolveFontTheme, type FontThemeId } from "@/lib/fonts";
 import { STOREFRONT_CONTENT_KEYS, type StorefrontContent } from "@/lib/site-content";
+import { brandName } from "@/lib/seo-config";
 
 export const SITE_FONT_KEY = "site_font";
 
@@ -15,6 +16,14 @@ const getSettings = cache(async () => {
 export const getStorefrontContent = cache(async (): Promise<StorefrontContent> => {
   const settings = await getSettings();
   return Object.fromEntries(STOREFRONT_CONTENT_KEYS.flatMap((key) => settings[key] === undefined ? [] : [[key, settings[key]]]));
+});
+
+export const getSiteDisplayName = cache(async () => {
+  try {
+    return (await getSettings()).seo_site_name?.trim() || brandName;
+  } catch {
+    return brandName;
+  }
 });
 
 // cache() дедуплицирует запрос в рамках одного рендера.

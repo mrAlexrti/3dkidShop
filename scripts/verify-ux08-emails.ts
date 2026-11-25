@@ -27,8 +27,8 @@ mkdirSync(output, { recursive: true });
 
 function preview(key: string, html: string, text: string, detail: boolean) {
   assert.deepEqual([...html.matchAll(/<img src="([^"]+)"/g)].map(match => match[1]), [emailLogo]);
-  assert.ok(html.includes('alt="3D Kid" width="63" height="70"') && html.includes("<!--[if mso]>"));
-  assert.ok(html.includes('href="https://www.3dkid.shop/">3D Kid</a>') && text.includes("https://www.3dkid.shop/"));
+  assert.ok(html.includes('alt="3D kid" width="63" height="70"') && html.includes("<!--[if mso]>"));
+  assert.ok(html.includes('href="https://www.3dkid.shop/">3D kid</a>') && text.includes("https://www.3dkid.shop/"));
   assert.ok(!html.includes("data:image") && !text.includes("token="), "Only previews embed the logo and their links are inert");
   assert.ok(!/<script\b|\bonclick=/.test(html), "Email is usable without JavaScript");
   writeFileSync(join(output, key + ".html"), html.replace(emailLogo, logo));
@@ -96,8 +96,8 @@ for (const locale of ["ua", "en"] as const) {
 }
 
 writeFileSync(join(output, "index.html"), `<!doctype html><html lang="en"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>3D Kid email previews</title>
-<body style="font:16px system-ui;padding:24px;line-height:1.6"><h1>3D Kid email previews</h1>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>3D kid email previews</title>
+<body style="font:16px system-ui;padding:24px;line-height:1.6"><h1>3D kid email previews</h1>
 <p>Synthetic data. Action links use a non-deliverable example domain.</p><ul>${previews.map(({ key, detail }) =>
   `<li><a href="${key}.html">${key}</a> · <a href="${key}.txt">plain text</a>${detail ? ` · <a href="${key}-desktop.png">desktop</a> · <a href="${key}-mobile.png">mobile</a>` : ""}</li>`
 ).join("")}</ul></body></html>`);
@@ -173,7 +173,7 @@ async function verifyLayouts() {
             awaitPromise: true, returnByValue: true, expression: `(async () => {
               const img = document.querySelector('img');
               await img.decode().catch(() => {});
-              return img.alt === '3D Kid' && img.naturalWidth === 0 && !!document.querySelector('h1').getBoundingClientRect().width &&
+              return img.alt === '3D kid' && img.naturalWidth === 0 && !!document.querySelector('h1').getBoundingClientRect().width &&
                 !!document.querySelector('a[href^="https://example.invalid"]').getBoundingClientRect().width &&
                 document.documentElement.scrollWidth <= innerWidth;
             })()`,

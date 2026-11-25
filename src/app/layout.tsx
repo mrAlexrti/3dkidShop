@@ -3,24 +3,27 @@ import type { CSSProperties } from "react";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { Providers } from "@/components/providers";
-import { getLocale, getT } from "@/lib/i18n-server";
-import { getFontThemeId } from "@/lib/site-settings";
+import { getLocale } from "@/lib/i18n-server";
+import { getFontThemeId, getSiteDisplayName } from "@/lib/site-settings";
 import { FONT_THEMES, googleFontsHref } from "@/lib/fonts";
+import { faviconPath, siteOrigin } from "@/lib/seo-config";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const t = await getT();
+  const name = await getSiteDisplayName();
   return {
-  title: {
-    default:  "3D Kid",
-    template: "%s | 3D Kid",
-  },
-  description: t.pages.about.metaDescription,
-  metadataBase: new URL("https://www.3dkid.shop"),
-  openGraph: {
-    title:       "3D Kid",
-    description: t.home.hero.title,
-    type:        "website",
-  },
+    title: { default: name, template: `%s | ${name}` },
+    applicationName: name,
+    metadataBase: new URL(siteOrigin),
+    icons: {
+      icon: [
+        { url: faviconPath, sizes: "96x96", type: "image/png" },
+        { url: "/favicon-48.png", sizes: "48x48", type: "image/png" },
+        { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+        { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+        { url: "/favicon.ico", sizes: "16x16 32x32 48x48 96x96", type: "image/x-icon" },
+      ],
+      apple: { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    },
   };
 }
 

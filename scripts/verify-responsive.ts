@@ -32,9 +32,14 @@ import { heroAssets } from "../src/lib/hero-assets";
 import { sourceModule } from "./source-module";
 import * as cartReconciliation from "../src/lib/cart-reconciliation";
 import * as galleryHelpers from "../src/lib/gallery";
+import * as seo from "../src/lib/seo";
+import * as seoConfig from "../src/lib/seo-config";
+import * as productSeo from "../src/lib/product-seo";
 
 async function verify() {
   const aboutOnly = process.argv.includes("--about");
+  const baseline = process.argv.find(arg => arg.startsWith("--baseline="))?.slice("--baseline=".length) ?? "d8cc9215cbf9862d1b5398c81daccb3880a60096";
+  assert.match(baseline, /^[a-f0-9]{40}$/);
   const h = React.createElement;
   const output = resolve(".next/cache/responsive-qa");
   mkdirSync(output, { recursive: true });
@@ -79,6 +84,7 @@ async function verify() {
     "@/lib/utils": utils, "@/lib/product-content": productContent, "@/lib/product-media": media,
     "@/lib/cart-reconciliation": cartReconciliation,
     "@/lib/gallery": galleryHelpers,
+    "@/components/product/favorite-button": { FavoriteButton: () => null, useCustomerPresence: () => false },
     "@/lib/i18n": { translations },
     "@/lib/product-variants": variants, "@/lib/cart-items": cartItems, "@/lib/cart-limits": limits, "@/components/product/product-description": { ProductDescription }, "@/lib/category-name": categoryNames, "@/lib/site-content": content,
     "@/store/lang-store": language, "@/store/cart-store": { useCartStore: (selector?: (s: typeof cartState) => unknown) => {
@@ -104,7 +110,8 @@ async function verify() {
       ? { key: `${locale}:toy`, products: products.map((p) => ({ ...p, name: locale === "en" ? p.nameEn : p.name })) } : initial) },
   });
   const filters = load("src/components/catalog/catalog-filters.tsx", { "@/components/catalog/product-search-input": search });
-  const gallery = load("src/components/product/product-gallery.tsx");
+  const selection = load("src/components/product/product-selection.tsx");
+  const gallery = load("src/components/product/product-gallery.tsx", { "./product-selection": selection });
   const options = load("src/components/product/product-options.tsx", { "@/components/ui/button": button,
     react: { ...React, useState: (initial: unknown) => React.useState(initial === null ? "small" : initial) } });
   const cartPage = load("src/app/(shop)/cart/page.tsx", { "@/components/ui/button": button });
@@ -134,7 +141,9 @@ async function verify() {
   const featured = load("src/components/home/featured-products.tsx", { ...serverBindings, "@/components/catalog/product-search-input": search, "@/components/product/product-card": card });
   const benefits = load("src/components/home/benefits.tsx", serverBindings);
   const productPage = load("src/app/(shop)/product/[slug]/page.tsx", { ...serverBindings,
-    "@/lib/prisma": { prisma: { product: { findFirst: async () => ({ ...products[stressProduct ? 0 : 1], description: "Long description / Довгий опис ".repeat(8), category: categories[0],
+    "@/lib/seo": seo, "@/lib/seo-config": seoConfig, "@/lib/product-seo": productSeo,
+    "@/components/seo/json-ld": load("src/components/seo/json-ld.tsx"), "@/components/product/product-selection": selection,
+    "@/lib/prisma": { prisma: { product: { findUnique: async () => ({ ...products[stressProduct ? 0 : 1], slug: "fixture", isActive: true, description: "Long description / Довгий опис ".repeat(8), category: categories[0],
       images: Array.from({ length: 9 }, (_, i) => ({ id: `${i}`, url: products[0].image })),
       options: [{ name: "Size", values: sizes.map((s) => ({ id: s.id, value: s.labelUa, valueEn: s.labelEn, price: s.price, note: s.noteUa, noteEn: s.noteEn })) }],
       attributes: [{ id: "a", key: "Довгахарактеристикабезпробілів", value: "Verylongunbrokencharacteristicvalue" }] }), findMany: async () => products.map((p) => ({ ...p, images: [{ url: p.image }], options: [] })) } } },
@@ -146,10 +155,11 @@ async function verify() {
     await (component as (props: object) => Promise<React.ReactNode>)(props);
   let customAbout = false;
   const aboutPage = load("src/app/(shop)/about/page.tsx", { ...serverBindings,
-    "@/lib/prisma": { prisma: { siteContent: { findMany: async () => customAbout ? [
-      { key: `about_slogan_${locale}`, value: (locale === "ua" ? "Довгийслоганбезпробілів" : "Longunbrokenslogan").repeat(20) },
-      { key: `about_body_${locale}`, value: (locale === "ua" ? "Перший абзац\nНовий рядок\n\nДругий абзац. " : "First paragraph\nNew line\n\nSecond paragraph. ").repeat(20) },
-    ] : [] } } },
+    "@/lib/seo": seo,
+    "@/lib/site-settings": { getStorefrontContent: async () => customAbout ? {
+      [`about_slogan_${locale}`]: (locale === "ua" ? "Довгийслоганбезпробілів" : "Longunbrokenslogan").repeat(20),
+      [`about_body_${locale}`]: (locale === "ua" ? "Перший абзац\nНовий рядок\n\nДругий абзац. " : "First paragraph\nNew line\n\nSecond paragraph. ").repeat(20),
+    } : {} },
   });
 
   const pages = new Map<string, string>();
@@ -177,7 +187,7 @@ async function verify() {
   }
   const cssPath = "src/app/(shop)/storefront.css";
   const globals = (await postcss([tailwindcss(tailwindConfig)]).process(readFileSync("src/app/globals.css", "utf8"), { from: "src/app/globals.css" })).css;
-  const styles = { current: globals + readFileSync(cssPath, "utf8"), accepted: globals + execFileSync("git", ["show", `d8cc9215cbf9862d1b5398c81daccb3880a60096:${cssPath}`], { encoding: "utf8" }) };
+  const styles = { current: globals + readFileSync(cssPath, "utf8"), accepted: globals + execFileSync("git", ["show", `${baseline}:${cssPath}`], { encoding: "utf8" }) };
   const server = createServer((request, response) => {
     const url = new URL(request.url!, "http://localhost");
     if (url.pathname === "/style.css") { response.setHeader("Content-Type", "text/css"); response.end(styles[url.searchParams.get("version") === "accepted" ? "accepted" : "current"]); }
@@ -199,7 +209,7 @@ async function verify() {
   });
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
   const address = server.address() as { port: number };
-  const executable = process.argv[2] || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
+  const executable = process.argv.slice(2).find(arg => !arg.startsWith("--")) || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
   const profile = resolve(output, `edge-${Date.now()}`);
   const browser = spawn(executable, ["--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { windowsHide: true, stdio: "ignore" });
   let socket: WebSocket | undefined;

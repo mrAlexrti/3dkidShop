@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
-import { getT } from "@/lib/i18n-server";
+import { getLocale, getT } from "@/lib/i18n-server";
 import { isOnlinePaymentAvailable } from "@/lib/payments/online-payment";
+import { translations } from "@/lib/i18n";
+import { getStorefrontContent } from "@/lib/site-settings";
+import { pageSeo, resolveSeo } from "@/lib/seo";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { pages: { deliveryPayment: page } } = await getT();
-  return { title: page.title, description: page.metaDescription, openGraph: { title: page.title, description: page.metaDescription } };
+  const [locale, content] = await Promise.all([getLocale(), getStorefrontContent()]);
+  const page = translations[locale].pages.deliveryPayment;
+  return pageSeo({ seo: resolveSeo(content, locale), path: "/delivery-payment", locale, title: page.title, description: page.metaDescription });
 }
 
 export default async function DeliveryPaymentPage() {

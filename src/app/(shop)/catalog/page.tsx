@@ -5,41 +5,35 @@ import { ProductGrid } from "@/components/catalog/product-grid";
 import { Pagination } from "@/components/catalog/pagination";
 import type { Metadata } from "next";
 import type { Prisma } from "@prisma/client";
-import { redirect } from "next/navigation";
-import { getT } from "@/lib/i18n-server";
+import { notFound, permanentRedirect, redirect } from "next/navigation";
+import { cache } from "react";
 import { getCategoryIdsForSlug, getCategoryTree } from "@/lib/categories";
 import { getLocale } from "@/lib/i18n-server";
 import { getProductNameField } from "@/lib/product-content";
 import { getCategoryName } from "@/lib/category-name";
-
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getT();
-  return {
-    title: t.catalog.title,
-    description: t.pages.about.metaDescription,
-  };
-}
+import { translations, type Locale } from "@/lib/i18n";
+import { getStorefrontContent } from "@/lib/site-settings";
+import { breadcrumb, pageSeo, resolveSeo } from "@/lib/seo";
+import { catalogPath } from "@/lib/seo-config";
+import { JsonLd } from "@/components/seo/json-ld";
 
 const PAGE_SIZE = 12;
 
-type SearchParams = {
-  category?: string;
-  sort?: string;
-  q?: string;
-  page?: string;
-};
-
-export default async function CatalogPage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
-  const params = await searchParams;
-  const [t, locale] = await Promise.all([getT(), getLocale()]);
-  const page = Math.min(1000000, Math.max(1, parseInt(params.page ?? "1", 10) || 1));
-
+type CatalogProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+const getCatalog = cache(async (category: string | undefined, q: string | undefined, sort: string | undefined, pageValue: string | undefined, locale: Locale) => {
+  const page = Math.min(1000000, Math.max(1, parseInt(pageValue ?? "1", 10) || 1));
+  const params = { category, q, sort, page: pageValue };
   const categoryTree = await getCategoryTree();
-  const categoryIds = getCategoryIdsForSlug(categoryTree, params.category);
+  const flattened = categoryTree.flatMap(node => [node, ...node.children]);
+  const activeCategory = flattened.find(node => node.slug === category);
+  if (category && !activeCategory) {
+    const matches = flattened.filter(node => node.slug.toLowerCase() === category.toLowerCase());
+    if (matches.length !== 1) notFound();
+    const target = new URLSearchParams();
+    for (const [key, value] of Object.entries({ ...params, category: matches[0].slug })) if (value) target.set(key, value);
+    permanentRedirect(`/catalog?${target}`);
+  }
+  const categoryIds = getCategoryIdsForSlug(categoryTree, category);
 
   // Строим where без лишних полей чтобы "Все" = пустой where
   const where: Prisma.ProductWhereInput = { isActive: true };
@@ -61,6 +55,43 @@ export default async function CatalogPage({
 
   const { products, total } = await catalogProducts({ where, orderBy, categoryIds, q: params.q, sort: params.sort, page, pageSize: PAGE_SIZE });
 
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  if (totalPages > 0 && page > totalPages) {
+    const nextParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => { if (value) nextParams.set(key, value); });
+    nextParams.set("page", String(totalPages));
+    redirect(`/catalog?${nextParams.toString()}`);
+  }
+  if (page > 1 && !totalPages && !q) notFound();
+  return { params, page, categoryTree, total, totalPages, products, activeCategory };
+});
+
+async function catalogRequest(searchParams: CatalogProps["searchParams"]) {
+  const [params, locale] = await Promise.all([searchParams, getLocale()]);
+  const single = (key: string) => {
+    const value = params[key];
+    return typeof value === "string" ? value : undefined;
+  };
+  if (Array.isArray(params.category)) notFound();
+  return { locale, ...await getCatalog(single("category"), single("q"), single("sort"), single("page"), locale) };
+}
+
+export async function generateMetadata({ searchParams }: CatalogProps): Promise<Metadata> {
+  const [{ locale, page, params, activeCategory, total }, content] = await Promise.all([catalogRequest(searchParams), getStorefrontContent()]);
+  const t = translations[locale];
+  const name = activeCategory ? getCategoryName(activeCategory, locale) : t.catalog.title;
+  const filtered = Boolean(params.q || params.sort && params.sort !== "newest");
+  return pageSeo({
+    seo: resolveSeo(content, locale), locale, path: catalogPath(activeCategory?.slug, filtered ? 1 : page),
+    title: page > 1 ? `${name} — ${t.seo.page(page)}` : name,
+    description: activeCategory ? t.seo.categoryDescription(name) : t.seo.catalogDescription,
+    noindex: filtered || Boolean(activeCategory && !total),
+  });
+}
+
+export default async function CatalogPage({ searchParams }: CatalogProps) {
+  const { locale, categoryTree, activeCategory, total, totalPages, products, page, params } = await catalogRequest(searchParams);
+  const t = translations[locale];
   const filterCategories: FilterCategory[] = categoryTree.map((c) => ({
     id: c.id,
     name: c.name,
@@ -74,20 +105,10 @@ export default async function CatalogPage({
     })),
   }));
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-  const activeCategory = categoryTree.flatMap((category) => [category, ...category.children])
-    .find((category) => category.slug === params.category);
-  if (totalPages > 0 && page > totalPages) {
-    const nextParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value) nextParams.set(key, value);
-    });
-    nextParams.set("page", String(totalPages));
-    redirect(`/catalog?${nextParams.toString()}`);
-  }
-
   return (
     <div className="sf-shell sf-home-panel sf-catalog">
+      {activeCategory && <JsonLd data={breadcrumb([{ name: t.seo.home, path: "/" }, { name: t.catalog.title, path: "/catalog" },
+        { name: getCategoryName(activeCategory, locale), path: catalogPath(activeCategory.slug) }])} />}
       <div className="sf-section-heading">
         <div>
           <h1>{t.catalog.title}</h1>

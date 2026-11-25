@@ -67,7 +67,7 @@ export function renderNotification(event: NotificationEvent, order: OrderForNoti
     order.novaPoshtaTtn ? `${t.tracking}: ${order.novaPoshtaTtn}` : null,
   ].filter((line): line is string => Boolean(line));
   const message = {
-    subject: `${title} · ${reference} · 3D Kid`,
+    subject: `${title} · ${reference} · 3D kid`,
     telegram: [title, ...context, order.customerName, order.customerPhone, order.city, order.shippingAddress,
       ...items.map(({ name, quantity }) => `${name} × ${quantity}`)].join("\n").slice(0, 3600) + `\n${adminUrl}`,
     telegramKeyboard,

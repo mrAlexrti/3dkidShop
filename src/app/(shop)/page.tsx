@@ -4,8 +4,18 @@ import { prisma } from "@/lib/prisma";
 import { FeaturedProducts } from "@/components/home/featured-products";
 import { Benefits } from "@/components/home/benefits";
 import { Hero } from "@/components/home/hero";
+import { getLocale } from "@/lib/i18n-server";
+import { getStorefrontContent } from "@/lib/site-settings";
+import { pageSeo, resolveSeo, siteIdentity } from "@/lib/seo";
+import { JsonLd } from "@/components/seo/json-ld";
 
 export const revalidate = 60;
+
+export async function generateMetadata() {
+  const [locale, content] = await Promise.all([getLocale(), getStorefrontContent()]);
+  const seo = resolveSeo(content, locale);
+  return pageSeo({ seo, path: "/", locale, title: seo.title, description: seo.description, home: true });
+}
 
 async function getHomeData() {
   return prisma.$transaction((tx) => tx.product.findMany({
@@ -17,7 +27,7 @@ async function getHomeData() {
 }
 
 export default async function HomePage() {
-  const products = await getHomeData();
+  const [products, locale, content] = await Promise.all([getHomeData(), getLocale(), getStorefrontContent()]);
 
   const mapProduct = (product: (typeof products)[number]) => ({
     id: product.id,
@@ -37,6 +47,7 @@ export default async function HomePage() {
 
   return (
     <>
+      <JsonLd data={siteIdentity(resolveSeo(content, locale).name)} />
       <Hero />
       <FeaturedProducts products={products.map(mapProduct)} />
       <Benefits />

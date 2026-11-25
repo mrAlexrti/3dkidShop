@@ -36,7 +36,7 @@ export function Header({ categories }: { categories: CategoryTreeNode[] }) {
         }
       }}>
         {!isHome && <><Link href="/" className="sf-brand" aria-label={t.nav.home}>
-          <Image src="/hero/logo.png" width={282} height={314} sizes="50px" alt="3D Kid" />
+          <Image src="/hero/logo.png" width={282} height={314} sizes="50px" alt="3D kid" />
         </Link>
         <Link href="/catalog" className="sf-header-link">{t.nav.catalog}</Link></>}
         <div className="sf-controls">

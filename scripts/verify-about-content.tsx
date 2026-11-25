@@ -11,6 +11,7 @@ import { z } from "zod";
 import { sourceModule } from "./source-module";
 import { translations, type Locale } from "../src/lib/i18n";
 import * as content from "../src/lib/site-content";
+import * as seo from "../src/lib/seo";
 import * as validation from "../src/lib/admin-form-validation";
 import { RetiredMediaError } from "../src/lib/media-lifecycle-policy";
 import * as utils from "../src/lib/utils";
@@ -47,10 +48,11 @@ async function verify() {
   let reads = 0;
   const page = sourceModule<typeof import("../src/app/(shop)/about/page")>("src/app/(shop)/about/page.tsx", {
     react: React, "react/jsx-runtime": jsxRuntime, "@/lib/i18n-server": localeAccess, "@/lib/site-content": content,
-    "@/lib/prisma": { prisma: { siteContent: { findMany: async (query: unknown) => {
-      assert.deepEqual(query, { where: { key: { in: content.ABOUT_CONTENT_KEYS } }, select: { key: true, value: true } }); reads++;
-      return rows.filter((row) => content.ABOUT_CONTENT_KEYS.includes(row.key));
-    } } } },
+    "@/lib/site-settings": { getStorefrontContent: async () => {
+      reads++;
+      return Object.fromEntries(rows.filter(row => content.STOREFRONT_CONTENT_KEYS.includes(row.key)).map(row => [row.key, row.value]));
+    } },
+    "@/lib/seo": seo,
   });
   assert.equal(page.dynamic, "force-dynamic");
   for (const locale of [undefined, "ua", "en", "unknown"] as const) {
@@ -74,7 +76,11 @@ async function verify() {
     cookie = locale;
     const resolved = content.resolveAboutCopy(Object.fromEntries(rows.map((row) => [row.key, row.value])), locale);
     const metadata = await page.generateMetadata(); const html = renderToStaticMarkup(await page.default());
-    assert.deepEqual(metadata, { title: resolved.metaTitle, description: resolved.metaDescription, openGraph: { title: resolved.metaTitle, description: resolved.metaDescription } });
+    assert.equal(metadata.title, resolved.metaTitle);
+    assert.equal(metadata.description, resolved.metaDescription);
+    assert.equal(metadata.openGraph?.title, resolved.metaTitle + " | 3D kid");
+    assert.equal(metadata.openGraph?.description, resolved.metaDescription);
+    assert.equal(metadata.alternates?.canonical, "https://www.3dkid.shop/about");
     assert.equal((html.match(/<p /g) ?? []).length, 2); assert.ok(html.includes("whitespace-pre-wrap"));
     assert.ok(!html.includes("MUST_NOT_RENDER") && !html.includes("<script>") && !html.includes("<b>"));
     assert.ok(html.includes(locale === "ua" ? "Перший абзац\nНовий рядок" : "First English paragraph\nSecond line"));
@@ -192,6 +198,7 @@ async function verify() {
     "@/lib/actions/categories": { updateSiteContent: actions.updateSiteContent },
     "@/components/admin/admin-form": { AdminForm: "form", AdminFieldError: "field-error", AdminSaveButton: "save-button" },
     "@/components/admin/about-content-fields": { AboutContentFields: AboutProbe }, "@/components/admin/media-url-field": { MediaUrlField: "media-field" },
+    "@/components/admin/seo-content-fields": { SeoContentFields: () => null },
     "@/lib/fonts": { FONT_THEMES: { warm: { label: "Warm" } }, resolveFontTheme: () => "warm" }, "@/lib/site-settings": { SITE_FONT_KEY: "site_font_theme" },
     "@/lib/hero-assets": { heroAssets: [1, 2, 3].map((index) => ({ key: `hero_image_${index}`, src: "/placeholder.svg" })) },
     "@/lib/actions/notification-settings": { updateNotificationSettings: async () => { throw new Error("FORBIDDEN_IN_ABOUT_QA"); } },

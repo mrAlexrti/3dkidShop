@@ -1,4 +1,4 @@
-# 3D Kid launch roadmap
+# 3D kid launch roadmap
 
 | Release | Status |
 | --- | --- |
@@ -9,7 +9,8 @@
 | UX-06 — Customer Account UI Redesign | Deployed and hydration verified in Production at `6c2dd27e8b5eedf0871e455097f043a4836beecd`. Final functional acceptance remains part of manual Production QA. |
 | UX-07 — Customer Account Content Management | Deployed at `1b4563ca8bfde35872fd39a16bdcc3cea6712e25`. All 66 read-only Production checks passed with zero hydration errors or warnings. The operator confirmed both Site Content controls. Live Blob upload, replacement, persistence and reset QA await final illustration files. |
 | UX-08 — Customer Registration and Authentication Flow Improvements | Local final review includes focused completion screens and accessible confirmation feedback. UX-05 is included with bilingual HTML and plain-text emails. Physical-device registration retesting and live Gmail and Outlook rendering are pending authorized Production QA. |
-| Batch 2.0 — Promo Codes | Pending. Next major functional batch. |
+| SEO-01 — Search appearance, brand identity and indexing | Current pre-launch priority. Local implementation and verification precede separate deployment approval and operator Search Console checks. |
+| Batch 2.0 — Promo Codes | Pending after SEO-01. |
 | Launch Fixes | Legal pages, Google OAuth publication, Telegram customer comment and cancelled-order revenue analytics. |
 | Final QA | November 29–30, 2026. Comprehensive end-to-end QA and launch-blocking fixes. |
 | Store launch | December 1, 2026 target, subject to successful QA. |

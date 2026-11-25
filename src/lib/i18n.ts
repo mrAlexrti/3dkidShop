@@ -1,11 +1,13 @@
 // Переводы UA | EN для всего интерфейса магазина
 import { customerCopy } from "./customer/copy";
+import { seoCopy } from "./seo-copy";
 
 export type Locale = "ua" | "en";
 
 export const translations = {
   ua: {
     account: customerCopy.ua,
+    seo: seoCopy.ua,
     filamentSummary: { groups: "Групи", alternatives: "Альтернативні філаменти", none: "Філаменти не налаштовано", ready: "Матеріали доступні", blocked: "Матеріали недоступні", blocking: "Заблоковані групи", up: "Вище", down: "Нижче" },
     filaments: {"title":"Філаменти","create":"Додати філамент","edit":"Редагувати філамент","manufacturer":"Виробник","series":"Серія","material":"Матеріал","color":"Колір","hex":"HEX кольору","availability":"Доступність","available":"Доступний","unavailable":"Недоступний","enable":"Зробити доступним","disable":"Зробити недоступним","search":"Пошук","all":"Усі","filter":"Фільтрувати","empty":"Філаменти не знайдено.","requirements":"Філаменти для варіантів","help":"Кожна група має містити хоча б один доступний філамент. Філаменти в межах однієї групи взаємозамінні.","blocked":"Немає доступного філаменту в цій групі","ready":"У групі є доступний філамент","manual":"Варіант вимкнено вручну","productDisabled":"Товар приховано або вимкнено для замовлення","addGroup":"Додати групу","removeGroup":"Прибрати групу","alternative":"Альтернативні філаменти","addAlternative":"Додати альтернативу","removeAlternative":"Прибрати альтернативу","choose":"Оберіть філамент","copy":"Скопіювати вимоги з варіанта","none":"Вимоги до філаментів не задано"},
     // Optional editor values are text; the UI never interprets them as markup.
@@ -48,7 +50,7 @@ export const translations = {
           ORDER_CREATED: "Дякуємо за покупку! Ми отримали ваше замовлення. Нижче — його склад і поточний статус.",
           ORDER_PROCESSING: "Ми почали готувати ваше замовлення.",
           ORDER_CANCELLED: "Це замовлення більше не обробляється. Нижче можна перевірити стан оплати.",
-          ORDER_COMPLETED: "Дякуємо, що обрали 3D Kid! Ваше замовлення завершено.",
+          ORDER_COMPLETED: "Дякуємо, що обрали 3D kid! Ваше замовлення завершено.",
           PAYMENT_PENDING: "Ми ще очікуємо оплату за цим замовленням. Поточний стан можна перевірити за посиланням нижче.",
           PAYMENT_PAID: "Дякуємо за оплату! Ми отримали платіж за вашим замовленням.",
           PAYMENT_FAILED: "Платіж не пройшов. Перевірте його стан за посиланням нижче, перш ніж платити знову.",
@@ -58,7 +60,7 @@ export const translations = {
           DELIVERY_SHIPPED: "Ми передали посилку перевізнику. Нижче — поточні дані відправлення.",
           DELIVERY_IN_TRANSIT: "Перевізник везе посилку до місця отримання.",
           DELIVERY_ARRIVED: "Посилка чекає на вас. Нижче — поточні дані доставки.",
-          DELIVERY_DELIVERED: "Перевізник підтвердив доставку. Дякуємо, що замовили в 3D Kid!",
+          DELIVERY_DELIVERED: "Перевізник підтвердив доставку. Дякуємо, що замовили в 3D kid!",
           DELIVERY_RETURNED: "Посилка повернулася до відправника. Нижче — поточні дані відправлення.",
         },
       },
@@ -70,7 +72,7 @@ export const translations = {
       catalog:  "Каталог",
       cart:     "Кошик",
       menu:     "Меню",
-      home: "3D Kid — на головну",
+      home: "3D kid — на головну",
       categories: "Категорії товарів",
       account: "Особистий кабінет",
       openCart: "Відкрити кошик",
@@ -98,7 +100,7 @@ export const translations = {
         title: "Маленькі радощі для великої дитини в кожному з нас",
         subtitle: "",
         gallery: "Натхнення для ваших подарунків",
-        image: "3D Kid — зображення головної",
+        image: "3D kid — зображення головної",
         dragon: "М’ятний дракон із рухливими деталями",
         bunny: "Персиковий зайчик із кремовими вушками",
         robot: "Лавандовий робот із веселою усмішкою",
@@ -276,7 +278,7 @@ export const translations = {
       },
       deliveryPayment: {
         title: "Доставка і оплата",
-        metaDescription: "Доставка Новою Поштою та доступні способи оплати замовлень 3D Kid.",
+        metaDescription: "Доставка Новою Поштою та доступні способи оплати замовлень 3D kid.",
         deliveryTitle: "Доставка Новою Поштою",
         delivery: "Під час оформлення замовлення можна обрати доставку у відділення, поштомат або кур'єром Нової Пошти. Вкажіть місто та оберіть відділення чи поштомат; для кур'єрської доставки введіть адресу.",
         cost: "Вартість доставки розраховується за тарифами Нової Пошти.",
@@ -488,6 +490,7 @@ export const translations = {
 
   en: {
     account: customerCopy.en,
+    seo: seoCopy.en,
     filamentSummary: { groups: "Groups", alternatives: "Filament alternatives", none: "Filaments not configured", ready: "Materials available", blocked: "Materials unavailable", blocking: "Blocking groups", up: "Move up", down: "Move down" },
     filaments: {"title":"Filaments","create":"Add filament","edit":"Edit filament","manufacturer":"Manufacturer","series":"Series","material":"Material","color":"Color","hex":"Color HEX","availability":"Availability","available":"Available","unavailable":"Unavailable","enable":"Make available","disable":"Make unavailable","search":"Search","all":"All","filter":"Filter","empty":"No filaments found.","requirements":"Variant filament requirements","help":"Every group needs at least one available filament. Filaments within a group are alternatives.","blocked":"No available filament in this group","ready":"An alternative is available","manual":"Variant disabled manually","productDisabled":"Product is hidden or unavailable to order","addGroup":"Add group","removeGroup":"Remove group","alternative":"Alternative filaments","addAlternative":"Add alternative","removeAlternative":"Remove alternative","choose":"Choose a filament","copy":"Copy requirements from a variant","none":"No filament requirements"},
     materials: {"heading":"Materials:","adminTitle":"Materials and divider","ua":"Materials (UA)","en":"Materials (EN)","motif":"Divider symbol or motif","help":"Optional. Changes apply after saving the product. Empty English content falls back to Ukrainian.","preview":"Live divider preview","invalid":"Use a short motif (up to 8 symbols), without line breaks."},
@@ -529,7 +532,7 @@ export const translations = {
           ORDER_CREATED: "Thanks for shopping with us! We received your order. You’ll find the items and current status below.",
           ORDER_PROCESSING: "We’ve started preparing your order.",
           ORDER_CANCELLED: "We’re no longer processing this order. You can check the payment status below.",
-          ORDER_COMPLETED: "Thanks for choosing 3D Kid! Your order is complete.",
+          ORDER_COMPLETED: "Thanks for choosing 3D kid! Your order is complete.",
           PAYMENT_PENDING: "We’re still waiting for payment for this order. Use the link below to check its current status.",
           PAYMENT_PAID: "Thank you! We’ve received your payment for this order.",
           PAYMENT_FAILED: "Your payment didn’t go through. Check its status using the link below before paying again.",
@@ -539,7 +542,7 @@ export const translations = {
           DELIVERY_SHIPPED: "We’ve handed your parcel to the carrier. You can check the shipment details below.",
           DELIVERY_IN_TRANSIT: "The carrier is moving your parcel toward its destination.",
           DELIVERY_ARRIVED: "Your parcel is ready for pickup. You can check the delivery details below.",
-          DELIVERY_DELIVERED: "The carrier confirmed delivery. Thanks for shopping with 3D Kid!",
+          DELIVERY_DELIVERED: "The carrier confirmed delivery. Thanks for shopping with 3D kid!",
           DELIVERY_RETURNED: "The parcel was returned to the sender. You’ll find the current shipment details below.",
         },
       },
@@ -550,7 +553,7 @@ export const translations = {
       catalog:  "Catalog",
       cart:     "Cart",
       menu:     "Menu",
-      home: "3D Kid — home",
+      home: "3D kid — home",
       categories: "Product categories",
       account: "Account",
       openCart: "Open cart",
@@ -577,7 +580,7 @@ export const translations = {
         title: "Little joys for the big kid in each of us",
         subtitle: "",
         gallery: "A little gift inspiration",
-        image: "3D Kid — homepage image",
+        image: "3D kid — homepage image",
         dragon: "Mint dragon with articulated details",
         bunny: "Peach bunny with cream ears",
         robot: "Lavender robot with a happy smile",
@@ -740,7 +743,7 @@ export const translations = {
       },
       deliveryPayment: {
         title: "Delivery & payment",
-        metaDescription: "Nova Poshta delivery and available payment options for 3D Kid orders.",
+        metaDescription: "Nova Poshta delivery and available payment options for 3D kid orders.",
         deliveryTitle: "Nova Poshta delivery",
         delivery: "At checkout, you can choose delivery to a Nova Poshta branch or parcel locker, or delivery by Nova Poshta courier. Enter your city and select a branch or locker; for courier delivery, enter your address.",
         cost: "Delivery costs are calculated according to Nova Poshta rates.",

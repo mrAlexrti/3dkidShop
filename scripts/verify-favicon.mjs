@@ -12,29 +12,30 @@ const directory = resolve(".next/cache/batch18-favicon");
 mkdirSync(directory, { recursive: true });
 const logo = readFileSync("public/hero/logo.png");
 assert.deepEqual(logo, execFileSync("git", ["show", "HEAD:public/hero/logo.png"]));
-const ico = readFileSync("src/app/favicon.ico");
+const ico = readFileSync("public/favicon.ico");
 assert.equal(ico.readUInt16LE(0), 0); assert.equal(ico.readUInt16LE(2), 1);
-assert.equal(ico.readUInt16LE(4), 3);
-let offset = 54;
-for (const [index, size] of [16, 32, 48].entries()) {
+assert.equal(ico.readUInt16LE(4), 4);
+let offset = 70;
+for (const [index, size] of [16, 32, 48, 96].entries()) {
   const entry = 6 + index * 16, length = ico.readUInt32LE(entry + 8);
   assert.equal(ico[entry], size); assert.equal(ico[entry + 1], size);
   assert.equal(ico.readUInt32LE(entry + 12), offset);
   assert.equal(ico.readUInt16LE(entry + 6), 32);
   const frame = ico.subarray(offset, offset + length), meta = await sharp(frame).metadata();
   assert.equal(meta.width, size); assert.equal(meta.height, size);
-  assert.ok(meta.hasAlpha); offset += length;
+  assert.ok(meta.hasAlpha);
+  assert.deepEqual(frame, readFileSync(`public/favicon-${size}.png`));
+  offset += length;
 }
 assert.equal(offset, ico.length);
-const icon = await sharp("src/app/icon.png").metadata(), apple = await sharp("src/app/apple-icon.png").metadata();
+const icon = await sharp("public/favicon-96.png").metadata(), apple = await sharp("public/apple-touch-icon.png").metadata();
 assert.equal(icon.width, 96); assert.equal(icon.height, 96); assert.ok(icon.hasAlpha);
-assert.equal(apple.width, 180); assert.equal(apple.height, 180); assert.equal(apple.hasAlpha, false);
-const pixels = await sharp("src/app/icon.png").raw().toBuffer();
-const original = await sharp(logo).resize(96, 96, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } }).raw().toBuffer();
-assert.deepEqual(pixels, original, "Official full logo must be contained, never cropped or redrawn");
-assert.ok(ico.length < 20000 && readFileSync("src/app/icon.png").length < 20000 && readFileSync("src/app/apple-icon.png").length < 30000);
-assert.ok(!readFileSync("src/app/layout.tsx", "utf8").includes("icons:"), "Use file metadata without competing manual declarations");
-console.log("PASS favicon assets: unchanged official source, complete proportional logo, ICO 16/32/48, transparent PNG 96, opaque Apple PNG 180.");
+assert.equal(apple.width, 180); assert.equal(apple.height, 180); assert.ok(apple.hasAlpha);
+const pixels = await sharp("public/favicon-96.png").ensureAlpha().raw().toBuffer();
+assert.equal(pixels[3], 0, "Transparent top-left corner");
+assert.equal(pixels[4 * (48 * 96 + 48) + 3], 255, "Opaque mark center");
+assert.ok(ico.length < 20000 && readFileSync("public/favicon-96.png").length < 20000 && readFileSync("public/apple-touch-icon.png").length < 30000);
+console.log("PASS favicon assets: unchanged storefront artwork, transparent ICO/PNG frames at 16/32/48/96 and 180 px Apple icon.");
 const reuseIndex = process.argv.indexOf("--output");
 if (!process.argv.includes("--build") && reuseIndex < 0) process.exit(0);
 
@@ -95,10 +96,10 @@ try {
     // Preserve the app's existing streaming policy; verify the final DOM below.
     const links = [...html.matchAll(/<link\b[^>]*>/g)].map(([tag]) => Object.fromEntries([...tag.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, key, value]) => [key, value])))
       .filter(({ rel }) => rel === "icon" || rel === "apple-touch-icon");
-    assert.equal(links.length, 3, "One ICO, one PNG and one Apple icon, without conflicting defaults");
+    assert.equal(links.length, 6, "One ICO, four PNG sizes, and one Apple icon");
     assert.ok(links.some((l) => l.href.startsWith("/favicon.ico")));
-    assert.ok(links.some((l) => l.href.startsWith("/icon.png") && l.sizes === "96x96"));
-    assert.ok(links.some((l) => l.href.startsWith("/apple-icon.png") && l.sizes === "180x180"));
+    assert.ok(links.some((l) => l.href === "/favicon-96.png" && l.sizes === "96x96"));
+    assert.ok(links.some((l) => l.href === "/apple-touch-icon.png" && l.sizes === "180x180"));
     assert.ok(head.includes('rel="icon"') || html.includes("document.head.appendChild"), "Streamed icons must be hoisted into head");
     if (sharedLinks) assert.deepEqual(links, sharedLinks); else sharedLinks = links;
     for (const link of links) {
@@ -114,7 +115,7 @@ try {
   }
   const limited = await (await fetch(origin, { headers: { "user-agent": "Bingbot" } })).text();
   const limitedHead = limited.slice(limited.indexOf("<head>"), limited.indexOf("</head>"));
-  assert.ok(limitedHead.includes('href="/favicon.ico"') && limitedHead.includes('href="/icon.png?') && limitedHead.includes('href="/apple-icon.png?'));
+  assert.ok(limitedHead.includes('href="/favicon.ico"') && limitedHead.includes('href="/favicon-96.png"') && limitedHead.includes('href="/apple-touch-icon.png"'));
   console.log("PASS actual Next HTTP: UA/EN metadata/hoisting, HTML-limited crawler head links, stable URLs, anonymous GET/HEAD 200, Googlebot/Image and robots compatibility.");
 
   const profile = resolve(directory, `chrome-${Date.now()}`);
@@ -137,9 +138,9 @@ try {
     await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: theme }] });
     await send("Page.navigate", { url: `${origin}/catalog` });
     let loaded = false;
-    for (let i = 0; i < 100; i++) { loaded = await evaluate('Boolean(location.pathname==="/catalog" && document.querySelector("header a.sf-brand img") && document.querySelectorAll(\'head link[rel="icon"]\').length===2)'); if (loaded) break; await pause(100); }
+    for (let i = 0; i < 100; i++) { loaded = await evaluate('Boolean(location.pathname==="/catalog" && document.querySelector("header a.sf-brand img") && document.querySelectorAll(\'head link[rel="icon"]\').length===5)'); if (loaded) break; await pause(100); }
     assert.ok(loaded, "Catalog icon metadata/header missing");
-    const info = await evaluate(`(async()=>{const links=[...document.querySelectorAll('head link[rel="icon"],head link[rel="apple-touch-icon"]')].map(l=>l.getAttribute('href'));for(const href of links){const i=new Image();i.src=href;await i.decode();if(!i.naturalWidth)throw Error('decode');}const a=document.querySelector('a.sf-brand');if(a.getAttribute('href')!=='/'||a.querySelector('img').alt!=='3D Kid')throw Error('brand');a.focus();return {lang:document.documentElement.lang,links,focused:document.activeElement===a};})()`);
+    const info = await evaluate(`(async()=>{const links=[...document.querySelectorAll('head link[rel="icon"],head link[rel="apple-touch-icon"]')].map(l=>l.getAttribute('href'));for(const href of links){const i=new Image();i.src=href;await i.decode();if(!i.naturalWidth)throw Error('decode');}const a=document.querySelector('a.sf-brand');if(a.getAttribute('href')!=='/'||a.querySelector('img').alt!=='3D kid')throw Error('brand');a.focus();return {lang:document.documentElement.lang,links,focused:document.activeElement===a};})()`);
     assert.equal(info.lang, locale === "en" ? "en" : "uk"); assert.equal(info.links.length, 3); assert.ok(info.focused);
     await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
     await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });

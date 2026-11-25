@@ -7,6 +7,7 @@ import { AdminForm, AdminFieldError, AdminSaveButton } from "@/components/admin/
 import { AboutContentFields } from "@/components/admin/about-content-fields";
 import { ABOUT_CONTENT_KEYS, ACCOUNT_ILLUSTRATIONS } from "@/lib/site-content";
 import { MediaUrlField } from "@/components/admin/media-url-field";
+import { SeoContentFields } from "@/components/admin/seo-content-fields";
 import { getT } from "@/lib/i18n-server";
 import { translations } from "@/lib/i18n";
 import { FONT_THEMES, resolveFontTheme } from "@/lib/fonts";
@@ -37,6 +38,11 @@ export default async function AdminContentPage() {
       <p className="mt-2 text-ink/60">{tc.subtitle}</p>
 
       <AdminForm action={updateSiteContent} className="glass mt-6 max-w-3xl space-y-8 rounded-xl2 p-4 shadow-soft sm:p-6">
+        <SeoContentFields content={{
+          seo_home_title_ua: map.seo_home_title_ua, seo_home_title_en: map.seo_home_title_en,
+          seo_home_description_ua: map.seo_home_description_ua, seo_home_description_en: map.seo_home_description_en,
+          seo_site_name: map.seo_site_name, seo_social_image: map.seo_social_image,
+        }} />
         <fieldset className="space-y-4">
           <legend className="mb-4 text-lg font-semibold">{tc.heroText}</legend>
           {(["ua", "en"] as const).map((locale) => (

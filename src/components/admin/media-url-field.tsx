@@ -8,7 +8,7 @@ import { inspectMediaFile, MEDIA_TYPES, uploadErrorCode, type UploadErrorCode } 
 import { mediaUploadsAvailable, uploadProductMedia } from "@/lib/media-upload-client";
 import { AdminFieldError, useAdminForm } from "@/components/admin/admin-form";
 
-export function MediaUrlField({ name, label, help, defaultValue = "", value: controlledValue, onValueChange, fallback, resetLabel, animated = false, required = false, disabled = false, uploadEnabled = false, onUploadStateChange }: {
+export function MediaUrlField({ name, label, help, defaultValue = "", value: controlledValue, onValueChange, fallback, resetLabel, animated = false, required = false, disabled = false, uploadEnabled = false, widePreview = false, onUploadStateChange }: {
   name: string;
   label: string;
   help: string;
@@ -21,6 +21,7 @@ export function MediaUrlField({ name, label, help, defaultValue = "", value: con
   required?: boolean;
   disabled?: boolean;
   uploadEnabled?: boolean;
+  widePreview?: boolean;
   onUploadStateChange?: (name: string, busy: boolean) => void;
 }) {
   const { t, locale } = useLangStore();
@@ -116,8 +117,9 @@ export function MediaUrlField({ name, label, help, defaultValue = "", value: con
         setUploaded(false); setFailedUrl("");
         urlInput.current?.setCustomValidity("");
       }}>{resetLabel ?? text.clear}</button>}
-      {preview && preview !== failedUrl && <Image key={preview} src={preview} width={200} height={200} unoptimized
-        className={`mt-3 aspect-square rounded-xl object-cover${animated ? " motion-reduce:hidden" : ""}`} alt={`${t.admin.common.preview}: ${label}`} onError={() => setFailedUrl(preview)} />}
+      {preview && preview !== failedUrl && <Image key={preview} src={preview} width={widePreview ? 480 : 200} height={widePreview ? 252 : 200} unoptimized
+        className={`mt-3 rounded-xl ${widePreview ? "aspect-[40/21] w-full max-w-[480px] bg-ink/5 object-contain" : "aspect-square object-cover"}${animated ? " motion-reduce:hidden" : ""}`}
+        alt={`${t.admin.common.preview}: ${label}`} onError={() => setFailedUrl(preview)} />}
       {preview && preview === failedUrl && <p role="status" className="mt-2 text-xs text-ink/60">{t.admin.media.previewError}</p>}
     </div>
   );

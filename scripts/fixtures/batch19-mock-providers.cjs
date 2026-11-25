@@ -16,7 +16,7 @@ globalThis.fetch = async (input, init) => {
   const target = new URL(url);
   if (target.protocol === "http:" && ["127.0.0.1", "localhost"].includes(target.hostname)) return original(input, init);
   if (target.origin === "https://res.cloudinary.com" && target.pathname.startsWith("/fixture/")) {
-    return new Response(readFileSync("src/app/icon.png"), { headers: { "Content-Type": "image/png" } });
+    return new Response(readFileSync("public/favicon-96.png"), { headers: { "Content-Type": "image/png" } });
   }
   if (process.env.BATCH19_UX07 === "1" && target.origin === "https://ux07fixture.public.blob.vercel-storage.com" &&
       /^\/3dkid\/product-media\/image\/[0-9a-f-]{36}\.webp$/.test(target.pathname)) {

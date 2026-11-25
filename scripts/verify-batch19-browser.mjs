@@ -178,7 +178,8 @@ try {
     await until(() => evaluate(`!!document.querySelector(${JSON.stringify(selector)})`), selector);
     await evaluate(`(() => {
       const input = document.querySelector(${JSON.stringify(selector)});
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, ${JSON.stringify(value)});
+      const prototype = input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(prototype, "value").set.call(input, ${JSON.stringify(value)});
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
     })()`);
@@ -597,6 +598,81 @@ try {
     await reset(auth);
     await save({ [auth]: "" });
     for (const [key, expected] of Object.entries(unrelated)) assert.equal(await read(key), expected);
+    if (process.argv.includes("--seo01")) {
+      const seo = "#seo-content";
+      const imageKey = "seo_social_image";
+      await admin(390, "ua");
+      await textIncludes("Фактичні результати Google можуть відрізнятися.", seo);
+      await capture("seo-01", "admin-ua-mobile", seo);
+      await admin(1280, "en");
+      await textIncludes("Actual Google results may differ.", seo);
+      await textIncludes("1200 × 630", seo);
+      await capture("seo-01", "admin-en-desktop", seo);
+      await capture("seo-01", "simulated-search-preview", "#seo-search-preview");
+      const values = {
+        seo_site_name: "SEO fixture storefront",
+        seo_home_title_ua: "Тестовий заголовок SEO",
+        seo_home_title_en: "SEO fixture title",
+        seo_home_description_ua: "Тестовий опис для перевірки SEO.",
+        seo_home_description_en: "Saved description for the SEO fixture.",
+      };
+      for (const [key, text] of Object.entries(values)) await fill("#" + key, text);
+      await textIncludes(values.seo_home_title_en, "#seo-search-preview");
+      await textIncludes(values.seo_home_title_en.length + "/120", "#seo_home_title_en-help");
+      await textIncludes(values.seo_home_description_en.length + "/320", "#seo_home_description_en-help");
+      const sharp = (await import("sharp")).default;
+      const seoFile = join(directory, "seo-social-fixture.webp");
+      await sharp(resolve("public/seo/store-share.jpg")).webp({ quality: 78 }).toFile(seoFile);
+      const uploaded = await upload(imageKey, seoFile);
+      await verifyAdminPreviews({ [imageKey]: uploaded });
+      assert.equal(await evaluate("getComputedStyle(document.querySelector('div:has(> #seo_social_image) > img')).objectFit"), "contain");
+      await capture("seo-01", "social-image-upload");
+      await save({ ...values, [imageKey]: uploaded });
+      await admin(1280, "en");
+      await verifyAdminPreviews({ [imageKey]: uploaded });
+      for (const locale of ["ua", "en"]) {
+        const home = await (await request("/", "locale=" + locale)).text();
+        assert.ok(home.includes("<title>" + values["seo_home_title_" + locale] + "</title>"));
+        assert.ok(home.includes('name="description" content="' + values["seo_home_description_" + locale] + '"'));
+        assert.ok(home.includes('property="og:image" content="' + uploaded + '"'));
+        assert.ok(home.includes('property="og:site_name" content="' + values.seo_site_name + '"'));
+      }
+      await evaluate("document.querySelector('#seo_social_image').parentElement.querySelector('button[aria-label^=\"Reset to the default image\"]').click()");
+      for (const key of Object.keys(values)) await fill("#" + key, "");
+      await save(Object.fromEntries([...Object.keys(values), imageKey].map(key => [key, ""])));
+      await go("/");
+      assert.ok((await (await request("/", "locale=en")).text()).includes('property="og:image" content="https://www.3dkid.shop/seo/store-share.jpg"'));
+      const faviconLinks = await evaluate(`(async () => {
+        const links = [...document.querySelectorAll('head link[rel=icon],head link[rel=apple-touch-icon]')];
+        await Promise.all(links.map(async link => { const icon = new Image(); icon.src = link.href; await icon.decode(); }));
+        const sheet = document.createElement('section');
+        sheet.id = 'seo-favicon-samples';
+        sheet.style.cssText = 'position:fixed;top:14px;left:14px;z-index:9999;background:#fff8ef;padding:22px;border-radius:14px;color:#432638;font:16px Arial';
+        sheet.innerHTML = '<b>3D kid · favicon artwork at native sizes</b><div style="display:flex;gap:16px;align-items:end;margin-top:16px">' +
+          [16,32,48,96,180].map(size => '<figure style="margin:0;text-align:center"><img width="'+size+'" height="'+size+'" src="'+
+            (size===180?'/apple-touch-icon.png':'/favicon-'+size+'.png')+'"><figcaption>'+size+' px</figcaption></figure>').join('') + '</div>';
+        document.body.append(sheet);
+        await Promise.all([...sheet.querySelectorAll('img')].map(image => image.decode()));
+        return links.length;
+      })()`);
+      assert.equal(faviconLinks, 6);
+      await capture("seo-01", "favicon-native-sizes", "#seo-favicon-samples");
+      await evaluate(`(() => {
+        const sheet = document.getElementById('seo-favicon-samples');
+        sheet.replaceChildren();
+        const label = document.createElement('b');
+        label.textContent = 'Simulated browser tab · local verification';
+        const tab = document.createElement('div');
+        tab.style.cssText = 'display:flex;align-items:center;gap:8px;background:white;border:1px solid #e2cfda;border-radius:10px 10px 0 0;padding:10px;margin-top:12px';
+        const image = new Image(16,16);
+        image.src = '/favicon-16.png';
+        tab.append(image, document.createTextNode(document.title));
+        sheet.append(label, tab);
+      })()`);
+      await capture("seo-01", "simulated-browser-tab", "#seo-favicon-samples");
+      await evaluate("document.getElementById('seo-favicon-samples').remove()");
+      passes("SEO-01 desktop/mobile editor, localized counters and preview, mocked image upload and reset, saved metadata and favicon decode");
+    }
     console.log("UX-07 rendered illustration widths (CSS pixels)", { authDesktop: 300, authTablet: tablet, authMobile: 0, welcomeDesktop: 144, welcomeMobile: 78 });
     passes("UX-07 uploads, validation, independent replacement and reset, refreshed content, responsive account art and UA/EN previews");
   }

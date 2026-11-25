@@ -167,6 +167,10 @@ try {
   assert.match(oauth.headers.get("cache-control"), /private.*no-store/);
   console.log("PASS canonical OAuth origin and customer auth method, Host and bounded body checks");
   const screenshots = ["--ux06-screenshots", "--ux08-screenshots"].filter(flag => process.argv.includes(flag));
+  if (process.argv.includes("--seo01")) {
+    console.log(await run(process.execPath, [resolve("scripts/verify-seo01-http.mjs")]));
+    screenshots.push("--seo01");
+  }
   console.log(await run(process.execPath, [resolve("scripts/verify-batch19-browser.mjs"), ...screenshots]));
   }
   await assert.rejects(file(release + "-rollback.sql", approved), /B19_USE_FORWARD_RECOVERY/);

@@ -1,8 +1,11 @@
 import { z } from "zod";
 import { httpMediaUrl, storefrontImage } from "@/lib/product-media";
 import { translations, type Locale } from "@/lib/i18n";
+import { seoLimits } from "@/lib/seo-config";
 
 const optionalUrl = z.string().trim().pipe(z.union([z.literal(""), httpMediaUrl]));
+const optionalHttpsUrl = z.string().trim().max(2048).pipe(z.union([z.literal(""),
+  httpMediaUrl.refine((value) => new URL(value).protocol === "https:")]));
 export const ABOUT_CONTENT_LIMITS = { slogan: 500, body: 20000, meta_title: 160, meta_description: 320 } as const;
 const aboutText = (limit: number) => z.string().trim().min(1).max(limit);
 // Preserve the authored multiline body, including blank lines, in storage.
@@ -25,6 +28,12 @@ export const ACCOUNT_ILLUSTRATIONS = {
 
 export const storefrontContentSchema = z.object({
   ...aboutContentSchema.shape,
+  seo_home_title_ua: z.string().trim().max(seoLimits.title),
+  seo_home_title_en: z.string().trim().max(seoLimits.title),
+  seo_home_description_ua: z.string().trim().max(seoLimits.description),
+  seo_home_description_en: z.string().trim().max(seoLimits.description),
+  seo_site_name: z.string().trim().max(seoLimits.name),
+  seo_social_image: optionalHttpsUrl,
   hero_title_ua: z.string().trim().max(500),
   hero_title_en: z.string().trim().max(500),
   hero_subtitle_ua: z.string().trim().max(2000),

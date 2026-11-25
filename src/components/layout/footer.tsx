@@ -20,7 +20,7 @@ export function Footer({ categories, content }: { categories: CategoryTreeNode[]
     <footer className="sf-shell sf-footer">
       <div className="sf-footer-brand">
         <Link href="/" className="sf-brand" aria-label={t.nav.home}>
-          <Image src="/hero/logo.png" width={282} height={314} sizes="90px" alt="3D Kid" />
+          <Image src="/hero/logo.png" width={282} height={314} sizes="90px" alt="3D kid" />
         </Link>
         <p>{t.footer.description}</p>
       </div>
@@ -42,7 +42,7 @@ export function Footer({ categories, content }: { categories: CategoryTreeNode[]
           {socials.map(({ network, url }) => <a key={network} href={url} aria-label={t.footer.social[network]} target="_blank" rel="noopener noreferrer"><SocialIcon network={network} /></a>)}
         </div>
       </div>}
-      <small>© {new Date().getFullYear()} 3D Kid. {t.footer.rights}</small>
+      <small>© {new Date().getFullYear()} 3D kid. {t.footer.rights}</small>
     </footer>
   );
 }
