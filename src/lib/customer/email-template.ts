@@ -12,7 +12,7 @@ export function renderChallengeEmail(purpose: EmailPurpose, locale: Locale, url:
   const subject = copy.emailSubject[purpose];
   return {
     subject,
-    html: renderBrandedEmail({ locale, title: subject, intro: copy.emailBody[purpose],
-      action: { label: copy.openLink, url, fallback: true }, note: copy.emailExpiry(challengeMinutes(purpose)) }),
+    ...renderBrandedEmail({ locale, title: subject, intro: copy.emailBody[purpose],
+      action: { label: copy.emailAction[purpose], url, fallback: true }, note: copy.emailExpiry(challengeMinutes(purpose)) }),
   };
 }

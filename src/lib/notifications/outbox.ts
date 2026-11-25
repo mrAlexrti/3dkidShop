@@ -8,7 +8,7 @@ import { sendEmail } from "./email";
 import type { DeliveryResult } from "./delivery";
 import type { Locale } from "@/lib/i18n";
 
-type Payload = { telegram: string; keyboard?: TelegramInlineKeyboard; to?: string; subject: string; html: string };
+type Payload = { telegram: string; keyboard?: TelegramInlineKeyboard; to?: string; subject: string; html: string; text?: string };
 
 // Called only inside the financial-acceptance transaction. No external I/O.
 // Initial PAID is part of ORDER_CREATED, never a second PAYMENT_PAID message.
@@ -17,7 +17,7 @@ export async function enqueueAcceptanceNotifications(tx: Prisma.TransactionClien
     const message = renderNotification("ORDER_CREATED", order, channel === "telegram" ? "ua" : locale, channel);
     const payload: Payload = channel === "telegram"
       ? { telegram: message.telegram, ...(message.telegramKeyboard ? { keyboard: message.telegramKeyboard } : {}), subject: "", html: "" }
-      : { telegram: "", to: order.customerEmail ?? "", subject: message.subject, html: message.html };
+      : { telegram: "", to: order.customerEmail ?? "", subject: message.subject, html: message.html, text: message.text };
     const suppressed = order.paymentMode === "sandbox" || (channel === "email" && !order.customerEmail);
     await tx.orderNotification.create({ data: {
       orderId: order.id, event: "ORDER_CREATED", channel,
@@ -60,7 +60,7 @@ export async function recoverNotificationOutbox(now = new Date()) {
         try {
           result = row.channel === "telegram"
             ? await sendTelegramMessage(payload.telegram, payload.keyboard)
-            : await sendEmail({ to: payload.to, subject: payload.subject, html: payload.html });
+            : await sendEmail({ to: payload.to, subject: payload.subject, html: payload.html, text: payload.text });
         } catch { result = { sent: false, reason: "TRANSPORT_UNKNOWN", outcome: "unknown" }; }
       }
     } catch { result = { sent: false, reason: "SETTINGS_UNAVAILABLE", outcome: "retry" }; }

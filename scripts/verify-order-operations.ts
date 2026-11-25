@@ -19,6 +19,8 @@ import * as statuses from "../src/lib/status";
 import * as stages from "../src/lib/order-status";
 import * as events from "../src/lib/notifications/events";
 import * as callbacks from "../src/lib/notifications/telegram-actions";
+import * as brandedMail from "../src/lib/notifications/branded-email";
+import * as validation from "../src/lib/validations/checkout";
 import * as variants from "../src/lib/product-variants";
 import * as money from "../src/lib/payments/money";
 import * as reference from "../src/lib/order-reference";
@@ -76,6 +78,7 @@ const templates = sourceModule<typeof import("../src/lib/notifications/templates
   "@/lib/order-reference": reference,
   "@/lib/product-variants": variants, "@/lib/payments/order-result": { getOrderResultPath: (number: string) => `/result/${number}` },
   "@/lib/i18n": { translations }, "@/lib/status": statuses, "@/lib/server-env": serverEnv, "./telegram-actions": callbacks,
+  "@/lib/validations/checkout": validation, "./branded-email": brandedMail,
 });
 
 async function verify() {

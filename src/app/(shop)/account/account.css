@@ -291,6 +291,8 @@
 .ac-auth-state > svg { color: var(--sf-accent); }
 .ac-auth-state h2 { font-size: clamp(1.3rem, 3vw, 1.75rem); }
 .ac-auth-state p { color: var(--sf-muted); font-size: .9rem; }
+.ac-auth-state--complete { gap: 14px; }
+.ac-status-heading:focus { outline: none; }
 .ac-sent-address { overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
 .ac-auth-state-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
 .ac-state { justify-items: center; text-align: center; color: var(--sf-accent); }

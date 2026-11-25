@@ -215,10 +215,24 @@ try {
     await submit();
     await textIncludes(locale === "en" ? "Check your email" : "Перевірте пошту", "main .ac-auth-state");
     await textIncludes(email, ".ac-sent-address");
+    await until(() => evaluate("document.activeElement?.matches('main .ac-status-heading')"), "email status heading focused");
+    assert.equal(await evaluate("getComputedStyle(document.activeElement).outlineStyle"), "none");
+    assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true);
     assert.equal(await evaluate("!!document.querySelector('main input[name=email]')"), false);
     assert.equal(await evaluate("document.querySelector('.ac-auth-state button.ac-button')?.disabled"), true);
     if (email === credentials.email || locale === "ua") await captureUX08(mode + "-check-email-" + locale);
     return before;
+  }
+  async function verifyCompletion(title) {
+    await textIncludes(title, "main h1");
+    await until(() => evaluate("document.activeElement === document.querySelector('main h1')"), "completion heading focused");
+    assert.equal(await evaluate(`document.querySelectorAll('main h1').length === 1 &&
+      !!document.querySelector('main .ac-auth-state--complete a.ac-button[href="/account/sign-in"]') &&
+      !document.querySelector('main form')`), true);
+    await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
+    assert.equal(await evaluate("document.activeElement?.matches('main a.ac-button') && getComputedStyle(document.activeElement).outlineStyle === 'solid'"), true);
+    await evaluate("document.querySelector('main h1').focus()");
   }
   async function confirm(link, password, expected = "Changes saved.", review) {
     await send("Page.navigate", { url: "about:blank" });
@@ -236,6 +250,7 @@ try {
     }
     await submit();
     await textIncludes(expected, main);
+    if (password && expected !== "Check your details.") await verifyCompletion(expected);
     if (review) await captureUX08(review + "-done");
   }
   async function signIn(email, password, expected = "/account") {
@@ -257,7 +272,7 @@ try {
     browserContext = { ...browserContext, authentication: "anonymous" };
   }
   async function verifyMobileRegistration() {
-    const email = "qa.mobile@example.test";
+    const email = `qa.${"mobile".repeat(8)}@${"fixture".repeat(7)}.example.test`;
     const password = "  Mobile пароль 🔑 +&%  ";
     await viewport(390, "ua");
     const first = await emailForm("register", email, "ua");
@@ -272,6 +287,7 @@ try {
     await go(link);
     await until(() => evaluate("document.querySelector('input[name=token]')?.value.length === 43 && !location.hash"), "mobile password setup");
     await verifyPasswordToggle("ua", "new-password", "confirmPassword");
+    assert.equal(await evaluate("document.querySelector('main .ac-field small').textContent"), "Використайте щонайменше 12 символів");
     await captureUX08("registration-mobile-ua-passwords");
     await fill("main [name=password]", password);
     await fill("main [name=confirmPassword]", password.trim());
@@ -282,10 +298,20 @@ try {
     await fill("main [name=confirmPassword]", "short");
     await submit();
     await textIncludes("щонайменше 12 символів", "main [role=alert]");
+    assert.equal(await evaluate("document.querySelector('main [role=alert]').textContent.includes('72')"), false);
+    const oversized = "🙂".repeat(19);
+    await fill("main [name=password]", oversized);
+    await fill("main [name=confirmPassword]", oversized);
+    await submit();
+    await textIncludes("72", "main [role=alert]");
+    await fill("main [name=password]", "");
+    await fill("main [name=confirmPassword]", "");
+    await captureUX08("registration-mobile-ua-length-error");
     await fill("main [name=password]", password);
     await fill("main [name=confirmPassword]", password);
     await evaluate("const form = document.querySelector('main form'); form.requestSubmit(); form.requestSubmit()");
     await textIncludes("Акаунт створено", "main [role=status]");
+    await verifyCompletion("Акаунт створено");
     await captureUX08("registration-mobile-ua-complete");
     assert.equal(await db.user.count({ where: { email, role: "CUSTOMER", emailVerified: { not: null } } }), 1);
     await signIn(email.toUpperCase(), password.trim(), "Не вдалося увійти");
@@ -309,7 +335,24 @@ try {
     // A loading boundary may start the response before Next sends the not-found entry.
     const html = await response.text();
     assert.ok(response.status === 404 || (response.status === 200 && html.includes("NEXT_HTTP_ERROR_FALLBACK;404")));
-    assert.doesNotMatch(html, /Historic recipient|Gift Recipient|Historical medium/);
+    assert.doesNotMatch(html, /Historic recipient|Gift Recipient|Historical medium|Guest Mailbox|Different Contact/);
+  }
+  async function verifyEmailedOrderStatus(order) {
+    const mail = await until(() => currentMail().find(message => message.to === order.customerEmail &&
+      message.html.includes(`Order #${order.number}</h2>`)), "order receipt email");
+    const href = mail.html.match(/href="([^"]+)"/)?.[1]?.replaceAll("&amp;", "&");
+    assert.ok(href && mail.text?.includes(href), "HTML and plain text deliver the same direct action");
+    const url = new URL(href);
+    assert.equal(url.origin, origin);
+    assert.equal(url.pathname, "/checkout/success");
+    assert.equal(url.searchParams.get("order"), order.number);
+    await go(url.href);
+    await textIncludes(`Order #${order.number}`, "main [role=status]");
+    assert.equal(await evaluate(`!document.querySelector('main').textContent.includes(${JSON.stringify(order.customerName)}) &&
+      !document.querySelector('main').textContent.includes(${JSON.stringify(order.shippingAddress)})`), true);
+    url.searchParams.delete("token");
+    await go(url.href);
+    await textIncludes("Status unavailable", "main h1");
   }
   async function checkout(details) {
     for (const [selector, value] of Object.entries(details)) await fill(selector, value);
@@ -753,6 +796,12 @@ try {
   await checkout({ "#customerName": "Guest", "#customerSurname": "Recipient", "#customerPhone": "0501112211" });
   assert.equal(await db.order.count({ where: { customerName: "Guest Recipient", customerEmail: null, customerId: null } }), 1);
   await addCart();
+  await checkout({ "#customerName": "Guest", "#customerSurname": "Mailbox", "#customerPhone": "0501112211", "#customerEmail": "guest.receipt@example.test" });
+  const guestReceipt = await db.order.findFirstOrThrow({ where: { customerName: "Guest Mailbox" } });
+  assert.equal(guestReceipt.customerId, null);
+  await verifyEmailedOrderStatus(guestReceipt);
+  await go("/account/orders/" + guestReceipt.id, "/account/sign-in");
+  await addCart();
   const index = await emailForm("register", credentials.email);
   const registration = await messageLink("register", index);
   await confirm(registration, credentials.password, "Account created", "desktop-en-registration-confirmation");
@@ -824,8 +873,13 @@ try {
   const different = await db.order.findFirstOrThrow({ where: { customerName: "Different Contact" } });
   assert.equal(different.customerId, user.id);
   assert.equal(different.customerEmail, "other@example.test");
+  await verifyEmailedOrderStatus(different);
+  await deniedOrder(guestReceipt.id, nativeCookie);
+  await go("/account/orders/" + different.id);
+  await textIncludes("Different Contact", main);
   await go("/account/orders/" + gift.id);
   await textIncludes("Gift Recipient", main);
+  passes("guest and signed-in receipt links open the signed status page without private data or order access");
 
   await go("/account/orders");
   const claimIndex = currentMail().length;

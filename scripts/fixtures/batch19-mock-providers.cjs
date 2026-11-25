@@ -50,7 +50,7 @@ globalThis.fetch = async (input, init) => {
   }
   if (url === "https://api.resend.com/emails") {
     const message = JSON.parse(init?.body ?? await input.text());
-    appendFileSync(process.env.BATCH19_MAIL_LOG, JSON.stringify({ to: message.to, html: message.html }) + "\n");
+    appendFileSync(process.env.BATCH19_MAIL_LOG, JSON.stringify({ to: message.to, html: message.html, text: message.text }) + "\n");
     return Response.json({ id: "mock-resend" });
   }
   throw new Error(`B19_UNEXPECTED_EXTERNAL_FETCH ${target.origin}${target.pathname}`);

@@ -5,9 +5,10 @@ export function passwordFits(password: string) {
 }
 
 export function passwordCreationError(password: unknown, confirmation: unknown) {
-  if (typeof password !== "string" || password.length < minimumPasswordLength || !passwordFits(password)) {
+  if (typeof password !== "string" || password.length < minimumPasswordLength || password.includes("\0")) {
     return "passwordRequirements";
   }
+  if (!passwordFits(password)) return "passwordLengthLimit";
   if (password !== confirmation) return "passwordMismatch";
   return null;
 }

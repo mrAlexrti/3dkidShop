@@ -28,7 +28,7 @@ export function AccountEmpty({ title, description, cta, icon }: { title: string;
   </div>;
 }
 
-export async function AccountAuthFrame({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+export async function AccountAuthFrame({ title, description, children }: { title?: string; description?: string; children: ReactNode }) {
   const content = await getStorefrontContent();
   return <section className="ac-auth">
     <div className="ac-auth-art" aria-hidden="true">
@@ -36,7 +36,7 @@ export async function AccountAuthFrame({ title, description, children }: { title
       <AccountIllustration {...resolveAccountIllustration(content, "account_auth_image")} auth />
     </div>
     <div className="ac-auth-body">
-      <AccountIntro title={title} description={description} />
+      {title && <AccountIntro title={title} description={description} />}
       {children}
     </div>
   </section>;

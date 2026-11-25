@@ -12,13 +12,14 @@ import type { EmailPurpose } from "@/lib/customer/challenges";
 import { passwordCreationError } from "@/lib/customer/password";
 
 type Action = (state: AccountResult | null, data: FormData) => Promise<AccountResult>;
-export function AccountForm({ action, button, children, token = false, done, refresh = false, confirmMode }: {
-  action: Action; button: string; children?: ReactNode; token?: boolean; done?: string; refresh?: boolean; confirmMode?: EmailPurpose;
+export function AccountForm({ action, button, children, intro, token = false, done, refresh = false, confirmMode }: {
+  action: Action; button: string; children?: ReactNode; intro?: ReactNode; token?: boolean; done?: string; refresh?: boolean; confirmMode?: EmailPurpose;
 }) {
   const [result, submit, pending] = useActionState(action, null);
   const [proof, setProof] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<ReturnType<typeof passwordCreationError>>(null);
   const submitting = useRef(false);
+  const completionHeading = useRef<HTMLHeadingElement>(null);
   const { t } = useLangStore();
   const router = useRouter();
   useEffect(() => {
@@ -36,12 +37,18 @@ export function AccountForm({ action, button, children, token = false, done, ref
   useEffect(() => { if (!pending) submitting.current = false; }, [pending, result]);
   const passwordMode = confirmMode === "register" || confirmMode === "reset" || confirmMode === "addPassword" ? confirmMode : null;
   const completion = result === "ok" && passwordMode ? t.account.completion[passwordMode] : null;
-  if (completion) return <div className="ac-auth-state" role="status">
-    <CircleCheck size={32} aria-hidden="true" />
-    <h2>{completion.title}</h2>
-    <p>{completion.detail}</p>
+  const completed = Boolean(completion);
+  useEffect(() => {
+    if (completed) completionHeading.current?.focus();
+  }, [completed]);
+  if (completion) return <section className="ac-auth-state ac-auth-state--complete">
+    <CircleCheck size={40} aria-hidden="true" />
+    <div className="ac-intro" role="status">
+      <h1 ref={completionHeading} tabIndex={-1} className="ac-status-heading">{completion.title}</h1>
+      <p>{completion.detail}</p>
+    </div>
     <Link className="ac-button" href="/account/sign-in" prefetch={false}>{t.account.signIn}<ArrowRight size={16} aria-hidden="true" /></Link>
-  </div>;
+  </section>;
 
   function validate(event: FormEvent<HTMLFormElement>) {
     if (submitting.current || (token && !proof)) {
@@ -65,7 +72,7 @@ export function AccountForm({ action, button, children, token = false, done, ref
   const shown = fieldError || result;
   const invalidLink = token && (proof === "" || (result === "invalid" && !fieldError));
   const recovery = confirmMode === "register" || confirmMode === "reset" ? `/account/sign-in?mode=${confirmMode}` : "/account/profile";
-  return <form action={submit} onSubmit={validate} className="ac-form" aria-busy={pending}>
+  return <>{intro}<form action={submit} onSubmit={validate} className="ac-form" aria-busy={pending}>
     <fieldset disabled={pending || finished}>
       {children}
       {token && <input type="hidden" name="token" value={proof ?? ""} />}
@@ -78,7 +85,7 @@ export function AccountForm({ action, button, children, token = false, done, ref
     </p>}
     {invalidLink && <Link className="ac-text-link" href={recovery} prefetch={false}>{t.account.requestNewLink}<ArrowRight size={16} aria-hidden="true" /></Link>}
     {finished && <Link className="ac-text-link" href={done} prefetch={false}>{done === "/account/sign-in" ? t.account.signIn : t.account.title}<ArrowRight size={16} aria-hidden="true" /></Link>}
-  </form>;
+  </form></>;
 }
 
 export function GoogleForm({ intent = "signin" }: { intent?: "signin" | "register" | "link" }) {

@@ -26,10 +26,12 @@ export async function sendEmail({
   to,
   subject,
   html,
+  text,
 }: {
   to?: string | string[] | null;
   subject: string;
   html: string;
+  text?: string;
 }): Promise<SendEmailResult> {
   if (!to || (Array.isArray(to) && to.length === 0)) return { sent: false, reason: "missing_recipient", outcome: "permanent" };
 
@@ -52,6 +54,7 @@ export async function sendEmail({
         to,
         subject,
         html,
+        text,
       }),
     });
 

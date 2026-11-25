@@ -118,7 +118,7 @@ async function verify() {
     return confirmAccountEmail("register", null, data);
   };
   assert.equal(await register(testPassword, testPassword.trim()), "passwordMismatch");
-  assert.equal(await register("🙂".repeat(19), "🙂".repeat(19)), "passwordRequirements");
+  assert.equal(await register("🙂".repeat(19), "🙂".repeat(19)), "passwordLengthLimit");
   assert.equal(await register("short", "short"), "passwordRequirements");
   assert.equal(await owner.user.count({ where: { email: newEmail } }), 0);
   assert.equal(await prisma.customerChallenge.count({ where: { tokenHash: security.tokenHash(registration) } }), 1);

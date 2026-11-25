@@ -23,7 +23,7 @@ export async function emitOrderEvents(before: OrderForNotification | null, order
         const message = renderNotification(event, order, channel === "telegram" ? "ua" : locale, channel);
         const result = channel === "telegram"
           ? await sendTelegramMessage(message.telegram, message.telegramKeyboard)
-          : await sendEmail({ to: order.customerEmail, subject: message.subject, html: message.html });
+          : await sendEmail({ to: order.customerEmail, subject: message.subject, html: message.html, text: message.text });
         return channel === "email" && result.sent;
       }));
       emailSent ||= results.some((result) => result.status === "fulfilled" && result.value);

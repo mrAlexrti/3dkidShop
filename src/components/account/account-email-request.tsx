@@ -65,7 +65,7 @@ export function AccountEmailRequest({ mode, action, children }: {
   const feedback = error && <p className="ac-feedback" role="alert">{t.account.result[error]}</p>;
   if (sent) return <section className="ac-auth-state" aria-busy={pending}>
     <MailCheck size={34} aria-hidden="true" />
-    <h2 ref={heading} tabIndex={-1}>{t.account.checkEmail}</h2>
+    <h2 ref={heading} tabIndex={-1} className="ac-status-heading">{t.account.checkEmail}</h2>
     <strong className="ac-sent-address">{address}</strong>
     <p role="status">{t.account.result.sent}</p>
     <p>{t.account.requestNext[mode]}</p>

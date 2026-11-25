@@ -18,6 +18,15 @@ async function verify() {
     globalThis.fetch = async () => Response.json(provider === "telegram" ? { ok: true, result: { message_id: 123 } } : { id: "qa-receipt" });
     assert.deepEqual(await send(), { sent: true, providerMessageId: provider === "telegram" ? "123" : "qa-receipt" });
   }
+  for (const alternative of ["QA plain text", undefined]) {
+    globalThis.fetch = async (_url, init) => {
+      const message = JSON.parse(String(init?.body));
+      assert.equal(message.text, alternative);
+      assert.equal(message.html, "<p>QA mail</p>");
+      return Response.json({ id: "qa-receipt" });
+    };
+    assert.equal((await email.sendEmail({ to: "qa@example.invalid", subject: "QA", html: "<p>QA mail</p>", text: alternative })).sent, true);
+  }
   console.log("PASS delivery adapters: acknowledged receipts; definite 429 retry; permanent 403; ambiguous 5xx/timeout never auto-retried. Mocked HTTP and fake configuration only.");
 }
 verify().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => {

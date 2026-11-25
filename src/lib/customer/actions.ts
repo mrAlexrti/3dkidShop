@@ -16,7 +16,7 @@ import { activeCustomerSession, customerSession, lockCustomer, revokeCustomerSes
 import { customerOrigin, customerPost, emailInput, hashPassword, identifier, passwordFits, rateLimit, tokenHash, tokenInput } from "./security";
 import { passwordCreationError } from "./password";
 
-export type AccountResult = "ok" | "sent" | "invalid" | "failed" | "signinError" | "rate" | "unavailable" | "passwordRequirements" | "passwordMismatch";
+export type AccountResult = "ok" | "sent" | "invalid" | "failed" | "signinError" | "rate" | "unavailable" | "passwordRequirements" | "passwordLengthLimit" | "passwordMismatch";
 const profileInput = z.object({
   firstName: z.string().trim().max(100), lastName: z.string().trim().max(100),
   phone: z.string().trim().max(32).refine((value) => !value || (/^[+\d\s()-]+$/.test(value) && /^\d{10,15}$/.test(value.replace(/\D/g, "")))),

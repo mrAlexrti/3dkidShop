@@ -6,10 +6,12 @@ import { dirname, join, resolve } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { challengeMinutes, emailPurposes, renderChallengeEmail } from "../src/lib/customer/email-template";
+import { customerCopy } from "../src/lib/customer/copy";
 import { emailLogo } from "../src/lib/notifications/branded-email";
 import { CONFIGURABLE_EVENTS } from "../src/lib/notifications/events";
 import { renderNotification, type OrderForNotification } from "../src/lib/notifications/templates";
 import { validOrderResultToken } from "../src/lib/payments/order-result";
+import { translations } from "../src/lib/i18n";
 
 const output = resolve("coverage/ux-08/emails");
 const previewOrigin = "https://example.invalid";
@@ -23,49 +25,73 @@ const deliveryStatuses: Record<string, string> = {
 };
 mkdirSync(output, { recursive: true });
 
-function preview(key: string, html: string, detail: boolean) {
-  assert.ok(html.includes(emailLogo) && html.includes("<!--[if mso]>"));
+function preview(key: string, html: string, text: string, detail: boolean) {
+  assert.deepEqual([...html.matchAll(/<img src="([^"]+)"/g)].map(match => match[1]), [emailLogo]);
+  assert.ok(html.includes('alt="3D Kid" width="63" height="70"') && html.includes("<!--[if mso]>"));
+  assert.ok(html.includes('href="https://www.3dkid.shop/">3D Kid</a>') && text.includes("https://www.3dkid.shop/"));
+  assert.ok(!html.includes("data:image") && !text.includes("token="), "Only previews embed the logo and their links are inert");
   assert.ok(!/<script\b|\bonclick=/.test(html), "Email is usable without JavaScript");
   writeFileSync(join(output, key + ".html"), html.replace(emailLogo, logo));
+  writeFileSync(join(output, key + ".txt"), text);
   previews.push({ key, detail });
 }
 
 for (const locale of ["ua", "en"] as const) {
   for (const purpose of emailPurposes) {
-    const url = `${previewOrigin}/account/confirm?mode=${purpose}#preview`;
-    const { html, subject } = renderChallengeEmail(purpose, locale, url);
+    const fragment = purpose === "claim" ? "preview-" + "A".repeat(220) : "preview";
+    const url = `${previewOrigin}/account/confirm?mode=${purpose}#${fragment}`;
+    const { html, subject, text } = renderChallengeEmail(purpose, locale, url);
     assert.ok(subject.length > 0);
-    assert.equal(html.match(/href="/g)?.length, 2, "Button and fallback use the same URL");
+    assert.deepEqual([...html.matchAll(/href="([^"]+)"/g)].map(match => match[1]), [url, url, "https://www.3dkid.shop/"]);
+    assert.ok(html.includes(customerCopy[locale].emailAction[purpose]) && text.includes(`${customerCopy[locale].emailAction[purpose]}\n${url}`));
     assert.ok(html.split(url).length >= 4, "Fallback URL is also visible as text");
-    assert.ok(html.includes(String(challengeMinutes(purpose))), "Expiry is shown");
-    preview(`${locale}-${purpose}`, html, purpose === "register" || purpose === "reset");
+    assert.ok(text.includes(customerCopy[locale].emailExpiry(challengeMinutes(purpose))), "Expiry is shown");
+    preview(`${locale}-${purpose}`, html, text, purpose === "register" || purpose === "reset");
   }
   for (const event of CONFIGURABLE_EVENTS) {
+    const long = event === "DELIVERY_IN_TRANSIT";
+    const noShipment = event === "PAYMENT_FAILED";
     const order: OrderForNotification = {
-      id: "preview-order", number: "3DK-PREVIEW-01", status: event === "ORDER_CREATED" ? "NEW" : "PROCESSING", paymentProvider: "mono",
+      id: "preview-order", number: long ? "3DK-" + "12345678".repeat(12) : "3DK-PREVIEW-01",
+      status: event === "ORDER_CREATED" ? "NEW" : "PROCESSING", paymentProvider: "mono",
       paymentStatus: event.startsWith("PAYMENT_") ? event.slice(8) : "PAID",
       novaPoshtaTtn: event.startsWith("DELIVERY_") ? "20400000000000" : null,
       novaPoshtaStatus: deliveryStatuses[event] ?? null,
       createdAt: new Date("2026-11-25T10:00:00Z"), customerName: locale === "ua" ? "Марія Тестова" : "Maria Sample",
-      customerPhone: "", city: locale === "ua" ? "Тестове місто" : "Sample city",
-      shippingAddress: locale === "ua" ? "Навчальне відділення № 1" : "Sample branch 1", total: 498,
-      items: [{ productName: locale === "ua" ? "Рожевий дракончик" : "Pink pocket dragon",
-        optionsJson: null, quantity: 2, price: 249 }],
+      customerPhone: "", city: noShipment ? "" : locale === "ua" ? "Тестове місто" : "Sample city",
+      deliveryMethod: noShipment ? null : "np_warehouse",
+      shippingAddress: noShipment ? "" : locale === "ua" ? "Тестове місто, навчальне відділення № 1" : "Sample city, branch 1",
+      shippingCost: long ? 29.50 : 0, total: long ? 327.50 : 498,
+      items: [{ productName: long ? (locale === "ua" ? "Дракон".repeat(22) : "PocketDragon".repeat(11))
+        : locale === "ua" ? "Рожевий дракончик" : "Pink pocket dragon", optionsJson: null, quantity: 2, price: long ? 149 : 249 }],
     };
     if (order.paymentStatus === "PAID") order.paidAt = new Date("2026-11-25T10:08:00Z");
     if (event === "ORDER_COMPLETED") order.status = "COMPLETED";
     if (event === "ORDER_CANCELLED") order.status = "CANCELLED";
-    const { html, subject } = renderNotification(event, order, locale);
+    const { html, subject, text } = renderNotification(event, order, locale);
     const action = html.match(/href="([^"]+)"/)?.[1];
     assert.ok(typeof action === "string", "Order status email has an action");
-    const link = new URL(action.replaceAll("&amp;", "&"));
+    const directAction = action.replaceAll("&amp;", "&");
+    const link = new URL(directAction);
     const number = String(order.number);
     assert.equal(link.origin, previewOrigin);
     assert.equal(link.pathname, "/checkout/success");
     assert.equal(link.searchParams.get("order"), number);
     assert.ok(validOrderResultToken(number, link.searchParams.get("token") ?? ""), "Existing status capability is valid");
-    assert.ok(subject.includes(number) && html.includes(order.items[0].productName));
-    preview(`${locale}-${event.toLowerCase()}`, html.replace(action, previewOrigin + "/order-preview"), event === "ORDER_CREATED");
+    const t = translations[locale].notifications;
+    assert.ok(subject.includes(number) && html.includes(order.items[0].productName) && text.includes(directAction));
+    assert.ok(text.includes(t.mail.intro[event]));
+    for (const field of [t.mail.orderStatus, t.mail.paymentStatus, t.mail.deliveryStatus]) {
+      assert.equal(text.split(field + ":").length, 2);
+    }
+    assert.ok(!text.includes(t.created + ":") && !text.includes(t.paid + ":"));
+    assert.equal(text.includes(t.tracking + ":"), event.startsWith("DELIVERY_"));
+    assert.equal(text.includes(t.mail.shippingCost + ":"), long);
+    assert.equal(text.includes(t.mail.deliveryDetails + ":"), !noShipment);
+    assert.equal(text.includes(t.mail.deliveryMethod + ":"), !noShipment);
+    assert.ok(html.includes('scope="col"') && text.includes(t.mail.unitPrice + ":"));
+    const safeAction = previewOrigin + "/order-preview";
+    preview(`${locale}-${event.toLowerCase()}`, html.replace(action, safeAction), text.replace(directAction, safeAction), event === "ORDER_CREATED");
   }
 }
 
@@ -73,7 +99,7 @@ writeFileSync(join(output, "index.html"), `<!doctype html><html lang="en"><meta 
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>3D Kid email previews</title>
 <body style="font:16px system-ui;padding:24px;line-height:1.6"><h1>3D Kid email previews</h1>
 <p>Synthetic data. Action links use a non-deliverable example domain.</p><ul>${previews.map(({ key, detail }) =>
-  `<li><a href="${key}.html">${key}</a>${detail ? ` · <a href="${key}-desktop.png">desktop</a> · <a href="${key}-mobile.png">mobile</a>` : ""}</li>`
+  `<li><a href="${key}.html">${key}</a> · <a href="${key}.txt">plain text</a>${detail ? ` · <a href="${key}-desktop.png">desktop</a> · <a href="${key}-mobile.png">mobile</a>` : ""}</li>`
 ).join("")}</ul></body></html>`);
 
 async function verifyLayouts() {
@@ -117,7 +143,7 @@ async function verifyLayouts() {
     }
     await send("Network.enable");
     await send("Network.setBlockedURLs", { urls: ["http://*", "https://*"] });
-    for (const [device, width, height] of [["mobile", 390, 960], ["desktop", 960, 900]] as const) {
+    for (const [device, width, height] of [["narrow", 320, 900], ["mobile", 390, 960], ["desktop", 960, 900]] as const) {
       await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: width < 680 });
       for (const { key, detail } of previews) {
         const url = pathToFileURL(join(output, key + ".html")).href;
@@ -134,9 +160,25 @@ async function verifyLayouts() {
           else await pause(50);
         }
         assert.ok(layout?.fits && layout.logo, `${key} fits with logo at ${width}px`);
-        if (detail) {
-          const screenshot = await send<{ data: string }>("Page.captureScreenshot", { format: "png" });
+        if (detail && device !== "narrow") {
+          const { cssContentSize } = await send<{ cssContentSize: { width: number; height: number } }>("Page.getLayoutMetrics");
+          const screenshot = await send<{ data: string }>("Page.captureScreenshot", {
+            format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width: cssContentSize.width, height: cssContentSize.height, scale: 1 },
+          });
           writeFileSync(join(output, `${key}-${device}.png`), Buffer.from(screenshot.data, "base64"));
+        }
+        if (detail && device === "narrow") {
+          await send("Runtime.evaluate", { expression: `document.querySelector("img").src = ${JSON.stringify(emailLogo)}` });
+          const { result } = await send<{ result: { value: boolean } }>("Runtime.evaluate", {
+            awaitPromise: true, returnByValue: true, expression: `(async () => {
+              const img = document.querySelector('img');
+              await img.decode().catch(() => {});
+              return img.alt === '3D Kid' && img.naturalWidth === 0 && !!document.querySelector('h1').getBoundingClientRect().width &&
+                !!document.querySelector('a[href^="https://example.invalid"]').getBoundingClientRect().width &&
+                document.documentElement.scrollWidth <= innerWidth;
+            })()`,
+          });
+          assert.ok(result.value, `${key} remains usable with images blocked`);
         }
       }
     }
@@ -150,5 +192,5 @@ async function verifyLayouts() {
 }
 
 void verifyLayouts().then(() => {
-  console.log(`PASS ${previews.length} localized templates, ${previews.length * 2} offline desktop/mobile layout checks, 12 detailed PNG previews`);
+  console.log(`PASS ${previews.length} localized HTML/plain-text templates, ${previews.length * 3} offline layout checks, 6 blocked-logo checks and 12 detailed PNG previews`);
 }).catch(error => { console.error(error); process.exitCode = 1; });

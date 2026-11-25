@@ -10,6 +10,8 @@ import * as reference from "../src/lib/order-reference";
 import * as variants from "../src/lib/product-variants";
 import * as status from "../src/lib/status";
 import * as events from "../src/lib/notifications/events";
+import * as brandedMail from "../src/lib/notifications/branded-email";
+import * as validation from "../src/lib/validations/checkout";
 import { translations } from "../src/lib/i18n";
 import type { OrderForNotification } from "../src/lib/notifications/templates";
 
@@ -19,6 +21,7 @@ const templates = sourceModule<typeof import("../src/lib/notifications/templates
   "@/lib/date-time": dates, "@/lib/orders/cod-eligibility": eligibility, "./telegram-actions": callbacks,
   "@/lib/order-reference": reference, "@/lib/product-variants": variants, "@/lib/i18n": { translations }, "@/lib/status": status,
   "@/lib/server-env": { readServerEnv: () => "" }, "@/lib/payments/order-result": { getOrderResultPath: () => "/qa-result" },
+  "@/lib/validations/checkout": validation, "./branded-email": brandedMail,
 });
 const fixture = (): OrderForNotification => ({ id: "qa-order", number: "0001", checkoutAcceptance: "ACCEPTED", status: "PENDING",
   paymentMethod: "card_online", paymentProvider: "mono", paymentStatus: "PAID",
@@ -36,17 +39,18 @@ async function verify() {
     ["2026-07-01T21:00:00Z", "02.07.2026, 00:00"],
   ]) assert.equal(dates.formatManagerDateTime(new Date(instant)), expected);
   for (const invalid of ["2026-02-30", "2026-13-01", "2026-1-01", "1999-12-31", "9999-01-01", "", "<script>"]) assert.equal(dates.kyivDayBoundary(invalid), null);
-  // Both channels describe the stored creation instant separately from the
-  // provider/acceptance instants; COD never gets an invented paid timestamp.
+  // Management Telegram retains operational times. Customer email uses status labels.
   for (const locale of ["ua", "en"] as const) for (const channel of ["telegram", "email"] as const) {
     const order = fixture(); const rendered = templates.renderNotification("ORDER_CREATED", order, locale, channel);
     const text = channel === "telegram" ? rendered.telegram : rendered.html;
     const t = translations[locale].notifications;
-    for (const [label, value] of [[t.created, order.createdAt], [t.accepted, order.acceptedAt], [t.paid, order.paidAt]] as const) assert.ok(text.includes(`${label}: ${dates.formatManagerDateTime(value, locale)}`));
+    for (const [label, value] of [[t.created, order.createdAt], [t.accepted, order.acceptedAt], [t.paid, order.paidAt]] as const) {
+      assert.equal(text.includes(`${label}: ${dates.formatManagerDateTime(value, locale)}`), channel === "telegram");
+    }
     const cod = { ...order, paymentMethod: "cash_on_delivery", paymentProvider: null, paymentStatus: "PENDING", paidAt: null };
     const codMessage = templates.renderNotification("ORDER_CREATED", cod, locale, channel);
     const codText = channel === "telegram" ? codMessage.telegram : codMessage.html;
-    assert.ok(codText.includes(`${t.created}: ${dates.formatManagerDateTime(order.createdAt, locale)}`));
+    assert.equal(codText.includes(`${t.created}: ${dates.formatManagerDateTime(order.createdAt, locale)}`), channel === "telegram");
     assert.ok(!codText.includes(`${t.accepted}:`) && !codText.includes(`${t.paid}:`));
     if (channel === "telegram") {
       assert.match(JSON.stringify(codMessage.telegramKeyboard), /oc1:qa-order/); assert.match(JSON.stringify(codMessage.telegramKeyboard), /ox1:qa-order/);
@@ -71,8 +75,12 @@ async function verify() {
   db.notifications = []; sent.length = 0;
   const oldPayload = { telegram: "Historical immutable body", keyboard: { inline_keyboard: [[{ text: "Old action", callback_data: "ow1:qa-order" }]] }, subject: "", html: "" };
   db.notifications.push({ id: "old", event: "ORDER_CREATED", channel: "telegram", state: "PENDING", payload: structuredClone(oldPayload), attemptCount: 0, nextAttemptAt: new Date() });
+  const oldEmail = { telegram: "", to: "qa@example.invalid", subject: "Historical subject", html: "<p>Historical mail</p>" };
+  db.notifications.push({ id: "old-email", event: "ORDER_CREATED", channel: "email", state: "PENDING", payload: structuredClone(oldEmail), attemptCount: 0, nextAttemptAt: new Date() });
   await outbox.recoverNotificationOutbox(new Date(Date.now() + 10000)); await outbox.recoverNotificationOutbox(new Date(Date.now() + 10000));
-  assert.deepEqual(sent, [{ text: oldPayload.telegram, keyboard: oldPayload.keyboard }]); assert.deepEqual(db.notifications[0].payload, oldPayload);
+  assert.deepEqual(sent, [{ text: oldPayload.telegram, keyboard: oldPayload.keyboard },
+    { to: oldEmail.to, subject: oldEmail.subject, html: oldEmail.html, text: undefined }]);
+  assert.deepEqual(db.notifications.map(row => row.payload), [oldPayload, oldEmail]);
   console.log("PASS manager dates: exact UA/EN Kyiv formatting; DST jumps/rollover; created/accepted/paid semantics; COD/Mono keyboards; new outbox timestamps and immutable historical delivery; no resend. All effects mocked.");
 }
 verify().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => { globalThis.fetch = savedFetch; });
