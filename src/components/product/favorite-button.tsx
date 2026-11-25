@@ -1,17 +1,22 @@
 "use client";
 
-import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Heart } from "lucide-react";
 import { toast } from "sonner";
 import { changeFavorites } from "@/lib/customer/favorites";
 import { useLangStore } from "@/store/lang-store";
+import { resolveCartSession, suspendCart, useCartStore } from "@/store/cart-store";
+import { broadcastCart, CART_AUTH_KEY } from "@/lib/customer/guest-cart";
+import { clearAccountPaymentMarker } from "@/lib/payments/checkout-session";
 
 const key = "3dkid.guest-favorites";
 const syncKey = "3dkid.favorites-sync";
 const favorites = createContext<{ ids: string[]; busy: boolean; setFavorite: (id: string, saved: boolean) => void } | null>(null);
 const customerPresence = createContext<boolean | null>(null);
 export const useCustomerPresence = () => useContext(customerPresence);
+const initialCartPending = createContext(false);
+export const useInitialCartPending = () => useContext(initialCartPending);
 
 function guestIds(): string[] {
   try {
@@ -20,7 +25,7 @@ function guestIds(): string[] {
   } catch { return []; }
 }
 
-export function FavoritesProvider({ children }: { children: ReactNode }) {
+export function FavoritesProvider({ children, hasCustomerCookie = false }: { children: ReactNode; hasCustomerCookie?: boolean }) {
   const pathname = usePathname();
   const syncPath = pathname.startsWith("/account") ? pathname : "/";
   const [ids, setIds] = useState<string[]>([]);
@@ -31,16 +36,33 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   const authenticated = useRef<boolean | null>(null);
   const version = useRef<string | null>(null);
   const lastSync = useRef(0);
+  const observedSession = useRef<string | null | undefined>(undefined);
+  const authEpoch = useRef(0);
+  const expires = useRef<number>(0);
+  const expiryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const { t } = useLangStore();
 
   const refresh = useCallback(async function syncFavorites() {
     if (lock.current) { refreshNeeded.current = true; return; }
     lock.current = true;
+    const epoch = authEpoch.current;
     setBusy(true);
     try {
       const response = await fetch("/api/customer-favorites", { cache: "no-store" });
       if (!response.ok) throw new Error("FAVORITES_UNAVAILABLE");
       const { ids: remote, version: sessionVersion } = await response.json() as { ids: string[] | null; version: string | null };
+      if (epoch !== authEpoch.current) return;
+      expires.current = Number(response.headers.get("X-Customer-Session-Expires") ?? 0);
+      clearTimeout(expiryTimer.current);
+      if (expires.current > 0) {
+        expiryTimer.current = setTimeout(() => window.dispatchEvent(new Event(CART_AUTH_KEY)), Math.max(0, expires.current - Date.now()) + 5);
+      }
+      resolveCartSession(sessionVersion);
+      if (observedSession.current !== sessionVersion) {
+        if (observedSession.current) clearAccountPaymentMarker();
+        if (sessionVersion || observedSession.current) broadcastCart(CART_AUTH_KEY);
+        observedSession.current = sessionVersion;
+      }
       authenticated.current = remote !== null;
       setSignedIn(authenticated.current);
       version.current = sessionVersion;
@@ -55,10 +77,15 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
       }
       lastSync.current = Date.now();
     } catch {
+      if (epoch !== authEpoch.current) return;
       setIds([]);
       authenticated.current = null;
       setSignedIn(null);
       version.current = null;
+      if (useCartStore.getState().accountScope !== null) {
+        suspendCart();
+        useCartStore.setState({ syncStatus: "error", syncProblem: "failed" });
+      }
       // Retry on navigation, focus or the next interaction.
     } finally {
       setBusy(false);
@@ -67,13 +94,36 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  useLayoutEffect(() => {
+    if (hasCustomerCookie && observedSession.current === undefined) suspendCart();
+  }, [hasCustomerCookie]);
   useEffect(() => { void refresh(); }, [syncPath, refresh]);
   useEffect(() => {
-    const update = () => { if (Date.now() - lastSync.current >= 15000) void refresh(); };
-    const storage = (event: StorageEvent) => { if (event.key === key || event.key === syncKey) void refresh(); };
+    const invalidate = () => { ++authEpoch.current; clearTimeout(expiryTimer.current); };
+    const auth = () => { invalidate(); suspendCart(); void refresh(); };
+    const update = () => {
+      if (expires.current && expires.current <= Date.now()) auth();
+      else if (Date.now() - lastSync.current >= 15000) void refresh();
+    };
+    const storage = (event: StorageEvent) => {
+      if (event.key === CART_AUTH_KEY) auth();
+      else if (event.key === key || event.key === syncKey) void refresh();
+    };
+    const hide = () => { invalidate(); if (useCartStore.getState().accountScope !== null) suspendCart(); };
+    const show = (event: PageTransitionEvent) => { if (event.persisted) void refresh(); };
     window.addEventListener("focus", update);
     window.addEventListener("storage", storage);
-    return () => { window.removeEventListener("focus", update); window.removeEventListener("storage", storage); };
+    window.addEventListener(CART_AUTH_KEY, auth);
+    window.addEventListener("pagehide", hide);
+    window.addEventListener("pageshow", show);
+    return () => {
+      invalidate();
+      window.removeEventListener("focus", update);
+      window.removeEventListener("storage", storage);
+      window.removeEventListener(CART_AUTH_KEY, auth);
+      window.removeEventListener("pagehide", hide);
+      window.removeEventListener("pageshow", show);
+    };
   }, [refresh]);
 
   async function setFavorite(id: string, saved: boolean) {
@@ -109,7 +159,11 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  return <customerPresence.Provider value={signedIn}><favorites.Provider value={{ ids, busy, setFavorite }}>{children}</favorites.Provider></customerPresence.Provider>;
+  return <customerPresence.Provider value={signedIn}>
+    <initialCartPending.Provider value={hasCustomerCookie && signedIn === null}>
+      <favorites.Provider value={{ ids, busy, setFavorite }}>{children}</favorites.Provider>
+    </initialCartPending.Provider>
+  </customerPresence.Provider>;
 }
 
 export function FavoriteButton({ productId, productName, className }: { productId: string; productName: string; className?: string }) {

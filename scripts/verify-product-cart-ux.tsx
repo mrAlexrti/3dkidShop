@@ -192,6 +192,16 @@ async function verify() {
   await new Promise<void>((resolve) => setImmediate(resolve)); cart().updateQuantity(item.id, 4); releaseKey!(); await keyRace;
   assert.equal(orderCalls, 1);
   pass("real checkout handler blocks unverified/changed quotes, suppresses double submit, protects async identity edits and newer COD carts");
+  const guestState = cart();
+  useCartStore.setState({ accountScope: "fixture", accountRevision: 5, ready: () => true,
+    verifyCart: async () => {
+      useCartStore.setState({ accountRevision: 6, items: [...guestState.items, { ...item, id: "other-device-item" }] });
+      return true;
+    } });
+  await submit()(formData);
+  assert.equal(orderCalls, 1, "The original click cannot order goods added on another device during verification");
+  useCartStore.setState(guestState);
+  pass("account checkout requires explicit review when confirmation sees another device's change");
 
   assert.equal(slugs.generateProductSlug("  Їжачок Ґудзик — Жовтий 3D!  "), "yizhachok-gudzyk-zhovtyy-3d");
   assert.equal(slugs.generateProductSlug("М’який / Єнот & Щука"), "myakyy-yenot-shchuka");

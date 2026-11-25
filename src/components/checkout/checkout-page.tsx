@@ -1,7 +1,7 @@
 "use client";
 
 import { ProductImage as Image } from "@/components/product/product-image";
-import { CartReadiness, CartLineStatus, CartAmount } from "@/components/cart/cart-readiness";
+import { CartReadiness, CartLineStatus, CartAmount, CartSyncStatus } from "@/components/cart/cart-readiness";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CheckoutForm } from "@/components/checkout/checkout-form";
@@ -12,14 +12,16 @@ import { cartOptionLabel } from "@/lib/product-variants";
 import { cartImageSource } from "@/lib/cart-reconciliation";
 import type { CheckoutContact } from "@/lib/validations/checkout";
 
-export function CheckoutPageContent({ onlineCardEnabled, contact, customerScope }: { onlineCardEnabled: boolean; contact?: CheckoutContact; customerScope?: string }) {
+export function CheckoutPageContent({ onlineCardEnabled, contact, customerScope, profileScope }: { onlineCardEnabled: boolean; contact?: CheckoutContact; customerScope?: string; profileScope?: string }) {
   const cart = useCartStore();
   const { items } = cart;
   const { t, locale } = useLangStore();
   const [mounted, setMounted] = useState(false);
+  const canPrefill = cart.accountScope === profileScope;
   useEffect(() => { setMounted(true); }, []);
 
   if (!mounted) return <div className="container-shop py-20 text-center text-ink/40">{t.common.loading}</div>;
+  if ((cart.syncStatus === "loading" || cart.syncStatus === "error") && !items.length) return <div className="container-shop py-20"><CartSyncStatus /></div>;
   if (items.length === 0) return <div className="sf-checkout-page container-shop flex flex-col items-center py-32 text-center">
     <CartReadiness />
     <h1 className="font-display text-3xl">{t.cart.empty}</h1>
@@ -31,7 +33,8 @@ export function CheckoutPageContent({ onlineCardEnabled, contact, customerScope 
     <h1 className="font-display text-3xl">{t.checkout.title}</h1>
     <CartReadiness />
     <div className="mt-8 grid gap-10 lg:grid-cols-3">
-      <div className="lg:col-span-2"><CheckoutForm onlineCardEnabled={onlineCardEnabled} contact={contact} customerScope={customerScope} /></div>
+      <div className="lg:col-span-2"><CheckoutForm key={cart.accountScope ?? "guest"} onlineCardEnabled={onlineCardEnabled}
+        contact={canPrefill ? contact : undefined} customerScope={canPrefill ? customerScope : cart.accountScope ?? undefined} /></div>
       <aside className="h-fit">
         <div className="glass rounded-xl2 p-6 shadow-soft">
           <h2 className="mb-4 font-display text-lg">{t.checkout.yourOrder}</h2>

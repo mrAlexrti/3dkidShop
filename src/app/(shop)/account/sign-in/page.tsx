@@ -30,7 +30,7 @@ export default async function CustomerSignIn({ searchParams }: { searchParams: P
       customerEnabled() ? mailMode ? <AccountEmailRequest key={mailMode} mode={mailMode} action={requestAccountEmail.bind(null, mailMode, null)}>
         {alternatives}
       </AccountEmailRequest> : <>
-        <AccountForm action={signInCustomer} button={t.signIn}>
+        <AccountForm action={signInCustomer} button={t.signIn} retainOnError>
           <AccountField label={t.email} name="email" type="email" autoComplete="email" maxLength={254} />
           <AccountField label={t.password} name="password" type="password" autoComplete="current-password" maxLength={128} />
         </AccountForm>

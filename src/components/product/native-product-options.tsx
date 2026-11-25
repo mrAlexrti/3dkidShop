@@ -45,12 +45,19 @@ export function NativeProductOptions({ productId, name, slug, image, isOrderable
   function addSelection() {
     if (submitting.current || !isOrderable || !row || !within(quantity)) return;
     const item = candidate(quantity);
+    const scope = useCartStore.getState().accountScope;
+    if (scope) {
+      if (!addItem(item)) toast.error(t.cart.sync.failed);
+      return;
+    }
+    if (scope === undefined) return;
     submitting.current = true;
     startTransition(async () => {
       try {
         const products = await lookupCartProducts({ version: 2, lines: [{
           productId, selection: item.selection, sizeId: requestedSizeId(item),
         }] });
+        if (scope !== useCartStore.getState().accountScope) return;
         const verified = reconcileCart([item], products, locale);
         if (verified.issues[item.id] || verified.changed.length) {
           toast.error(verified.issues[item.id] ? t.product.unavailable : t.checkout.errors.priceChanged);

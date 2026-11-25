@@ -62,7 +62,7 @@ export const newToken = () => randomBytes(32).toString("base64url");
 export const tokenHash = (value: string) => createHash("sha256").update(value).digest("hex");
 
 const hour = 60 * 60 * 1000;
-export async function rateLimit(action: string, subject?: string, subjectLimit = 6) {
+export async function rateLimit(action: string, subject?: string, subjectLimit = 6, traffic = { ip: 40, shared: 180, global: 600 }) {
   const requestHeaders = await headers();
   // Vercel sets x-vercel-forwarded-for and overwrites a client-supplied value.
   const candidate = process.env.VERCEL === "1" ? requestHeaders.get("x-vercel-forwarded-for")?.trim() : "";
@@ -71,8 +71,8 @@ export async function rateLimit(action: string, subject?: string, subjectLimit =
   const bucket = Math.floor(now / hour);
   const end = new Date((bucket + 1) * hour);
   const limits: [string, number][] = [
-    [ip ? `ip:${ip}` : "shared", ip ? 40 : 180],
-    ["global", 600],
+    [ip ? `ip:${ip}` : "shared", ip ? traffic.ip : traffic.shared],
+    ["global", traffic.global],
   ];
   if (subject) limits.push([`subject:${subject}`, subjectLimit]);
   const buckets = limits.map(([scope, limit]) => {

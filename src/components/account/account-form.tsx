@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useId, useRef, useState, type ComponentPropsWithoutRef, type FormEvent, type ReactNode } from "react";
+import { startTransition, useActionState, useEffect, useId, useRef, useState, type ComponentPropsWithoutRef, type FormEvent, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -12,14 +12,15 @@ import type { EmailPurpose } from "@/lib/customer/challenges";
 import { passwordCreationError } from "@/lib/customer/password";
 
 type Action = (state: AccountResult | null, data: FormData) => Promise<AccountResult>;
-export function AccountForm({ action, button, children, intro, token = false, done, refresh = false, confirmMode }: {
-  action: Action; button: string; children?: ReactNode; intro?: ReactNode; token?: boolean; done?: string; refresh?: boolean; confirmMode?: EmailPurpose;
+export function AccountForm({ action, button, children, intro, token = false, done, refresh = false, confirmMode, retainOnError = false }: {
+  action: Action; button: string; children?: ReactNode; intro?: ReactNode; token?: boolean; done?: string; refresh?: boolean; confirmMode?: EmailPurpose; retainOnError?: boolean;
 }) {
   const [result, submit, pending] = useActionState(action, null);
   const [proof, setProof] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<ReturnType<typeof passwordCreationError>>(null);
   const submitting = useRef(false);
   const completionHeading = useRef<HTMLHeadingElement>(null);
+  const form = useRef<HTMLFormElement>(null);
   const { t } = useLangStore();
   const router = useRouter();
   useEffect(() => {
@@ -36,6 +37,13 @@ export function AccountForm({ action, button, children, intro, token = false, do
   }, [refresh, result, router]);
   useEffect(() => { if (!pending) submitting.current = false; }, [pending, result]);
   const passwordMode = confirmMode === "register" || confirmMode === "reset" || confirmMode === "addPassword" ? confirmMode : null;
+  const retain = retainOnError || !!passwordMode;
+  useEffect(() => {
+    if (!retain) return;
+    const abandon = () => form.current?.reset();
+    window.addEventListener("pagehide", abandon);
+    return () => window.removeEventListener("pagehide", abandon);
+  }, [retain]);
   const completion = result === "ok" && passwordMode ? t.account.completion[passwordMode] : null;
   const completed = Boolean(completion);
   useEffect(() => {
@@ -66,13 +74,20 @@ export function AccountForm({ action, button, children, intro, token = false, do
       }
     }
     submitting.current = true;
+    if (retain) {
+      // Dispatch directly so React does not reset uncontrolled fields on an
+      // operational rejection. Passwords stay in this form's DOM and FormData.
+      event.preventDefault();
+      const data = new FormData(event.currentTarget);
+      startTransition(() => submit(data));
+    }
   }
   const finished = !!done && (result === "ok" || (token && result === "sent"));
   const successful = result === "ok" || result === "sent";
   const shown = fieldError || result;
   const invalidLink = token && (proof === "" || (result === "invalid" && !fieldError));
   const recovery = confirmMode === "register" || confirmMode === "reset" ? `/account/sign-in?mode=${confirmMode}` : "/account/profile";
-  return <>{intro}<form action={submit} onSubmit={validate} className="ac-form" aria-busy={pending}>
+  return <>{intro}<form ref={form} action={submit} onSubmit={validate} className="ac-form" aria-busy={pending}>
     <fieldset disabled={pending || finished}>
       {children}
       {token && <input type="hidden" name="token" value={proof ?? ""} />}

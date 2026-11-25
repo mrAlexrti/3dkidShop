@@ -1,7 +1,7 @@
 import { CheckoutPageContent } from "@/components/checkout/checkout-page";
 import { isOnlinePaymentAvailable } from "@/lib/payments/online-payment";
 import { getT } from "@/lib/i18n-server";
-import { customerSession } from "@/lib/customer/session";
+import { customerSession, favoritesVersion } from "@/lib/customer/session";
 import { tokenHash } from "@/lib/customer/security";
 
 export const dynamic = "force-dynamic";
@@ -16,5 +16,6 @@ export default async function CheckoutPage() {
     customerName: customer.firstName ?? "", customerSurname: customer.lastName ?? "",
     customerPhone: customer.phone ?? "", customerEmail: customer.emailVerified ? customer.email : "",
   } : undefined;
-  return <CheckoutPageContent onlineCardEnabled={isOnlinePaymentAvailable()} contact={contact} customerScope={customer ? tokenHash(customer.id) : undefined} />;
+  return <CheckoutPageContent onlineCardEnabled={isOnlinePaymentAvailable()} contact={contact} customerScope={customer ? tokenHash(customer.id) : undefined}
+    profileScope={customer ? favoritesVersion(customer.binding) : undefined} />;
 }

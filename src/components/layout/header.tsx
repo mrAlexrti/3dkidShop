@@ -11,13 +11,16 @@ import { LangSwitcher } from "@/components/layout/lang-switcher";
 import { CategoryNav } from "@/components/layout/category-nav";
 import type { CategoryTreeNode } from "@/lib/categories";
 import { getCategoryName } from "@/lib/category-name";
-import { useCustomerPresence } from "@/components/product/favorite-button";
+import { useCustomerPresence, useInitialCartPending } from "@/components/product/favorite-button";
 
 export function Header({ categories }: { categories: CategoryTreeNode[] }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   // Derive the badge from React's store snapshot during hydration.
   const count = useCartStore(({ items }) => items.reduce((total, item) => total + item.quantity, 0));
+  const initialCartPending = useInitialCartPending();
+  const cartStatus = useCartStore((cart) => cart.syncStatus);
+  const loadingCart = initialCartPending || cartStatus === "loading" || cartStatus === "error";
   const openCart = useCartStore((s) => s.openCart);
   const { locale, t } = useLangStore();
   const isHome = pathname === "/";
@@ -45,9 +48,10 @@ export function Header({ categories }: { categories: CategoryTreeNode[] }) {
             <UserRound size={21} aria-hidden="true" />
             {signedIn && <span className="sf-account-entry-state" aria-hidden="true"><Check size={11} strokeWidth={3} /></span>}
           </Link>
-          <button type="button" onClick={openCart} className="sf-icon-button" aria-label={`${t.nav.openCart} (${count})`}>
+          <button type="button" onClick={openCart} className="sf-icon-button" aria-label={loadingCart ? t.nav.openCart : `${t.nav.openCart} (${count})`}
+            aria-busy={loadingCart} data-cart-state={initialCartPending ? "loading" : cartStatus}>
             <ShoppingBag size={21} aria-hidden="true" />
-            <span className="sf-cart-count" aria-hidden="true">{count}</span>
+            {!loadingCart && <span className="sf-cart-count" aria-hidden="true">{count}</span>}
           </button>
           {!isHome && !isAccount && <button id="store-menu-toggle" type="button" className="sf-icon-button sf-mobile-menu" onClick={() => setMobileOpen(!mobileOpen)} aria-label={mobileOpen ? t.nav.closeMenu : t.nav.menu} aria-expanded={mobileOpen} aria-controls="store-mobile-nav">
             {mobileOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}

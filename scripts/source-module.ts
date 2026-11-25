@@ -7,6 +7,10 @@ import { createJSONStorage } from "zustand/middleware";
 import * as configuration from "../src/lib/product-configuration";
 import * as configurationAdmin from "../src/lib/product-configuration-admin";
 import * as cartPersistence from "../src/lib/cart-persistence";
+import * as cartProducts from "../src/lib/cart-products";
+import * as cartContract from "../src/lib/customer/cart-contract";
+import * as accountCart from "../src/lib/customer/cart";
+import * as checkoutSession from "../src/lib/payments/checkout-session";
 import * as productQuery from "../src/lib/product-query";
 import { publicProductInclude } from "../src/lib/product-query";
 import * as gallery from "../src/lib/gallery";
@@ -32,6 +36,13 @@ export function sourceModule<T>(file: string, bindings: Record<string, unknown>)
     "@/lib/product-query": productQuery,
     "@/lib/gallery": gallery,
     "@/lib/customer/session": { customerSession: async () => null },
+    "@/lib/customer/security": { customerPost: () => false },
+    "@/lib/cart-products": cartProducts,
+    "@/lib/customer/cart-contract": cartContract,
+    "@/lib/customer/cart": accountCart,
+    "@/lib/customer/cart-actions": { changeAccountCart: () => { throw new Error("Unexpected account cart mutation in guest fixture"); } },
+    "@/lib/customer/guest-cart": { broadcastCart: () => {}, CART_SYNC_KEY: "fixture-cart-sync" },
+    "@/lib/payments/checkout-session": checkoutSession,
     "@/lib/actions/require-admin": { requireAdmin: async () => {} },
     "./favorite-button": { FavoriteButton: () => null },
     "@/components/product/favorite-button": { FavoriteButton: () => null },

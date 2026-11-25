@@ -121,7 +121,7 @@ function CartDrawerContents() {
                 <div className="flex flex-col items-center justify-center h-full py-16 text-center">
                   <CartReadiness />
                   <span className="text-5xl mb-4">🛒</span>
-                  <p className="text-sm text-ink/50">{t.cart.empty}</p>
+                  {(cart.syncStatus === "guest" || cart.syncStatus === "ready") && <p className="text-sm text-ink/50">{t.cart.empty}</p>}
                 </div>
               ) : (
                 <ul className="space-y-4">
@@ -159,7 +159,7 @@ function CartDrawerContents() {
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity - 1)}
                               aria-label={`${t.cart.decrease}: ${item.name}`}
-                              disabled={item.quantity <= 1}
+                              disabled={cart.busy || item.quantity <= 1}
                               className="rounded-full p-0.5 transition-colors hover:bg-pink-50 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <Minus size={13} />
@@ -167,13 +167,14 @@ function CartDrawerContents() {
                             <span className="w-5 text-center text-sm tabular-nums">{item.quantity}</span>
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                              disabled={!canSetQuantity(items, item.id, item.quantity + 1)} aria-label={`${t.cart.increase}: ${item.name}`}
+                              disabled={cart.busy || !!cart.issues[item.id] || !canSetQuantity(items, item.id, item.quantity + 1)} aria-label={`${t.cart.increase}: ${item.name}`}
                               className="rounded-full p-0.5 hover:bg-pink-50 transition-colors"
                             >
                               <Plus size={13} />
                             </button>
                           </div>
                           <button
+                            disabled={cart.busy}
                             onClick={() => removeItem(item.id)}
                             aria-label={`${t.cart.remove}: ${item.name}`}
                             className="ml-auto rounded-full p-1.5 text-ink/30 hover:text-pink-600 hover:bg-pink-50 transition-colors"

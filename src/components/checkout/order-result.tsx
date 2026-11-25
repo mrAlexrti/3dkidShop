@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useLangStore } from "@/store/lang-store";
 import type { PaymentResultState } from "@/lib/payments/payment-state";
 import { formatOrderReference } from "@/lib/order-reference";
-import { useCartStore } from "@/store/cart-store";
+import { refreshAccountCart, useCartStore } from "@/store/cart-store";
+import { broadcastCart, CART_SYNC_KEY } from "@/lib/customer/guest-cart";
 import { completeCheckoutCart, explicitPaymentRetry } from "@/lib/payments/checkout-session";
 import { preparePaymentRetry } from "@/lib/actions/retry-payment";
 
@@ -19,7 +20,14 @@ export function OrderResult({ initialState, number: initialNumber, token, attemp
   const [starting, setStarting] = useState(false);
   const [retryError, setRetryError] = useState(false);
   useEffect(() => {
-    if (attempt) { const cart = useCartStore.getState(); completeCheckoutCart(attempt, state, cart.items, cart.clear, cart.checkoutRevision); }
+    if (attempt && state === "paid") {
+      const cart = useCartStore.getState();
+      completeCheckoutCart(attempt, state, cart.items, cart.clear, cart.checkoutRevision);
+      if (cart.accountScope) {
+        void refreshAccountCart();
+        broadcastCart(CART_SYNC_KEY);
+      }
+    }
   }, [attempt, state]);
   const [retry, setRetry] = useState(0);
   useEffect(() => {

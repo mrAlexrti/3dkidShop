@@ -6,7 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { getCheckoutSchema, type CheckoutInput } from "@/lib/validations/checkout";
 import { Button } from "@/components/ui/button";
 import { CartAmount } from "@/components/cart/cart-readiness";
-import { useCartStore } from "@/store/cart-store";
+import { refreshAccountCart, useCartStore } from "@/store/cart-store";
+import { broadcastCart, CART_SYNC_KEY } from "@/lib/customer/guest-cart";
 import { createOrder } from "@/lib/actions/create-order";
 import { onlineCheckoutKey, rememberCheckoutResult, checkoutRetrySource } from "@/lib/payments/checkout-session";
 import { useRouter } from "next/navigation";
@@ -149,26 +150,39 @@ export function CheckoutForm({ onlineCardEnabled, contact, customerScope }: { on
   }
 
   const onSubmit = async (data: CheckoutInput) => {
-    if (submitLock.current || !useCartStore.getState().ready()) return;
+    const reviewed = useCartStore.getState();
+    if (submitLock.current || !reviewed.ready()) return;
     submitLock.current = true;
     setSubmitting(true);
     try {
-      if (!await verifyCart(locale, true)) return;
+      const verified = await verifyCart(locale, true);
       const snapshot = useCartStore.getState();
+      if (reviewed.accountScope !== snapshot.accountScope) return;
+      if (reviewed.accountScope && reviewed.accountRevision !== snapshot.accountRevision) {
+        toast.error(t.cart.sync.conflict);
+        return;
+      }
+      if (!verified) return;
       const items = snapshot.items;
       const checkoutRevision = snapshot.checkoutRevision;
       const retryKey = data.paymentMethod === "card_online" ? await onlineCheckoutKey(data, items, checkoutRevision, customerScope) : undefined;
       if (!useCartStore.getState().ready() || useCartStore.getState().checkoutRevision !== checkoutRevision || useCartStore.getState().items !== items) return;
-      const result = await createOrder(data, items, locale, retryKey, checkoutRetrySource(retryKey), true);
+      const proof = snapshot.accountScope ? { scope: snapshot.accountScope, revision: snapshot.accountRevision } : undefined;
+      const result = await createOrder(data, items, locale, retryKey, checkoutRetrySource(retryKey), true, proof);
+      if (snapshot.accountScope !== useCartStore.getState().accountScope) return;
       if (result.success) {
         if (retryKey) rememberCheckoutResult(retryKey, result.resultUrl);
+        if (proof) {
+          broadcastCart(CART_SYNC_KEY);
+          if (!result.payment) void refreshAccountCart();
+        }
         if (result.payment) {
           toast.message(c.feedback.redirect);
           window.location.assign(result.payment.pageUrl);
           return;
         }
         if (retryKey) { router.push(result.resultUrl); return; }
-        if (useCartStore.getState().checkoutRevision === checkoutRevision && useCartStore.getState().items === items) clear();
+        if (!proof && useCartStore.getState().accountScope === null && useCartStore.getState().checkoutRevision === checkoutRevision && useCartStore.getState().items === items) clear();
         toast.success(result.emailSent ? c.feedback.emailed : c.feedback.created);
         router.push(result.resultUrl);
       } else {

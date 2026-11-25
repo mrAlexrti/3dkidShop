@@ -77,6 +77,10 @@ try {
     GRANT SELECT ON public."Category",public."SiteContent",public."Product",public."ProductImage",public."ProductOption",public."ProductOptionValue",public."ProductVariant",public."ProductVariantSelection",public."ProductAttribute",public."Review" TO app_3dkid;
     GRANT UPDATE (name) ON public."Product" TO app_3dkid;
     GRANT SELECT, INSERT ON public."Order",public."OrderItem" TO app_3dkid;
+    GRANT UPDATE (number,status,"paymentInvoiceId","paymentProviderStatus","paymentModifiedAt","paymentErrorCode",
+      "paymentStatus","paymentNextCheckAt","paymentExpiresAt","paidAt","checkoutAcceptance","acceptedAt")
+      ON public."Order" TO app_3dkid;
+    GRANT SELECT, INSERT ON public."OrderNotification" TO app_3dkid;
     INSERT INTO public."User" (id,email,role) VALUES ('qa_existing_admin','admin@example.test','ADMIN');`]);
   // Match the existing Site Content permissions for the isolated admin editor test.
   if (ux07) await sql(["-c", 'GRANT INSERT, UPDATE, DELETE ON public."SiteContent" TO app_3dkid']);
@@ -103,6 +107,15 @@ try {
   await file(release + "-preflight.sql");
   await file(release + ".sql", approved);
   const ownerUrl = `postgresql://${owner}@127.0.0.1:${port}/${database}?schema=public&connection_limit=6`;
+  const cartRelease = "docs/release/ux-09-10-customer-cart";
+  const cartApproval = ["-c", "SET ux0910.reviewed_execution='customer-cart-reviewed'"];
+  await file(cartRelease + "-preflight.sql");
+  await assert.rejects(file(cartRelease + ".sql"), /UX0910_REVIEW_OR_BASELINE_GUARD_MISSING/);
+  await file(cartRelease + ".sql", cartApproval);
+  await file(cartRelease + "-verify.sql");
+  await assert.rejects(sql(["-c", `SET ROLE app_3dkid; INSERT INTO public."CustomerCart" ("userId",lines) VALUES ('qa_existing_admin','[]')`]), /UX0910_CUSTOMERS_ONLY/);
+  await file(cartRelease + "-rollback.sql", cartApproval);
+  await file(cartRelease + ".sql", cartApproval);
   const drift = await run(process.execPath, [prisma, "migrate", "diff", "--from-url", ownerUrl, "--to-schema-datamodel", resolve("prisma/schema.prisma"), "--script"]);
   assert.match(drift, /This is an empty migration/);
   console.log("PASS baseline guards, sentinel, legacy checkout reads/writes and admin records, transactional migration, empty rollback, reapply and Prisma schema comparison");
@@ -130,6 +143,8 @@ try {
   const origin = `http://${ux07 ? "localhost" : "127.0.0.1"}:${appPort}`;
   Object.assign(env, { CUSTOMER_AUTH_ORIGIN: origin, AUTH_URL: origin, NEXTAUTH_URL: origin, NEXT_PUBLIC_SITE_URL: origin, BATCH19_APP_ORIGIN: origin });
   console.log(await run(process.execPath, [resolve("node_modules/tsx/dist/cli.mjs"), resolve("scripts/verify-batch19-concurrency.ts")]));
+  console.log(await run(process.execPath, [resolve("node_modules/tsx/dist/cli.mjs"), resolve("scripts/verify-ux0910-cart.ts")]));
+  await assert.rejects(file(cartRelease + "-rollback.sql", cartApproval), /UX0910_ROLLBACK_REFUSED_AFTER_USE/);
 
   if (!process.argv.includes("--database-only")) {
   const externalMock = resolve("scripts/fixtures/batch19-mock-providers.cjs").replaceAll("\\", "/");

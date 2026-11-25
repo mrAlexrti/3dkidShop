@@ -3,6 +3,10 @@ import { withoutCartImages } from "./cart-reconciliation";
 
 type Storage = { getItem: (key: string) => string | null; setItem: (key: string, value: string) => void; removeItem: (key: string) => void };
 export const CART_STORAGE_KEY = "stikr-cart-v2";
+export function guestTransferPending() {
+  try { return JSON.parse(localStorage.getItem(CART_STORAGE_KEY) ?? "null")?.state?.transferPending === true; }
+  catch { return false; }
+}
 let listener: ((failed: boolean) => void) | undefined;
 let failed = false;
 function report(value: boolean) { if (failed !== value) { failed = value; queueMicrotask(() => listener?.(value)); } }
@@ -29,6 +33,13 @@ export function migratedCart(storage: Storage) {
 }
 export const cartStorage = {
   getItem: () => { try { return migratedCart(localStorage); } catch { report(true); return JSON.stringify({ version: 2, state: { items: [], migrationError: true } }); } },
-  setItem: (name: string, value: string) => { try { if (JSON.parse(value)?.state?.migrationError) return; localStorage.setItem(name, value); report(false); } catch { report(true); } },
+  setItem: (name: string, value: string) => {
+    try {
+      const state = JSON.parse(value)?.state;
+      if (state?.migrationError || state?.privateCart || guestTransferPending()) return;
+      localStorage.setItem(name, value);
+      report(false);
+    } catch { report(true); }
+  },
   removeItem: (name: string) => { try { localStorage.removeItem(name); report(false); } catch { report(true); } },
 };

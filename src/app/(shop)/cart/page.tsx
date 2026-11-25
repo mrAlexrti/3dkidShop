@@ -1,7 +1,7 @@
 "use client";
 
 import { ProductImage as Image } from "@/components/product/product-image";
-import { CartReadiness, CartLineStatus, CartAmount } from "@/components/cart/cart-readiness";
+import { CartReadiness, CartLineStatus, CartAmount, CartSyncStatus } from "@/components/cart/cart-readiness";
 import { canSetQuantity } from "@/lib/cart-limits";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -12,13 +12,17 @@ import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { cartOptionLabel } from "@/lib/product-variants";
 import { cartImageSource } from "@/lib/cart-reconciliation";
+import { useInitialCartPending } from "@/components/product/favorite-button";
 
 export default function CartPage() {
   const cart = useCartStore();
   const { items, removeItem, updateQuantity, ready } = cart;
   const { t, locale } = useLangStore();
   const router = useRouter();
+  const initialPending = useInitialCartPending();
 
+  if (initialPending && cart.syncStatus === "guest") return <div className="sf-cart-page container-shop py-20" role="status">{t.cart.sync.loading}</div>;
+  if ((cart.syncStatus === "loading" || cart.syncStatus === "error") && !items.length) return <div className="sf-cart-page container-shop py-20"><CartSyncStatus /></div>;
   if (items.length === 0) {
     return (
       <div className="sf-cart-page container-shop flex flex-col items-center py-32 text-center">
@@ -56,12 +60,12 @@ export default function CartPage() {
                 </div>
                 <div className="flex flex-1 flex-col justify-between min-w-0">
                   <div>
-                    <Link
+                    {item.slug ? <Link
                       href={`/product/${item.slug}`}
                       className="font-medium hover:text-pink-600 transition-colors line-clamp-2 leading-snug"
                     >
                       {item.name}
-                    </Link>
+                    </Link> : <p className="font-medium">{item.name}</p>}
                     <CartLineStatus id={item.id} />
                     {(item.variant || item.selection) && (
                       <p className="text-xs text-ink/40 mt-0.5">
@@ -74,14 +78,14 @@ export default function CartPage() {
                       <button
                         onClick={() => updateQuantity(item.id, item.quantity - 1)}
                               aria-label={`${t.cart.decrease}: ${item.name}`}
-                        disabled={item.quantity <= 1}
+                        disabled={cart.busy || item.quantity <= 1}
                         className="disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <Minus size={14} />
                       </button>
                       <span className="w-5 text-center text-sm tabular-nums">{item.quantity}</span>
                       <button onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                              disabled={!canSetQuantity(items, item.id, item.quantity + 1)} aria-label={`${t.cart.increase}: ${item.name}`}>
+                              disabled={cart.busy || !!cart.issues[item.id] || !canSetQuantity(items, item.id, item.quantity + 1)} aria-label={`${t.cart.increase}: ${item.name}`}>
                         <Plus size={14} />
                       </button>
                     </div>
@@ -91,6 +95,7 @@ export default function CartPage() {
                   </div>
                 </div>
                 <button
+                  disabled={cart.busy}
                   onClick={() => removeItem(item.id)}
                             aria-label={`${t.cart.remove}: ${item.name}`}
                   className="self-start rounded-full p-1.5 text-ink/30 hover:text-pink-600 hover:bg-pink-50 transition-colors"

@@ -4,7 +4,7 @@ import { getSizeVariants, snapshotSize } from "@/lib/product-variants";
 import { requestedSizeId } from "@/lib/cart-items";
 import { getOnlinePaymentConfig } from "@/lib/payments/online-payment";
 import { getOrderResultPath, getAttemptResultPath } from "@/lib/payments/order-result";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { checkoutIdentity } from "@/lib/payments/checkout-identity";
 import { verifiedPaymentRetry, type PaymentRetrySource } from "@/lib/payments/retry";
 
@@ -25,7 +25,10 @@ import { allocateOrderNumber, isOrderNumberCollision } from "@/lib/order-number"
 import { Prisma } from "@prisma/client";
 import { nativeMode, productConfiguration, selectedCombination, snapshotCombination, combinationSelectionSchema } from "@/lib/product-configuration";
 import { flushVariantConstraints } from "@/lib/variant-transaction";
-import { activeCustomerSession, customerSession, lockCustomer } from "@/lib/customer/session";
+import { activeCustomerSession, customerSession, favoritesVersion, lockCustomer } from "@/lib/customer/session";
+import { customerPost, customerSecret } from "@/lib/customer/security";
+import { cartLineInput, cartProof } from "@/lib/customer/cart-contract";
+import { consumeCart, matchesCart, readCart } from "@/lib/customer/cart";
 import { colorGallery } from "@/lib/gallery";
 
 export type CreateOrderResult =
@@ -147,7 +150,8 @@ export async function createOrder(
   locale: Locale = "ua",
   retryKey?: string,
   retrySource?: PaymentRetrySource,
-  requirePriceMatch = false
+  requirePriceMatch = false,
+  accountCart?: unknown
 ): Promise<CreateOrderResult> {
   const errors = translations[locale === "en" ? "en" : "ua"].checkout.errors;
   const parsed = getCheckoutSchema(locale === "en" ? "en" : "ua").safeParse(data);
@@ -165,16 +169,25 @@ export async function createOrder(
   const d = { ...parsed.data, customerEmail: parsed.data.customerEmail || "" };
   const customer = await customerSession();
   const customerId = customer?.id ?? null;
+  const proof = cartProof.safeParse(accountCart);
+  if (customer ? !proof.success || proof.data.scope !== favoritesVersion(customer.binding) || !await customerPost() : accountCart !== undefined) {
+    return { success: false, error: errors.invalid };
+  }
+  const revision = proof.success ? proof.data.revision : null;
+  const key = customer && revision !== null && !retrySource
+    ? createHmac("sha256", customerSecret()).update(JSON.stringify(["customer-cart-checkout", customer.id, revision])).digest("hex")
+    : retryKey;
 
   // A retry is replayed before current pricing/config availability is checked.
   // Its original server-priced snapshot remains immutable.
   let identity: ReturnType<typeof checkoutIdentity> | null = null;
-  if (d.paymentMethod === "card_online") {
-    try { identity = checkoutIdentity(retryKey ?? "", d, items); }
+  if (customer || d.paymentMethod === "card_online") {
+    try { identity = checkoutIdentity(key ?? "", d, items); }
     catch { return { success: false, error: errors.invalid }; }
     const existing = await prisma.order.findUnique({ where: { checkoutKeyHash: identity.checkoutKeyHash } });
     if (existing) {
-      if ((existing.customerId ?? null) !== customerId || existing.checkoutPayloadHash !== identity.checkoutPayloadHash || !existing.paymentReference) return { success: false, error: errors.invalid };
+      if ((existing.customerId ?? null) !== customerId || existing.checkoutPayloadHash !== identity.checkoutPayloadHash) return { success: false, error: errors.invalid };
+      if (!existing.paymentReference) return existing.number && customer ? { success: true, orderNumber: existing.number, emailSent: false, resultUrl: getOrderResultPath(existing.number) } : { success: false, error: errors.invalid };
       return { success: true, orderNumber: existing.number, emailSent: false, resultUrl: getAttemptResultPath(existing.paymentReference),
         ...(!existing.paidAt && existing.status !== "CANCELLED" && existing.paymentStatus === "PENDING" && existing.paymentPageUrl && (!existing.paymentExpiresAt || existing.paymentExpiresAt.getTime() > Date.now())
           ? { payment: { provider: "mono" as const, pageUrl: existing.paymentPageUrl } } : {}) };
@@ -183,7 +196,7 @@ export async function createOrder(
 
   const onlineConfig = d.paymentMethod === "card_online" ? getOnlinePaymentConfig() : null;
   if (d.paymentMethod === "card_online" && retrySource) {
-    try { if (await verifiedPaymentRetry(retrySource, customerId) !== retryKey) return { success: false, error: errors.payment }; }
+    try { if (await verifiedPaymentRetry(retrySource, customerId) !== key) return { success: false, error: errors.payment }; }
     catch { return { success: false, error: errors.payment }; }
   }
   if (d.paymentMethod === "card_online" && !onlineConfig) {
@@ -213,7 +226,13 @@ export async function createOrder(
     try {
       order = await prisma.$transaction(async (tx) => {
         if (customer && (!await lockCustomer(tx, customer.id) || !await activeCustomerSession(tx, customer.id, customer.binding))) throw new CheckoutInputError(errors.invalid);
-        const priced = await priceOrderItems(tx, items, errors, requirePriceMatch);
+        const cart = customer ? await readCart(tx, customer.id) : null;
+        if (cart && (cart.revision !== revision || !matchesCart(cart.lines, items.map(cartLineInput)))) {
+          // A concurrent identical submission can be replayed after it commits.
+          if (identity && await tx.order.findUnique({ where: { checkoutKeyHash: identity.checkoutKeyHash }, select: { id: true } })) throw new CheckoutInputError("CHECKOUT_REPLAY");
+          throw new CheckoutInputError(translations[locale === "en" ? "en" : "ua"].cart.sync.conflict);
+        }
+        const priced = await priceOrderItems(tx, items, errors, requirePriceMatch || !!customer);
         if (!priced.success) throw new CheckoutInputError(priced.error);
         orderNumber = onlineConfig ? null : await allocateOrderNumber(tx);
         resultUrl = reference ? getAttemptResultPath(reference) : getOrderResultPath(orderNumber!);
@@ -267,13 +286,21 @@ export async function createOrder(
           }, include: { items: true },
         });
         await flushVariantConstraints(tx);
+        if (customer && cart) {
+          const plan = cart.lines.map(({ generation, removed, quantity }) => ({ generation, removed, quantity }));
+          if (onlineConfig) await tx.customerCartPurchase.create({ data: { orderId: created.id, lines: plan } });
+          else await consumeCart(tx, customer.id, plan);
+        }
         return created;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
       break;
     } catch (error) {
-      if (error instanceof CheckoutInputError) return { success: false, error: error.message };
+      if (error instanceof CheckoutInputError) {
+        if (error.message === "CHECKOUT_REPLAY") return createOrder(data, items, locale, retryKey, retrySource, requirePriceMatch, accountCart);
+        return { success: false, error: error.message };
+      }
       if (identity && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" && Array.isArray(error.meta?.target) && error.meta.target.includes("checkoutKeyHash")) {
-        return createOrder(data, items, locale, retryKey, retrySource, requirePriceMatch);
+        return createOrder(data, items, locale, retryKey, retrySource, requirePriceMatch, accountCart);
       }
       if (isOrderNumberCollision(error) && attempt < 4) continue;
       throw error;

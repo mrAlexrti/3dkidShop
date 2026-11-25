@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const directory = process.env.BATCH19_QA_DIRECTORY;
 const origin = process.env.BATCH19_APP_ORIGIN;
@@ -66,6 +67,7 @@ try {
   const hydrationErrors = [];
   let browserContext = {};
   let mockUpload;
+  let cartReads = 0;
   const uploadTraffic = [];
   function finishRequest(method, parameters) {
     void send(method, parameters).catch((error) => {
@@ -88,6 +90,7 @@ try {
     }
     if (message.method === "Fetch.requestPaused") {
       const { requestId, request: { url, method, headers } } = message.params;
+      if (url === origin + "/api/customer-cart" && method === "GET") cartReads++;
       if (mockUpload && !["GET", "HEAD"].includes(method)) {
         const target = new URL(url);
         uploadTraffic.push([method, target.origin + target.pathname]);
@@ -324,7 +327,9 @@ try {
   }
   async function addCart() {
     await go("/catalog");
+    await until(() => evaluate("!!document.querySelector('[data-cart-state=guest],[data-cart-state=ready]')"), "cart scope ready");
     await evaluate(`[...document.querySelectorAll('article')].find(el => el.querySelector('a[href="/product/qa-cat"]')).querySelector('.sf-product-add').click()`);
+    await until(() => evaluate("document.querySelector('.sf-cart-count')?.textContent === '1'"), "cart addition stored");
     await go("/checkout");
     await until(() => evaluate("!!document.querySelector('#customerEmail')"), "checkout after guest add");
     await textIncludes("1", "header .sf-cart-count");
@@ -419,6 +424,126 @@ try {
     const folder = resolve("coverage", suite);
     mkdirSync(folder, { recursive: true });
     writeFileSync(join(folder, `${name}.png`), Buffer.from(data, "base64"));
+  }
+
+  async function verifyCustomerCartAndLogin() {
+    const secret = "Synthetic-cart-browser-password-42!";
+    const rejected = "Synthetic-cart-browser-password-42?";
+    const first = "ux0910-cart-a@example.test", second = "ux0910-cart-b@example.test";
+    const passwordHash = await bcrypt.hash(secret, 12);
+    for (const email of [first, second]) await db.user.create({ data: { email, emailVerified: new Date(), role: "CUSTOMER", passwordHash } });
+    const authPaths = (name) => `main input[name=${name}]`;
+    const compare = (email, password) => evaluate(`document.querySelector('${authPaths("email")}').value === ${JSON.stringify(email)} &&
+      document.querySelector('${authPaths("password")}').value === ${JSON.stringify(password)}`);
+    const badge = (count) => until(() => evaluate(`document.querySelector('.sf-cart-count')?.textContent === "${count}"`), `cart badge ${count}`);
+    const save = async (name) => {
+      if (name.startsWith("account-cart")) {
+        await until(() => evaluate("!!document.querySelector('main .sf-cart-item') && Number(getComputedStyle(document.querySelector('main .sf-cart-item')).opacity) >= 0.99"), "cart line animation settles before capture");
+      }
+      await capture("ux-09-10", name);
+    };
+    const browserCart = async (cookie) => {
+      const { version } = await (await request(favoritesApi, cookie)).json();
+      return fetch(origin + "/api/customer-cart", { headers: { cookie, "x-cart-scope": version } });
+    };
+    const cookieName = "3dkid.customer.session";
+    const setCookie = (cookie) => send("Network.setCookie", { name: cookieName, value: cookie.slice(cookieName.length + 1), url: origin, httpOnly: true, sameSite: "Lax" });
+    await viewport(1280, "en");
+    await go("/account/sign-in");
+    const guestReads = cartReads;
+    const generic = "Sign-in failed. Check your details or reset your password.";
+    await signIn(first, rejected, generic);
+    assert.equal(await compare(first, rejected), true, "Wrong password retained without printing values");
+    await save("login-rejected-desktop-en");
+    assert.equal(cartReads, guestReads, "Guest authentication view uses no account-cart reads");
+    await evaluate("document.querySelector('main .ac-password-toggle').click()");
+    await until(() => evaluate("document.querySelector('main input[name=password]').type === 'text'"), "show rejected password");
+    assert.equal(await compare(first, rejected), true);
+    const stored = (value) => evaluate(`![location.href, JSON.stringify({...localStorage}), JSON.stringify({...sessionStorage}), document.cookie].some(x => x.includes(${JSON.stringify(value)}))`);
+    assert.equal(await stored(rejected), true, "Rejected password never persisted");
+    await fill(authPaths("password"), secret);
+    await submit();
+    await path("/account");
+    assert.equal(await evaluate("!document.querySelector('main input[autocomplete=current-password]')"), true);
+    assert.equal(await stored(secret), true);
+    const desktop = await accountCookie();
+    await go("/catalog");
+    await badge(0);
+    await until(() => evaluate("!!document.querySelector('.sf-product-card:has(a[href=\"/product/qa-cat\"]) .sf-product-add')"), "desktop add");
+    await evaluate("document.querySelector('.sf-product-card:has(a[href=\"/product/qa-cat\"]) .sf-product-add').click()");
+    await badge(1);
+    const desktopCart = await browserCart(desktop);
+    assert.equal(desktopCart.status, 200);
+    assert.match(desktopCart.headers.get("cache-control"), /private.*no-store/);
+    assert.match(desktopCart.headers.get("vary"), /Cookie/i);
+    assert.equal((await desktopCart.json()).items[0].quantity, 1);
+    await go("/cart");
+    await save("account-cart-desktop-en");
+
+    // Authenticate a second independent session and exercise its mobile UI.
+    await send("Network.deleteCookies", { name: cookieName, url: origin });
+    await viewport(390, "ua");
+    const unknown = "ux0910-unknown@example.test";
+    const failureUa = "Не вдалося увійти. Перевірте дані або відновіть пароль.";
+    await signIn(unknown, secret, failureUa);
+    assert.equal(await compare(unknown, secret), true);
+    await save("login-rejected-mobile-ua");
+    await fill(authPaths("email"), first);
+    await submit();
+    await path("/account");
+    const mobile = await accountCookie();
+    assert.ok(desktop !== mobile, "Desktop and mobile use independent sessions");
+    await go("/cart");
+    await badge(1);
+    assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true);
+    await save("account-cart-mobile-ua");
+    const plus = 'main .sf-quantity-control button:last-child';
+    await until(() => evaluate(`document.querySelector('${plus}')?.matches(':enabled')`), "mobile cart edit");
+    await evaluate(`document.querySelector('${plus}').click()`);
+    await badge(2);
+    assert.equal((await (await browserCart(desktop)).json()).items[0].quantity, 2);
+    await setCookie(desktop);
+    await viewport(1280, "en");
+    await go("/cart");
+    await badge(2);
+    await evaluate("document.querySelector('main .sf-cart-item > button').click()");
+    await badge(0);
+    assert.equal((await (await browserCart(mobile)).json()).items.length, 0);
+    await addCart();
+    await badge(1);
+    assert.equal(await evaluate("!JSON.parse(localStorage.getItem('stikr-cart-v2') || '{\"state\":{\"items\":[]}}').state.items.length"), true);
+    await go("/account");
+    await badge(1);
+    await evaluate(`(() => {
+      const fetchOriginal = window.fetch.bind(window);
+      window.fetch = async (...args) => {
+        const response = await fetchOriginal(...args);
+        if (args[0] !== "/api/customer-cart") return response;
+        await new Promise(resolve => { window.releaseCartRead = resolve; });
+        return response;
+      };
+      window.dispatchEvent(new Event("focus"));
+    })()`);
+    await until(() => evaluate("typeof window.releaseCartRead === 'function'"), "old-account response held");
+    await submit("main nav form");
+    await path("/account/sign-in");
+    await evaluate("window.releaseCartRead?.()");
+    await badge(0);
+    assert.equal((await browserCart(desktop)).status, 401);
+    await signIn(second, secret);
+    await badge(0);
+    const desktopScope = (await (await request(favoritesApi, mobile)).json()).version;
+    const wrongScope = await fetch(origin + "/api/customer-cart", { headers: { cookie: await accountCookie(), "x-cart-scope": desktopScope } });
+    assert.equal(wrongScope.status, 401);
+    await signOut();
+    await signIn(first, secret);
+    await badge(1);
+    await signOut();
+    await badge(0);
+    assert.equal((await request("/api/customer-cart")).status, 401);
+    console.log("UX-09 browser observed " + (cartReads - guestReads) + " private cart reads across sign-ins, cart/drawer navigation, checkout entry and an explicit focus check.");
+    passes("UX-09 two independent authenticated sessions, desktop/mobile additions and edits, private reads, sign-out, re-login and account isolation");
+    passes("UX-10 generic invalid password and email, retained editable fields, visibility toggle, successful correction and ephemeral credentials in UA/EN");
   }
 
   async function verifyAccountIllustrations() {
@@ -1085,6 +1210,7 @@ try {
 
   await viewport(390, "en");
   await go("/account");
+  await until(() => evaluate("!!document.querySelector('[data-cart-state=ready]')"), "authenticated hydration before keyboard navigation");
   await evaluate("document.querySelector('.ac-nav a').focus()");
   await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
   await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
@@ -1257,6 +1383,7 @@ try {
   assert.ok(await db.customerRateLimit.count({ where: { hits: { gt: 1 } } }));
   assert.equal(await db.account.count({ where: { provider: "google" } }), 2);
   assert.equal(await db.account.count({ where: { provider: "legacy", userId: "qa_existing_admin" } }), 1);
+  await verifyCustomerCartAndLogin();
   assert.equal(interceptionFailure, undefined);
   assert.deepEqual(hydrationErrors, []);
   passes("real admin credentials, mobile and desktop UA/EN storefront, clickable filament summaries, stable standard/custom option order");

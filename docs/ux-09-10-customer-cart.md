@@ -1,0 +1,54 @@
+# UX-09 and UX-10 customer cart and sign-in
+
+The verified baseline is `80af0d512f2f8a7c2a6c2e8889b9690e78bd4e84` on `redesign-3dkid-v2`. The UX branch is `feat/ux-09-10-customer-cart`. SEO-01 is deployed and the operator submitted the homepage for reindexing. Search appearance refresh and remaining account QA are independent.
+
+## Findings and architecture
+
+Zustand persisted all carts in `stikr-cart-v2` regardless of the customer session. Signing out left those items available to the next browser user and another browser had no copy. The refreshed storefront keeps this local persistence for anonymous shoppers. Signed-in shoppers use a private versioned PostgreSQL cart owned by the ID from the verified Auth.js-backed customer session. Account cart items and prices remain in browser memory. The login form used React's function action on uncontrolled inputs, which resets those inputs after the action fulfills even if it returns a validation error. The customer sign-in and password creation forms now dispatch the existing action in a transition and retain the original inputs during recoverable failures. Password visibility resets to masked on submission. An abandoned page resets the inputs. A completed flow removes the form. Registration request and recovery request email fields already had their own handling.
+
+The cart stores at most 100 entries. Each entry represents a simple product, a legacy or native size, or the exact color/size combination. The stored fields are identifiers, quantities and deduction bookkeeping. Product photos, labels, prices and current eligibility come from the existing cart reconciliation projection. Product deletion and retirement remain visible as removable unavailable lines. A missing product has a localized placeholder name and no product link. Inventory remains available until checkout enforces the current rules. Checkout continues to price and check the products under the existing Product and Filament locks. Future promotions can price the same verified lines during checkout and snapshot a discount on the order.
+
+## Lifecycle, imports and concurrency
+
+1. The existing private favorites session lookup provides the cart's session binding. A server-rendered cookie presence hint prevents signed-in visitors from seeing an empty cart before hydration. The account API verifies its own session and binding regardless of that hint. Unauthenticated clients make no account-cart API calls.
+2. A browser with a guest cart tries an import after sign-in. A Web Lock protects the local batch from two tabs. The database serializes customer writes and uses a globally unique receipt ID to prevent one guest batch from replaying into another account. The receipt can acknowledge the same import after a network timeout, refresh or reauthentication.
+3. Eligible equivalent items combine quantities. Distinct configurations stay separate. A guest line is transferred in full only if the result fits the existing PostgreSQL quantity, 100-line and order-subtotal limits. Unavailable items, duplicates with contradictory configuration and over-limit lines stay in the guest cart. A localized message explains any remainder. Guest items are removed from local storage after an acknowledged database commit, and a partial import is not retried automatically. A subsequent deliberate guest edit creates a new import batch.
+4. Changes use the current cart revision. If two devices write from the same revision, one write succeeds. The other gets the current state and a message to review it and retry. This also makes an uncertain replay of an identical mutation safe. Revision checks never replace order pricing or availability checks.
+5. The cart refreshes at sign-in, drawer and checkout entry, locale changes within the cart, focus and visibility changes, or on a same-browser storage signal. Concurrent reads are coalesced. The client discards prior-session responses by generation when the session changes. Cross-tab messages carry only random change indicators. Sign-out hides the account cart as soon as the action starts and restores only the guest cart once the session resolves. Session expiry and a private API 401 also invalidate account state.
+6. If required browser storage or Web Locks are unavailable, the existing guest cart stays local and the account cart remains accessible. If a transfer was started but its persistence is still unconfirmed, the guest copy is held intact and frozen until the same account reconciles the receipt. The shopper can sign in to the same account and retry synchronization. One browser tab must never treat the same unconfirmed guest quantities as a fresh import.
+
+## Order creation and payments
+
+An authenticated checkout must present the current session binding, cart revision and matching selections and quantities. The submitted prices are checked against the server prices. A server HMAC over customer ID and revision establishes the initial request identity. The checkout payload fingerprint prevents modified recipient details, payment choice or items from replaying an earlier order. A repeated equivalent request resolves to the same order or payment attempt. The payment provider's existing explicit retry authorization still controls successor attempts. The guest checkout identity and payment-return behavior remain in place.
+
+If cart verification sees a newer revision after the customer presses the checkout button, the form asks the customer to review the updated cart and submit again. This prevents items added concurrently on another device from becoming part of the original submission.
+
+Cash-on-delivery deducts inside the order creation transaction. Online reservations keep the cart intact until an authoritative paid transition durably accepts the order. A purchase plan records selected quantities and line generations. Payment acceptance consumes that plan once. Additions to the same configuration survive, as do unrelated items and lines removed and later recreated. A failure before order creation leaves the cart unchanged. Failed online attempts retain the existing retry and review flow. Repeated payment delivery does not deduct more units. No customer or contact information is duplicated into the cart. The existing browser payment-return marker stores account retry metadata in tab-scoped session storage without the account cart contents. Resuming the hosted checkout retry across tabs is outside this release.
+
+## Release sequence and rollback
+
+The migration adds `CustomerCart`, `CustomerCartImport` and `CustomerCartPurchase`. Each uses a primary key and a foreign key with cascade behavior. The import receipt has an owner index. PostgreSQL checks fail closed on invalid document types and array lengths. The restricted runtime role receives SELECT and INSERT for these tables, UPDATE only on cart revision and lines, and DELETE only on consumed purchase plans. No existing rows are backfilled. No maintenance job or polling is added.
+
+Separate operator approval is required for Production migration and deployment. Confirm the current baseline and runtime role, take and verify a restorable backup, review the exact SQL and its hashes, and run the read-only preflight through the direct PostgreSQL connection over TLS. The approved execution session must set `ux0910.reviewed_execution='customer-cart-reviewed'` before loading the migration. Use `psql -X -v ON_ERROR_STOP=1` for preflight, migration and verification. Run verification immediately after the migration commits. The old application remains compatible with the additive tables. Deploy only the reviewed application after database verification. The normal version does not require new environment variables.
+
+- [Read-only preflight](release/ux-09-10-customer-cart-preflight.sql)
+- [Migration and minimal grants](release/ux-09-10-customer-cart.sql)
+- [Read-only verification](release/ux-09-10-customer-cart-verify.sql)
+- [Empty-schema rollback](release/ux-09-10-customer-cart-rollback.sql)
+
+Reverting the application is safe for the old application's checkout. The SQL rollback refuses to run after any cart, import receipt or purchase plan exists. Once in use, keep the schema and use forward recovery with operator review. Investigate outstanding online purchases before any application rollback so authorized payment reconciliation can complete their cart deduction. Retain import receipts as long as users might replay saved guest carts.
+
+## Local validation and performance
+
+- The rehearsal initializes a loopback-only PostgreSQL cluster with synthetic fixtures. It exercises migration, restricted runtime grants, empty rollback, reapplication and refusal after use. Checkout tests cover concurrent replay, failed quotes and card attempts, accepted card deduction, and unrelated additions from another device.
+- The optimized app is checked with UA and EN desktop and mobile views. The two-session browser flow verifies cart edits in both directions, sign-out, a delayed prior-session response, re-login, two-account isolation, and preserved masked sign-in values. The browser also checks SEO-01, account pages, UX-07 image settings and auth flows. Captures are generated in `coverage/ux-09-10/` using synthetic data.
+- A two-line configured cart read used 11 PostgreSQL statements and one configured add used 12 in the local fixture. Counts include transaction statements and exclude session lookup and rate-limit accounting. Guest views issued zero calls to the private cart API. The representative catalog remained at 12 statements per page. Cart synchronization uses events instead of periodic polling.
+
+## Manual QA after approval
+
+- In one guest browser add a product, sign in to an account with the same variant plus a different variant, and confirm quantities merge once after repeated sign-in. Disconnect during the merge and retry after restoring the connection.
+- Open the same account on a second device. Edit and remove cart lines on both devices, background and refocus, and compare badge, drawer, currency and checkout contents. Test two simultaneous edits and the retry message.
+- Sign out while a cart request is pending. Verify account items are hidden. Sign in to a second account on that browser and verify isolation, then return to the first account and verify persistence.
+- Confirm guest checkout. With authorized payment fixtures, separately verify COD, failed card initialization, paid acceptance, and retry without double deduction. Add items from another device while the hosted payment page is open.
+- Verify sign-in error retention for a mistyped password and an alternate email on desktop and a physical phone. Use the show/hide button and successful retry. Check abandonment and keyboard focus.
+- Confirm Ukrainian and English, UX-07 illustrations, Google and account access, SEO smoke gates and deferred Production QA. Do not infer actual email-provider or payment results from local mocks.

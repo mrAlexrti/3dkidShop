@@ -150,6 +150,13 @@ export const translations = {
     },
     // Корзина
     cart: {
+      sync: {
+        loading: "Завантажуємо ваш кошик…", failed: "Не вдалося синхронізувати кошик. Спробуйте ще раз.",
+        conflict: "Кошик змінився на іншому пристрої. Перевірте його та спробуйте ще раз.",
+        merge: "Деякі товари залишилися в гостьовому кошику. Їх можна переглянути після виходу з акаунта.",
+        pending: "Гостьові товари збережено. Увійдіть до того самого акаунта, щоб завершити перенесення.",
+        missing: "Недоступний товар",
+      },
       reconciliation: {
         checking: "Перевіряємо товари й ціни. Показані суми ще не підтверджені.",
         failed: "Не вдалося перевірити кошик. Ваш вибір збережено. Для оформлення повторіть перевірку.",
@@ -627,6 +634,13 @@ export const translations = {
       size: "Size", chooseSize: "Choose a size", from: "from", sizeUnavailable: "This size is unavailable",
     },
     cart: {
+      sync: {
+        loading: "Loading your cart…", failed: "Your cart could not be synchronized. Try again.",
+        conflict: "Your cart changed on another device. Review it and try again.",
+        merge: "Some items stayed in your guest cart. You can view them after signing out.",
+        pending: "Your guest items are saved. Sign in to the same account to finish transferring them.",
+        missing: "Unavailable product",
+      },
       reconciliation: {"checking":"Checking products and prices. Displayed amounts are not yet confirmed.","failed":"Unable to verify the cart. Your selections are saved. Retry verification before checkout.","retry":"Check again","blocked":"Remove unavailable items to continue to checkout.","unavailable":"This product has been removed or is temporarily unavailable to order.","sizeUnavailable":"The selected size is no longer available. Remove this line and choose a size on the product page.","variantUnavailable":"This combination is no longer available. Remove the line or choose other options on the product page.","priceChanged":"Prices have changed. Review the updated amounts before checkout.","review":"I have reviewed the updated amounts","limit":"The amount exceeds the supported limit. Reduce quantities or remove items."},
       title:      "Cart",
       empty:      "Your cart is empty",

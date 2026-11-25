@@ -34,6 +34,30 @@ model User {
   favorites    CustomerFavorite[]
   orders       Order[]
   challenges   CustomerChallenge[]
+  cart         CustomerCart?
+}
+
+model CustomerCart {
+  userId    String @id
+  revision  Int    @default(0)
+  lines     Json
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  imports   CustomerCartImport[]
+}
+
+model CustomerCartImport {
+  id       String @id @db.Uuid
+  userId   String
+  accepted Json
+  cart     CustomerCart @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model CustomerCartPurchase {
+  orderId String @id
+  lines   Json
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
 model Account {
@@ -236,6 +260,7 @@ enum CheckoutAcceptance {
 }
 
 model Order {
+  cartPurchase CustomerCartPurchase?
   id                      String      @id @default(cuid())
   number                  String?     @unique
   checkoutAcceptance      CheckoutAcceptance @default(LEGACY)

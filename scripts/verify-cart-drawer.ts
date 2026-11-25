@@ -22,6 +22,8 @@ async function verify() {
   const bundle = await build({ entryPoints: [colorImages ? "scripts/fixtures/batch18a-browser.tsx" : addendum ? "scripts/fixtures/addendum-browser.tsx" : variants ? "scripts/fixtures/variants-browser.tsx" : galleryAdmin ? "scripts/fixtures/gallery-admin-browser.tsx" : mediaUploads ? "scripts/fixtures/media-upload-browser.tsx" : "scripts/fixtures/cart-drawer-browser.tsx"], bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
     define: { "process.env.NODE_ENV": '"development"' }, plugins: [{ name: "isolated-next-and-toast", setup(api) {
       api.onResolve({ filter: /^\.\/favorite-button$/ }, ({ path }) => ({ path, namespace: "favorite-qa" }));
+      api.onResolve({ filter: /^(?:@\/lib\/customer\/cart-actions|\.\/cart-actions)$/ }, ({ path }) => ({ path, namespace: "account-cart-qa" }));
+      api.onLoad({ filter: /.*/, namespace: "account-cart-qa" }, () => ({ contents: 'export async function changeAccountCart() { throw new Error("Unexpected account cart in guest fixture"); }' }));
       api.onLoad({ filter: /.*/, namespace: "favorite-qa" }, () => ({ contents: "export const FavoriteButton = () => null;" }));
       api.onResolve({ filter: /^(next\/image|next\/link|next\/navigation|sonner|@\/lib\/actions\/reconcile-cart|@vercel\/blob\/client)$/ }, ({ path }) => ({ path, namespace: "qa" }));
       api.onLoad({ filter: /.*/, namespace: "qa" }, ({ path }) => ({ contents: `export { ${modules[path]} } from ${JSON.stringify(fixture)};`, resolveDir: process.cwd() }));

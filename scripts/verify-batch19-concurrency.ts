@@ -136,7 +136,7 @@ async function verify() {
   const b = await makeUser("race-b@example.test");
   const makeSession = async (user: typeof a) => {
     const issued = await prisma.$transaction((tx) => sessions.issueSession(tx, user.id));
-    return { ...user, binding: security.tokenHash(issued.sid) };
+    return { ...user, binding: security.tokenHash(issued.sid), expires: new Date(Date.now() + 86400000) };
   };
   const [first, second, other] = await Promise.all([makeSession(a), makeSession(a), makeSession(b)]);
   const profile = new FormData();

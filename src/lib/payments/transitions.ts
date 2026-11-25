@@ -8,6 +8,8 @@ import { INVOICE_INITIALIZING, isUnacceptedOnlineOrder } from "@/lib/payments/in
 import { paymentReferenceWhere } from "./acceptance";
 import { allocateOrderNumber, isOrderNumberCollision } from "@/lib/order-number";
 import { enqueueAcceptanceNotifications } from "@/lib/notifications/outbox";
+import { lockCustomer } from "@/lib/customer/session";
+import { consumePaidCart } from "@/lib/customer/cart";
 
 export type PaymentEvidence = {
   provider: string; invoiceId: string; reference: string; amount: number; currency: number;
@@ -99,6 +101,8 @@ export async function applyPaymentEvidence(evidence: PaymentEvidence, options: {
           }
           if (order.checkoutAcceptance === "PROVISIONAL" || order.checkoutAcceptance === "REVIEW") {
             if (order.status === "PENDING" && !order.novaPoshtaTtn && !order.novaPoshtaDeliveredAt && order.paymentStatus !== "REFUNDED") {
+              // Use the same customer-before-order-number lock order as COD.
+              if (order.customerId) await lockCustomer(tx, order.customerId);
               data.number = order.number ?? await allocateOrderNumber(tx);
               data.checkoutAcceptance = "ACCEPTED";
               data.acceptedAt = new Date();
@@ -131,6 +135,7 @@ export async function applyPaymentEvidence(evidence: PaymentEvidence, options: {
         if (changed.count !== 1) return { outcome: "conflict" };
         const after = await tx.order.findUniqueOrThrow({ where: { id: order.id }, include: { items: true } });
         if (order.checkoutAcceptance !== "ACCEPTED" && after.checkoutAcceptance === "ACCEPTED") {
+          if (after.customerId) await consumePaidCart(tx, after.id, after.customerId);
           await enqueueAcceptanceNotifications(tx, after, after.checkoutLocale === "en" ? "en" : "ua");
         }
         return { outcome: "applied", transition: { before: order, after } };

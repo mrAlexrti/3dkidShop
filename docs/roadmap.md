@@ -5,12 +5,13 @@
 | Batch 1.8 — Color + Size | Deployed. |
 | Batch 1.8A — Color images and variant price UX | Deployed. |
 | Batch 1.8.1 — Filaments and catalog | Deployed. The operator accepted core configuration, copying, persistence, independent requirements and all eight manufacturing availability scenarios. BUG-01 is closed after mobile GIF playback passed on a physical phone. Deferred noncritical regressions move to final QA. |
-| Batch 1.9 — Customer account | Deployed. Google OAuth manual QA passed 5/5 across two Google accounts and a physical phone. Real Resend registration email delivery passed. BUG-02 and BUG-03 are pending a fresh native registration and sign-in retest on the affected physical device. Remaining manual Production QA is pending. |
+| Batch 1.9 — Customer account | Deployed. Google OAuth manual QA passed 5/5. Fresh registration, branded Resend email, cross-device confirmation, password creation, desktop and mobile sign-in, simultaneous sessions, profile editing, checkout autofill, password recovery and invalid credentials passed. BUG-02 and BUG-03 were not reproduced and their original cause remains unconfirmed. Remaining manual Production account QA is pending. |
 | UX-06 — Customer Account UI Redesign | Deployed and hydration verified in Production at `6c2dd27e8b5eedf0871e455097f043a4836beecd`. Final functional acceptance remains part of manual Production QA. |
 | UX-07 — Customer Account Content Management | Deployed at `1b4563ca8bfde35872fd39a16bdcc3cea6712e25`. All 66 read-only Production checks passed with zero hydration errors or warnings. The operator confirmed both Site Content controls. Live Blob upload, replacement, persistence and reset QA await final illustration files. |
-| UX-08 — Customer Registration and Authentication Flow Improvements | Local final review includes focused completion screens and accessible confirmation feedback. UX-05 is included with bilingual HTML and plain-text emails. Physical-device registration retesting and live Gmail and Outlook rendering are pending authorized Production QA. |
-| SEO-01 — Search appearance, brand identity and indexing | Current pre-launch priority. Local implementation and verification precede separate deployment approval and operator Search Console checks. |
-| Batch 2.0 — Promo Codes | Pending after SEO-01. |
+| UX-08 — Customer registration and authentication flow, with UX-05 branded email | Deployed. Registration and password recovery manual QA passed. Authorized Gmail and Outlook coverage across all templates is still pending. |
+| SEO-01 — Search appearance, brand identity and indexing | Deployed at `80af0d512f2f8a7c2a6c2e8889b9690e78bd4e84`. Google Search Console accepted the homepage reindexing request. Search appearance refresh is pending. |
+| UX-09 / UX-10 — Account cart and sign-in form corrections | P1 pre-launch review. Account-bound cart persistence, guest merge and retained rejected sign-in fields are implemented locally. Migration and Production QA require separate approval. |
+| Batch 2.0 — Promo Codes | Pending UX-09 / UX-10 review. |
 | Launch Fixes | Legal pages, Google OAuth publication, Telegram customer comment and cancelled-order revenue analytics. |
 | Final QA | November 29–30, 2026. Comprehensive end-to-end QA and launch-blocking fixes. |
 | Store launch | December 1, 2026 target, subject to successful QA. |

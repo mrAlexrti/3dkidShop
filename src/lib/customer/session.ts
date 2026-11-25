@@ -18,9 +18,9 @@ export async function customerSession() {
   if (!sid.success || typeof jwt?.sub !== "string") return null;
   const session = await prisma.session.findFirst({
     where: { sessionToken: tokenHash(sid.data), userId: jwt.sub, expires: { gt: new Date() }, user: { role: "CUSTOMER" } },
-    select: { sessionToken: true, user: { select: profile } },
+    select: { sessionToken: true, expires: true, user: { select: profile } },
   });
-  return session && { ...session.user, binding: session.sessionToken };
+  return session && { ...session.user, binding: session.sessionToken, expires: session.expires };
 }
 
 export const favoritesVersion = (binding: string) => tokenHash(`favorites:${binding}`);
