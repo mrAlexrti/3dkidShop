@@ -33,7 +33,7 @@ import { colorGallery } from "@/lib/gallery";
 
 export type CreateOrderResult =
   | { success: true; orderNumber: string | null; emailSent: boolean; resultUrl: string; payment?: HostedCheckout }
-  | { success: false; error: string };
+  | { success: false; error: string; pendingPaymentUrl?: string };
 
 type PricedOrderItem = {
   productVariantId?: string;
@@ -46,6 +46,9 @@ type PricedOrderItem = {
 };
 
 class CheckoutInputError extends Error {}
+class PendingPaymentError extends Error {
+  constructor(readonly reference: string) { super("UNRESOLVED_PAYMENT_EXISTS"); }
+}
 
 async function priceOrderItems(tx: Prisma.TransactionClient, items: CartItem[], errors: (typeof translations)[Locale]["checkout"]["errors"], requirePriceMatch: boolean) {
   const rawProductIds = items.map((item) => item.productId);
@@ -154,6 +157,8 @@ export async function createOrder(
   accountCart?: unknown
 ): Promise<CreateOrderResult> {
   const errors = translations[locale === "en" ? "en" : "ua"].checkout.errors;
+  const pendingPayment = (reference: string): CreateOrderResult => ({ success: false, error: errors.pendingPayment,
+    pendingPaymentUrl: getAttemptResultPath(reference) });
   const parsed = getCheckoutSchema(locale === "en" ? "en" : "ua").safeParse(data);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message ?? errors.invalid;
@@ -186,7 +191,12 @@ export async function createOrder(
     catch { return { success: false, error: errors.invalid }; }
     const existing = await prisma.order.findUnique({ where: { checkoutKeyHash: identity.checkoutKeyHash } });
     if (existing) {
-      if ((existing.customerId ?? null) !== customerId || existing.checkoutPayloadHash !== identity.checkoutPayloadHash) return { success: false, error: errors.invalid };
+      if ((existing.customerId ?? null) !== customerId) return { success: false, error: errors.invalid };
+      if (existing.checkoutPayloadHash !== identity.checkoutPayloadHash) {
+        if (customer && existing.paymentReference && existing.checkoutAcceptance === "PROVISIONAL" &&
+          (existing.paymentStatus === "PENDING" || existing.paymentStatus === "UNKNOWN")) return pendingPayment(existing.paymentReference);
+        return { success: false, error: errors.invalid };
+      }
       if (!existing.paymentReference) return existing.number && customer ? { success: true, orderNumber: existing.number, emailSent: false, resultUrl: getOrderResultPath(existing.number) } : { success: false, error: errors.invalid };
       return { success: true, orderNumber: existing.number, emailSent: false, resultUrl: getAttemptResultPath(existing.paymentReference),
         ...(!existing.paidAt && existing.status !== "CANCELLED" && existing.paymentStatus === "PENDING" && existing.paymentPageUrl && (!existing.paymentExpiresAt || existing.paymentExpiresAt.getTime() > Date.now())
@@ -231,6 +241,17 @@ export async function createOrder(
           // A concurrent identical submission can be replayed after it commits.
           if (identity && await tx.order.findUnique({ where: { checkoutKeyHash: identity.checkoutKeyHash }, select: { id: true } })) throw new CheckoutInputError("CHECKOUT_REPLAY");
           throw new CheckoutInputError(translations[locale === "en" ? "en" : "ua"].cart.sync.conflict);
+        }
+        if (customer) {
+          // A cart edit must not open a second payable checkout for this account.
+          // Once an invoice exists, merchant evidence determines when it is terminal.
+          const open = await tx.order.findFirst({ where: { customerId: customer.id, paymentProvider: "mono", paymentReference: { not: null },
+            OR: [
+              { checkoutAcceptance: { in: ["PROVISIONAL", "REVIEW"] }, paymentStatus: { in: ["PENDING", "UNKNOWN"] } },
+              { checkoutAcceptance: "REVIEW", paidAt: { not: null }, paymentStatus: { not: "REFUNDED" } },
+            ] }, select: { paymentReference: true, checkoutKeyHash: true } });
+          if (open?.checkoutKeyHash === identity!.checkoutKeyHash) throw new CheckoutInputError("CHECKOUT_REPLAY");
+          if (open?.paymentReference) throw new PendingPaymentError(open.paymentReference);
         }
         const priced = await priceOrderItems(tx, items, errors, requirePriceMatch || !!customer);
         if (!priced.success) throw new CheckoutInputError(priced.error);
@@ -295,6 +316,7 @@ export async function createOrder(
       }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
       break;
     } catch (error) {
+      if (error instanceof PendingPaymentError) return pendingPayment(error.reference);
       if (error instanceof CheckoutInputError) {
         if (error.message === "CHECKOUT_REPLAY") return createOrder(data, items, locale, retryKey, retrySource, requirePriceMatch, accountCart);
         return { success: false, error: error.message };

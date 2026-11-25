@@ -379,6 +379,7 @@ try {
     const label = signedIn ? (locale === "ua" ? "Особистий кабінет" : "My account") : (locale === "ua" ? "Увійти" : "Sign in");
     await until(() => evaluate(`document.querySelector('footer a[href="/account"]')?.textContent === ${JSON.stringify(label)} &&
       !!document.querySelector('header .sf-account-entry-state') === ${signedIn}`), "header and footer account status");
+    await until(() => evaluate(`!!document.querySelector('[data-cart-state=${signedIn ? "ready" : "guest"}]')`), "settled account cart badge");
     await until(() => evaluate("!!document.querySelector('main h1') && !document.querySelector('main .ac-state')"), "streamed account screen");
     const shell = await evaluate(`(() => {
       const header = document.querySelector('header.sf-header');
@@ -541,6 +542,95 @@ try {
     await signOut();
     await badge(0);
     assert.equal((await request("/api/customer-cart")).status, 401);
+    const setup = await send("Page.addScriptToEvaluateOnNewDocument", { source: `
+      (() => {
+        if (location.origin !== ${JSON.stringify(origin)}) return;
+        const mode = localStorage.getItem("ux0910-storage-test");
+        if (!mode) return;
+        Object.defineProperty(navigator, "locks", {
+          configurable: true,
+          get() {
+            if (mode === "lose-ack") throw new DOMException("Local Web Locks test", "SecurityError");
+            return undefined;
+          },
+        });
+        if (mode === "denied") Object.defineProperty(indexedDB, "open", { configurable: true,
+          value() { throw new DOMException("Local IndexedDB test", "SecurityError"); },
+        });
+        if (mode === "lose-ack" || mode === "parallel") {
+          const write = Storage.prototype.setItem;
+          Storage.prototype.setItem = function (key, value) {
+            if (key.startsWith("3dkid.guest-cart-receipt.")) throw new DOMException("Local receipt write test", "QuotaExceededError");
+            return write.call(this, key, value);
+          };
+        }
+      })();
+    ` });
+    const mode = (value) => evaluate(`localStorage.setItem('ux0910-storage-test', ${JSON.stringify(value)})`);
+    const acknowledged = () => until(() => evaluate(`(() => {
+      const draft = JSON.parse(localStorage.getItem('3dkid.guest-cart-draft') || 'null');
+      const batch = JSON.parse(draft?.pending || 'null')?.state.guestBatch;
+      const receipt = JSON.parse(localStorage.getItem('3dkid.guest-cart-receipt.' + batch) || 'null');
+      return receipt?.pending === draft?.pending && !!receipt?.cart;
+    })()`), "the recovered receipt is durable before signing out");
+    await viewport(1280, "en");
+    await addCart();
+    await mode("denied");
+    await signIn(second, secret);
+    await badge(0);
+    await go("/cart");
+    await textIncludes("Some items stayed in your guest cart", main);
+    assert.equal(await evaluate("JSON.parse(localStorage.getItem('3dkid.guest-cart-draft') || 'null')?.source !== localStorage.getItem('stikr-cart-v2')"), true);
+    await signOut();
+    await badge(1);
+    await go("/catalog");
+    await until(() => evaluate("!!document.querySelector('[data-cart-state=guest]')"), "guest remains editable with denied storage");
+    await evaluate(`document.querySelector('.sf-product-card:has(a[href="/product/qa-cat"]) .sf-product-add').click()`);
+    await badge(2);
+    await mode("lose-ack");
+    await signIn(second, secret);
+    await go("/cart");
+    await badge(2);
+    await textIncludes("Some items stayed in your guest cart", main);
+    assert.equal(await evaluate("JSON.parse(localStorage.getItem('3dkid.guest-cart-draft') || 'null')?.source === localStorage.getItem('stikr-cart-v2')"), true);
+    await signOut();
+    await go("/cart");
+    await textIncludes("Sign in to the same account to finish transferring them", main);
+    await mode("denied");
+    await signIn(second, secret);
+    await badge(2);
+    await acknowledged();
+    await signOut();
+    await badge(0);
+    await addCart();
+    await mode("denied");
+    await signIn(second, secret);
+    await badge(2);
+    const secondUser = await db.user.findUniqueOrThrow({ where: { email: second } });
+    const receiptCount = await db.customerCartImport.count({ where: { userId: secondUser.id } });
+    await mode("parallel");
+    await evaluate(`(() => {
+      for (const suffix of ["a", "b"]) {
+        const frame = document.createElement("iframe");
+        frame.hidden = true;
+        frame.className = "qa-cart-copy";
+        frame.src = "/cart?qa-frame=" + suffix;
+        document.body.appendChild(frame);
+      }
+    })()`);
+    await until(() => evaluate(`[...document.querySelectorAll(".qa-cart-copy")].length === 2 &&
+      [...document.querySelectorAll(".qa-cart-copy")].every(frame =>
+        frame.contentDocument?.querySelector("[data-cart-state=ready] .sf-cart-count")?.textContent === "3")`), "parallel same-origin browser sessions reconcile the same draft");
+    assert.equal(await db.customerCartImport.count({ where: { userId: secondUser.id } }), receiptCount + 1);
+    await mode("denied");
+    await go("/cart");
+    await badge(3);
+    await acknowledged();
+    await signOut();
+    await badge(0);
+    await evaluate("localStorage.removeItem('ux0910-storage-test')");
+    await send("Page.removeScriptToEvaluateOnNewDocument", { identifier: setup.identifier });
+    passes("Guest cart without Web Locks, denied IndexedDB, receipt write loss, replay with denied IndexedDB and fresh guest shopping");
     console.log("UX-09 browser observed " + (cartReads - guestReads) + " private cart reads across sign-ins, cart/drawer navigation, checkout entry and an explicit focus check.");
     passes("UX-09 two independent authenticated sessions, desktop/mobile additions and edits, private reads, sign-out, re-login and account isolation");
     passes("UX-10 generic invalid password and email, retained editable fields, visibility toggle, successful correction and ephemeral credentials in UA/EN");

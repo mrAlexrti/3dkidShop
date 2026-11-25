@@ -56,11 +56,12 @@ const next = resolve("node_modules/next/dist/bin/next");
 const prisma = resolve("node_modules/prisma/build/index.js");
 const release = "docs/release/batch-1.9-customer-account";
 const approved = ["-c", "SET batch19.reviewed_execution='customer-account-reviewed'"];
+const cartProfile = process.argv.includes("--cart-profile");
 let app;
 try {
   const port = await freePort();
   await run(pg("initdb"), ["-D", data, "-U", owner, "--auth=trust", "--locale=C", "--encoding=UTF8"], { cwd: directory });
-  await run(pg("pg_ctl"), ["-D", data, "-l", join(directory,"postgres.log"), "-o", `-h 127.0.0.1 -p ${port} -c max_connections=25 -c timezone=Europe/Kyiv`, "-w", "start"], { cwd: directory, stdio: "ignore" });
+  await run(pg("pg_ctl"), ["-D", data, "-l", join(directory,"postgres.log"), "-o", `-h 127.0.0.1 -p ${port} -c max_connections=25 -c timezone=Europe/Kyiv${cartProfile ? " -c shared_preload_libraries=pg_stat_statements" : ""}`, "-w", "start"], { cwd: directory, stdio: "ignore" });
   const connection = ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", String(port), "-U", owner, "-d", "postgres"];
   const sql = (args) => run(pg("psql"), [...connection, ...args]);
   const file = (path, settings = []) => sql([...settings, "-f", resolve(path)]);
@@ -109,15 +110,30 @@ try {
   const ownerUrl = `postgresql://${owner}@127.0.0.1:${port}/${database}?schema=public&connection_limit=6`;
   const cartRelease = "docs/release/ux-09-10-customer-cart";
   const cartApproval = ["-c", "SET ux0910.reviewed_execution='customer-cart-reviewed'"];
+  await sql(["-c", `INSERT INTO public."Category" (id,name,"nameEn",slug) VALUES ('ux0910_before_category','Migration fixture','Migration fixture','ux0910-before-category');
+    INSERT INTO public."Product" (id,name,slug,description,price,"categoryId","updatedAt","isActive")
+      VALUES ('ux0910_before_product','Existing migration fixture','ux0910-before-product','Synthetic',19,'ux0910_before_category',now(),false);`]);
+  const fingerprint = () => sql(["-qAt", "-c", ["User", "Account", "Session", "Product", "Order", "OrderItem"].map(table =>
+    `SELECT '${table}' || ':' || count(*) || ':' || md5(COALESCE(string_agg(to_jsonb(fixture_row)::text, '' ORDER BY fixture_row.id), '')) FROM public."${table}" fixture_row`).join(";")]);
+  const existingRecords = await fingerprint();
   await file(cartRelease + "-preflight.sql");
   await assert.rejects(file(cartRelease + ".sql"), /UX0910_REVIEW_OR_BASELINE_GUARD_MISSING/);
   await file(cartRelease + ".sql", cartApproval);
   await file(cartRelease + "-verify.sql");
+  assert.equal(await fingerprint(), existingRecords, "Cart migration preserves existing records byte for byte");
+  assert.equal(await sql(["-qAt", "-c", "BEGIN; SET LOCAL ROLE app_3dkid; SELECT total FROM public.\"Order\" WHERE id='legacy_order'; ROLLBACK;"]).then(output => output.trim()), "7.00");
   await assert.rejects(sql(["-c", `SET ROLE app_3dkid; INSERT INTO public."CustomerCart" ("userId",lines) VALUES ('qa_existing_admin','[]')`]), /UX0910_CUSTOMERS_ONLY/);
   await file(cartRelease + "-rollback.sql", cartApproval);
   await file(cartRelease + ".sql", cartApproval);
+  assert.equal(await fingerprint(), existingRecords, "Rollback and reapplication preserve existing records");
+  await sql(["-c", `DELETE FROM public."Product" WHERE id='ux0910_before_product';
+    DELETE FROM public."Category" WHERE id='ux0910_before_category';`]);
   const drift = await run(process.execPath, [prisma, "migrate", "diff", "--from-url", ownerUrl, "--to-schema-datamodel", resolve("prisma/schema.prisma"), "--script"]);
   assert.match(drift, /This is an empty migration/);
+  if (cartProfile) {
+    await sql(["-c", "CREATE EXTENSION pg_stat_statements"]);
+    env.BATCH19_CART_PROFILE = "1";
+  } else delete env.BATCH19_CART_PROFILE;
   console.log("PASS baseline guards, sentinel, legacy checkout reads/writes and admin records, transactional migration, empty rollback, reapply and Prisma schema comparison");
 
   if (process.argv.includes("--commerce-regression")) {

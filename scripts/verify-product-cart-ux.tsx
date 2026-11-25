@@ -9,6 +9,7 @@ import { z } from "zod";
 import { sourceModule } from "./source-module";
 import * as limits from "../src/lib/cart-limits";
 import * as cartItems from "../src/lib/cart-items";
+import { CART_STORAGE_KEY, GUEST_CART_DRAFT_KEY, GUEST_CART_RECEIPT_PREFIX, migratedCart } from "../src/lib/cart-persistence";
 import * as reconciliation from "../src/lib/cart-reconciliation";
 import * as variants from "../src/lib/product-variants";
 import * as media from "../src/lib/product-media";
@@ -68,6 +69,24 @@ async function verify() {
     assert.equal(reconciliation.cartImageSource(persisted, cart()), reconciliation.CART_IMAGE_PLACEHOLDER);
   }
   pass("legacy/current hydration masks remote images and ignores persisted verification while preserving IDs, quantities and selected sizes");
+
+  const source = JSON.stringify({ version: 2, state: { items: [item], checkoutRevision: 1 } });
+  const batch = "c08cdb59-9f14-49af-b8d7-ba292a37fc40";
+  const pending = JSON.stringify({ version: 2, state: { items: [item], checkoutRevision: 1, guestBatch: batch, transferPending: true } });
+  const completed = JSON.stringify({ version: 2, state: { items: [], checkoutRevision: 2, guestBatch: batch, transferFinished: true } });
+  const newer = JSON.stringify({ version: 2, state: { items: [{ ...item, quantity: 4 }], checkoutRevision: 3 } });
+  const drafts = new Map<string, string>([
+    [CART_STORAGE_KEY, source],
+    [GUEST_CART_DRAFT_KEY, JSON.stringify({ source, pending })],
+    [GUEST_CART_RECEIPT_PREFIX + batch, JSON.stringify({ pending, cart: completed })],
+  ]);
+  const guestStorage = { getItem: (key: string) => drafts.get(key) ?? null,
+    setItem: (key: string, value: string) => { drafts.set(key, value); },
+    removeItem: (key: string) => { drafts.delete(key); } };
+  assert.equal(migratedCart(guestStorage), completed);
+  guestStorage.setItem(CART_STORAGE_KEY, newer);
+  assert.equal(migratedCart(guestStorage), newer, "A late draft or acknowledgment must leave a different guest version intact");
+  pass("guest import overlays and late receipts apply only to their exact saved source");
   reset(); await useCartStore.persist.rehydrate(); assert.equal(cart().ready(), false);
   assert.equal(await cart().verifyCart("en"), true);
   assert.equal(cart().items[0].name, "Dragon"); assert.equal(cart().items[0].image, product.image);

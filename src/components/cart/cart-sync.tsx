@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { refreshAccountCart, restoreGuestCart, useCartStore } from "@/store/cart-store";
-import { CART_STORAGE_KEY } from "@/lib/cart-persistence";
+import { CART_STORAGE_KEY, GUEST_CART_DRAFT_KEY, GUEST_CART_RECEIPT_PREFIX } from "@/lib/cart-persistence";
 import { CART_SYNC_KEY } from "@/lib/customer/guest-cart";
 import { useLangStore } from "@/store/lang-store";
 
@@ -24,7 +24,8 @@ export function CartSync() {
     };
     const storage = (event: StorageEvent) => {
       if (event.key === CART_SYNC_KEY) void refreshAccountCart();
-      if (event.key === CART_STORAGE_KEY && useCartStore.getState().accountScope === null) restoreGuestCart();
+      if ((event.key === CART_STORAGE_KEY || event.key === GUEST_CART_DRAFT_KEY || event.key?.startsWith(GUEST_CART_RECEIPT_PREFIX)) &&
+        useCartStore.getState().accountScope === null) restoreGuestCart();
     };
     window.addEventListener("focus", focus);
     window.addEventListener("storage", storage);

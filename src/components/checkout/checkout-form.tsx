@@ -186,7 +186,10 @@ export function CheckoutForm({ onlineCardEnabled, contact, customerScope }: { on
         toast.success(result.emailSent ? c.feedback.emailed : c.feedback.created);
         router.push(result.resultUrl);
       } else {
-        toast.error(result.error);
+        const pendingPaymentUrl = result.pendingPaymentUrl;
+        if (pendingPaymentUrl) {
+          toast.error(result.error, { action: { label: c.pendingPaymentStatus, onClick: () => router.push(pendingPaymentUrl) } });
+        } else toast.error(result.error);
         void verifyCart(locale, true);
       }
     } catch {

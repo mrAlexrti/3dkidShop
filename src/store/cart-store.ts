@@ -261,6 +261,7 @@ export const useCartStore = create<CartState>()(
       merge: (persisted, current) => {
         if (guestReload) current = { ...current, accountScope: null, syncStatus: "guest", syncProblem: guestTransferPending() ? "pending" : null,
           items: [], priceChanges: [], issues: {}, checkoutRevision: 0, verification: "idle", verifiedRevision: null };
+        else if (current.accountScope === null && guestTransferPending()) current = { ...current, syncProblem: "pending" };
         if (!persisted || typeof persisted !== "object") return current;
         const revision = (persisted as { checkoutRevision?: unknown })?.checkoutRevision;
         const changes = (persisted as { priceChanges?: unknown })?.priceChanges;
