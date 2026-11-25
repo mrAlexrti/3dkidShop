@@ -1,7 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
+import { AccountIllustration } from "./account-illustration";
+import { resolveAccountIllustration } from "@/lib/site-content";
+import { getStorefrontContent } from "@/lib/site-settings";
 
 export function AccountIntro({ title, description }: { title: string; description?: string }) {
   return <header className="ac-intro"><h1>{title}</h1>{description && <p>{description}</p>}</header>;
@@ -26,11 +28,12 @@ export function AccountEmpty({ title, description, cta, icon }: { title: string;
   </div>;
 }
 
-export function AccountAuthFrame({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+export async function AccountAuthFrame({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  const content = await getStorefrontContent();
   return <section className="ac-auth">
     <div className="ac-auth-art" aria-hidden="true">
       <span className="ac-auth-spark"><Sparkles size={36} /></span>
-      <Image src="/hero/robot-v1.webp" alt="" width={360} height={360} sizes="(min-width: 780px) 300px, 1px" />
+      <AccountIllustration {...resolveAccountIllustration(content, "account_auth_image")} auth />
     </div>
     <div className="ac-auth-body">
       <AccountIntro title={title} description={description} />

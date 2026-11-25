@@ -2,7 +2,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Node loads this fixture with --require. */
 const { appendFileSync, readFileSync } = require("node:fs");
 const { createHash, generateKeyPairSync, sign } = require("node:crypto");
-if (!process.env.BATCH19_MAIL_LOG || !process.env.BATCH19_APP_ORIGIN?.startsWith("http://127.0.0.1:")) throw new Error("B19_MOCK_PRIVATE_ONLY");
+const { basename, join } = require("node:path");
+if (!process.env.BATCH19_MAIL_LOG || !/^http:\/\/(?:127\.0\.0\.1|localhost):\d+$/.test(process.env.BATCH19_APP_ORIGIN ?? "")) throw new Error("B19_MOCK_PRIVATE_ONLY");
 const google = "https://accounts.google.com";
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const jwk = { ...publicKey.export({ format: "jwk" }), kid: "local", alg: "RS256", use: "sig" };
@@ -16,6 +17,12 @@ globalThis.fetch = async (input, init) => {
   if (target.protocol === "http:" && ["127.0.0.1", "localhost"].includes(target.hostname)) return original(input, init);
   if (target.origin === "https://res.cloudinary.com" && target.pathname.startsWith("/fixture/")) {
     return new Response(readFileSync("src/app/icon.png"), { headers: { "Content-Type": "image/png" } });
+  }
+  if (process.env.BATCH19_UX07 === "1" && target.origin === "https://ux07fixture.public.blob.vercel-storage.com" &&
+      /^\/3dkid\/product-media\/image\/[0-9a-f-]{36}\.webp$/.test(target.pathname)) {
+    return new Response(readFileSync(join(process.env.BATCH19_QA_DIRECTORY, basename(target.pathname))), {
+      headers: { "Content-Type": "image/webp" },
+    });
   }
   if (url === google + "/.well-known/openid-configuration") return Response.json({
     issuer: google, authorization_endpoint: google + "/o/oauth2/v2/auth", token_endpoint: tokenUrl, jwks_uri: jwks,

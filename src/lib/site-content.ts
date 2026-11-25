@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { httpMediaUrl } from "@/lib/product-media";
+import { httpMediaUrl, storefrontImage } from "@/lib/product-media";
 import { translations, type Locale } from "@/lib/i18n";
 
 const optionalUrl = z.string().trim().pipe(z.union([z.literal(""), httpMediaUrl]));
@@ -18,6 +18,11 @@ const aboutContentSchema = z.object({
   about_meta_description_en: aboutText(ABOUT_CONTENT_LIMITS.meta_description),
 });
 export const ABOUT_CONTENT_KEYS = Object.keys(aboutContentSchema.shape);
+export const ACCOUNT_ILLUSTRATIONS = {
+  account_auth_image: "/hero/robot-v1.webp",
+  account_welcome_image: "/hero/bunny-v1.webp",
+} as const;
+
 export const storefrontContentSchema = z.object({
   ...aboutContentSchema.shape,
   hero_title_ua: z.string().trim().max(500),
@@ -27,6 +32,8 @@ export const storefrontContentSchema = z.object({
   hero_image_1: optionalUrl,
   hero_image_2: optionalUrl,
   hero_image_3: optionalUrl,
+  account_auth_image: optionalUrl,
+  account_welcome_image: optionalUrl,
   social_instagram: optionalUrl,
   social_telegram: optionalUrl,
   social_tiktok: optionalUrl,
@@ -60,4 +67,10 @@ export function resolveHeroCopy(content: StorefrontContent, locale: Locale) {
 export function safeContentUrl(value?: string): string | undefined {
   const result = httpMediaUrl.safeParse(value);
   return result.success ? result.data : undefined;
+}
+
+export function resolveAccountIllustration(content: StorefrontContent, key: keyof typeof ACCOUNT_ILLUSTRATIONS) {
+  const fallback = ACCOUNT_ILLUSTRATIONS[key];
+  const src = safeContentUrl(content[key]) ?? fallback;
+  return { src, fallback, unoptimized: storefrontImage(src) !== src };
 }

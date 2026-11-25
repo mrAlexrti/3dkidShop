@@ -281,7 +281,8 @@
   padding: 30px;
   background: radial-gradient(ellipse at 50% 45%, #fff2fa 0%, transparent 73%), linear-gradient(145deg, #f7cadd, #fde8d8);
 }
-.ac-auth-art img { width: 100%; max-width: 300px; height: auto; border: 6px solid white; border-radius: 26%; box-shadow: var(--sf-shadow); transform: rotate(-5deg); }
+.ac-auth-art picture { display: block; width: 100%; max-width: 300px; }
+.ac-auth-art img { width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; border: 6px solid white; border-radius: 26%; box-shadow: var(--sf-shadow); transform: rotate(-5deg); }
 .ac-auth-spark { position: absolute; top: 12%; right: 10%; z-index: 1; color: #9e3863; }
 .ac-auth-google { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid #f1dce4; }
 .ac-auth-google > p { color: var(--sf-muted); font-size: .77rem; }

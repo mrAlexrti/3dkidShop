@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
 import { PrismaClient } from "@prisma/client";
 
@@ -12,7 +12,7 @@ const dbUrl = new URL(process.env.BATCH19_OWNER_DATABASE_URL);
 assert.equal(dbUrl.hostname, "127.0.0.1");
 assert.equal(dbUrl.username, "batch18a_qa");
 assert.equal(dbUrl.pathname, "/batch18_review_" + process.env.BATCH19_QA_MARKER);
-assert.equal(new URL(origin).hostname, "127.0.0.1");
+assert.match(origin, /^http:\/\/(?:127\.0\.0\.1|localhost):\d+$/);
 assert.equal(readFileSync(join(directory, "qa-marker"), "utf8"), process.env.BATCH19_QA_MARKER);
 const db = new PrismaClient({ datasourceUrl: dbUrl.href });
 const profile = join(directory, "edge");
@@ -28,6 +28,9 @@ const main = "main";
 const newPassword = "Recovery!123";
 const savedId = "qa_product";
 const favoritesApi = "/api/customer-favorites";
+const ux07 = process.env.BATCH19_UX07 === "1";
+const mockBlobOrigin = "https://ux07fixture.public.blob.vercel-storage.com";
+const blobPath = /^3dkid\/product-media\/image\/[0-9a-f-]{36}\.webp$/;
 const currentMail = () => readFileSync(process.env.BATCH19_MAIL_LOG, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse);
 const request = (path, cookie) => fetch(origin + path, { headers: cookie ? { cookie } : undefined, redirect: "manual" });
 const passes = (message) => console.log("PASS " + message);
@@ -62,6 +65,8 @@ try {
   let browserException;
   const hydrationErrors = [];
   let browserContext = {};
+  let mockUpload;
+  const uploadTraffic = [];
   function finishRequest(method, parameters) {
     void send(method, parameters).catch((error) => {
       // Navigation can cancel a subresource after Edge reports it as paused.
@@ -82,7 +87,11 @@ try {
       if (/#418\b|hydrat|did not match/i.test(diagnostic)) hydrationErrors.push({ ...browserContext, message: diagnostic });
     }
     if (message.method === "Fetch.requestPaused") {
-      const { requestId, request: { url } } = message.params;
+      const { requestId, request: { url, method, headers } } = message.params;
+      if (mockUpload && !["GET", "HEAD"].includes(method)) {
+        const target = new URL(url);
+        uploadTraffic.push([method, target.origin + target.pathname]);
+      }
       if (url.startsWith("https://accounts.google.com/o/oauth2/v2/auth?")) {
         googleRequests++;
         const params = new URL(url).searchParams;
@@ -93,8 +102,32 @@ try {
         callback.searchParams.set("code", code);
         callback.searchParams.set("state", badState ? "invalid-local-state" : params.get("state"));
         finishRequest("Fetch.fulfillRequest", { requestId, responseCode: 302, responseHeaders: [{ name: "location", value: callback.href }] });
+      } else if (ux07 && url.startsWith("https://vercel.com/api/blob/?") && method === "OPTIONS") {
+        const requestedHeaders = Object.entries(headers).find(([name]) => name.toLowerCase() === "access-control-request-headers")?.[1] ?? "";
+        finishRequest("Fetch.fulfillRequest", { requestId, responseCode: 204, responseHeaders: [
+          { name: "access-control-allow-origin", value: origin }, { name: "access-control-allow-methods", value: "PUT" },
+          { name: "access-control-allow-headers", value: requestedHeaders },
+        ] });
+      } else if (ux07 && url.startsWith("https://vercel.com/api/blob/?") && method === "PUT") {
+        const pathname = new URL(url).searchParams.get("pathname");
+        if (!pathname || !blobPath.test(pathname) || !mockUpload) {
+          interceptionFailure = "Unexpected test Blob upload";
+          finishRequest("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" });
+        } else {
+          writeFileSync(join(directory, basename(pathname)), mockUpload);
+          const url = mockBlobOrigin + "/" + pathname;
+          finishRequest("Fetch.fulfillRequest", { requestId, responseCode: 200,
+            responseHeaders: [{ name: "content-type", value: "application/json" }, { name: "access-control-allow-origin", value: origin }],
+            body: Buffer.from(JSON.stringify({ url, downloadUrl: url, pathname, contentType: "image/webp", contentDisposition: "inline" })).toString("base64") });
+        }
+      } else if (ux07 && url.startsWith(mockBlobOrigin + "/") && method === "GET" && blobPath.test(new URL(url).pathname.slice(1))) {
+        finishRequest("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "content-type", value: "image/webp" }],
+          body: readFileSync(join(directory, basename(new URL(url).pathname))).toString("base64") });
       } else if (url.startsWith(origin + "/")) finishRequest("Fetch.continueRequest", { requestId });
       else finishRequest("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" });
+    }
+    if (mockUpload && message.method === "Network.responseReceived" && message.params.response.url === origin + "/api/product-media/upload") {
+      uploadTraffic.push(["upload endpoint HTTP", message.params.response.status]);
     }
     const task = pending.get(message.id);
     if (task) { pending.delete(message.id); if (message.error) task.fail(new Error(message.error.message)); else task.done(message.result); }
@@ -267,17 +300,197 @@ try {
 
   async function captureUX06(name) {
     if (!process.argv.includes("--ux06-screenshots")) return;
+    await capture("ux-06", name);
+  }
+
+  async function capture(suite, name, section) {
     await evaluate(`(async () => {
       await document.fonts.ready;
       await Promise.all([...document.querySelectorAll('main img')].filter(img => img.offsetWidth).map(img => img.decode().catch(() => {})));
       return true;
     })()`);
     const { cssContentSize } = await send("Page.getLayoutMetrics");
-    const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true,
-      clip: { x: 0, y: 0, width: cssContentSize.width, height: cssContentSize.height, scale: 1 } });
-    const folder = resolve("coverage/ux-06");
+    const clip = section ? await evaluate(`(() => {
+      const { x, y, width, height } = document.querySelector(${JSON.stringify(section)}).getBoundingClientRect();
+      return { x: Math.max(0, x + scrollX - 12), y: Math.max(0, y + scrollY - 12), width: width + 24, height: height + 24, scale: 1 };
+    })()`) : { x: 0, y: 0, width: cssContentSize.width, height: cssContentSize.height, scale: 1 };
+    const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip });
+    const folder = resolve("coverage", suite);
     mkdirSync(folder, { recursive: true });
     writeFileSync(join(folder, `${name}.png`), Buffer.from(data, "base64"));
+  }
+
+  async function verifyAccountIllustrations() {
+    const auth = "account_auth_image", welcome = "account_welcome_image";
+    const section = "#account-illustrations";
+    const form = 'form:has(#account-illustrations)';
+    const welcomeImg = ".ac-welcome-art img", authImg = ".ac-auth-art img";
+    const robot = "/hero/robot-v1.webp", bunny = "/hero/bunny-v1.webp";
+    const unrelated = { hero_title_en: "Synthetic hero title", social_tiktok: "https://tiktok.example.test/qa" };
+    await db.siteContent.createMany({ data: Object.entries(unrelated).map(([key, value]) => ({ key, value })) });
+    const read = async key => (await db.siteContent.findUnique({ where: { key } }))?.value;
+    const value = name => evaluate(`document.getElementById(${JSON.stringify(name)})?.value`);
+    const bytes = async (source, name, width) => {
+      const sharp = (await import("sharp")).default;
+      const file = join(directory, name + ".webp");
+      await sharp(resolve("public", source.slice(1))).resize(width, width, { fit: "cover" }).webp({ quality: 72 }).toFile(file);
+      return file;
+    };
+    async function admin(width, locale) {
+      await viewport(width, locale);
+      await go("/admin/content");
+      await textIncludes(locale === "ua" ? "Особистий кабінет" : "Customer account", section);
+      await textIncludes("800 × 800", section);
+      await textIncludes("400 × 400", section);
+      await until(() => evaluate(`!!document.querySelector('#${auth}-file:not(:disabled)')`), "mock Blob upload available");
+    }
+    async function pick(name, file) {
+      const { root } = await send("DOM.getDocument");
+      const { nodeId } = await send("DOM.querySelector", { nodeId: root.nodeId, selector: `#${name}-file` });
+      assert.ok(nodeId);
+      await send("DOM.setFileInputFiles", { files: [file], nodeId });
+    }
+    const uploadButton = name => `document.getElementById('${name}-file').parentElement.querySelectorAll('button')[1]`;
+    async function upload(name, file) {
+      const previous = await value(name);
+      mockUpload = readFileSync(file);
+      uploadTraffic.length = 0;
+      await pick(name, file);
+      await until(() => evaluate(`!${uploadButton(name)}.disabled`), "valid illustration ready to upload");
+      await evaluate(`${uploadButton(name)}.click()`);
+      try {
+        return await until(async () => {
+          const current = await value(name);
+          return current !== previous && current?.startsWith(mockBlobOrigin + "/") && current;
+        }, "uploaded Blob URL in " + name);
+      } catch (error) {
+        const feedback = await evaluate(`document.getElementById('${name}').parentElement.querySelector('[role=alert]')?.textContent`);
+        throw new Error(`${error.message}: ${feedback ?? ""} ${JSON.stringify(uploadTraffic)}`);
+      } finally { mockUpload = undefined; }
+    }
+    async function save(expected) {
+      await submit(form);
+      for (const [key, url] of Object.entries(expected)) await until(async () => await read(key) === url, "saved " + key);
+      await until(() => evaluate(`!!document.querySelector('${form} button[type=submit]:enabled')`), "Site Content Save complete");
+    }
+    async function shown(selector, source) {
+      const measured = await until(() => evaluate(`(() => {
+        const image = document.querySelector(${JSON.stringify(selector)});
+        if (!image?.complete || !image.naturalWidth || !decodeURIComponent(image.currentSrc).includes(${JSON.stringify(source)})) return null;
+        return { width: image.offsetWidth, height: image.offsetHeight, alt: image.alt, fit: getComputedStyle(image).objectFit,
+          optimized: new URL(image.currentSrc).pathname === "/_next/image" };
+      })()`), source + " image loaded");
+      assert.equal(measured.alt, "");
+      assert.equal(measured.width, measured.height);
+      assert.equal(measured.fit, "cover");
+      assert.equal(measured.optimized, true);
+      return measured.width;
+    }
+    async function reset(key) {
+      await evaluate(`document.querySelector('#${key}').parentElement.querySelector('button[aria-label^="Reset to default illustration"]').click()`);
+      assert.equal(await value(key), "");
+    }
+    async function verifyAdminPreviews(sources) {
+      for (const [key, source] of Object.entries(sources)) {
+        const preview = JSON.stringify(`div:has(> #${key}) > img`);
+        await until(() => evaluate(`!!document.querySelector(${preview})`), "preview element for " + key);
+        await evaluate(`document.querySelector(${preview}).scrollIntoView({ block: "center" })`);
+        await until(() => evaluate(`(() => {
+          const image = document.querySelector(${preview});
+          return image.complete && image.naturalWidth > 0 && image.currentSrc === ${JSON.stringify(source)};
+        })()`), "rendered admin preview for " + key);
+      }
+      assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true);
+    }
+
+    await admin(1280, "en");
+    assert.equal(await value(auth), "");
+    assert.equal(await value(welcome), "");
+    await go("/account/sign-in");
+    assert.equal(await shown(authImg, robot), 300);
+    await admin(1280, "en");
+    const badFile = join(directory, "invalid-account-illustration.txt");
+    writeFileSync(badFile, "invalid fixture");
+    await pick(auth, badFile);
+    await until(() => evaluate(`!!document.querySelector('${section} [role=alert]')`), "localized invalid image feedback");
+    assert.equal(await evaluate(`${uploadButton(auth)}.disabled`), true);
+    const authFile = await bytes(bunny, "auth-fixture", 800);
+    const welcomeFile = await bytes(robot, "welcome-fixture", 400);
+    const firstAuth = await upload(auth, authFile);
+    const firstWelcome = await upload(welcome, welcomeFile);
+    assert.equal(await read(auth), undefined);
+    assert.equal(await read(welcome), undefined);
+    await save({ [auth]: firstAuth, [welcome]: firstWelcome });
+    await admin(1280, "en");
+    assert.equal(await value(auth), firstAuth);
+    assert.equal(await value(welcome), firstWelcome);
+    await verifyAdminPreviews({ [auth]: firstAuth, [welcome]: firstWelcome });
+    await capture("ux-07", "admin-desktop-en", section);
+    await admin(390, "ua");
+    await verifyAdminPreviews({ [auth]: firstAuth, [welcome]: firstWelcome });
+    await capture("ux-07", "admin-mobile-ua", section);
+
+    await viewport(1280, "ua");
+    for (const route of ["/account/sign-in", "/account/sign-in?mode=register", "/account/sign-in?mode=reset", "/account/confirm?mode=verify"]) {
+      await go(route);
+      assert.equal(await shown(authImg, firstAuth), 300);
+    }
+    await go("/account/sign-in");
+    await capture("ux-07", "sign-in-desktop-ua");
+    await viewport(768, "en");
+    await go("/account/sign-in");
+    const tablet = await shown(authImg, firstAuth);
+    assert.ok(tablet > 200 && tablet < 300);
+    await viewport(390, "en");
+    await go("/account/sign-in");
+    await verifyAccountShell(390, "en", false);
+    assert.equal(await evaluate("getComputedStyle(document.querySelector('.ac-auth-art')).display"), "none");
+    assert.equal(await evaluate(`performance.getEntriesByType('resource').some(entry => decodeURIComponent(entry.name).includes(${JSON.stringify(firstAuth)}))`), false);
+    await capture("ux-07", "sign-in-mobile-en");
+    await signIn(credentials.email, newPassword);
+    assert.equal(await shown(welcomeImg, firstWelcome), 78);
+    await capture("ux-07", "welcome-mobile-en");
+    await viewport(1280, "ua");
+    await go("/account");
+    assert.equal(await shown(welcomeImg, firstWelcome), 144);
+    await capture("ux-07", "welcome-desktop-ua");
+    await signOut();
+
+    await admin(1280, "en");
+    const nextAuth = await upload(auth, welcomeFile);
+    await save({ [auth]: nextAuth });
+    assert.equal(await read(welcome), firstWelcome);
+    await go("/account/sign-in");
+    await shown(authImg, nextAuth);
+    await admin(1280, "en");
+    const nextWelcome = await upload(welcome, authFile);
+    await save({ [welcome]: nextWelcome });
+    assert.equal(await read(auth), nextAuth);
+    await signIn(credentials.email, newPassword);
+    await shown(welcomeImg, nextWelcome);
+
+    await admin(1280, "en");
+    await reset(auth);
+    await save({ [auth]: "", [welcome]: nextWelcome });
+    await admin(1280, "en");
+    await reset(welcome);
+    await save({ [welcome]: "", [auth]: "" });
+    await go("/account");
+    await shown(welcomeImg, bunny);
+    await signOut();
+    await shown(authImg, robot);
+    await admin(1280, "en");
+    const missing = "https://missing-ux07.example.test/illustration.webp";
+    await fill(`#${auth}`, missing);
+    await save({ [auth]: missing, [welcome]: "" });
+    await go("/account/sign-in");
+    await shown(authImg, robot);
+    await admin(1280, "en");
+    await reset(auth);
+    await save({ [auth]: "" });
+    for (const [key, expected] of Object.entries(unrelated)) assert.equal(await read(key), expected);
+    console.log("UX-07 rendered illustration widths (CSS pixels)", { authDesktop: 300, authTablet: tablet, authMobile: 0, welcomeDesktop: 144, welcomeMobile: 78 });
+    passes("UX-07 uploads, validation, independent replacement and reset, refreshed content, responsive account art and UA/EN previews");
   }
 
   const googleForm = 'main form[action="/api/customer-auth/start/google"]';
@@ -797,6 +1010,7 @@ try {
     return result.ok && session.user?.role === "ADMIN";
   })()`), true, "existing administrator credentials and session");
   await go("/admin");
+  if (ux07) await verifyAccountIllustrations();
   await db.product.update({ where: { id: "qa_native" }, data: { isActive: false } });
   for (const width of [390, 1280]) for (const locale of ["ua", "en"]) {
     await send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: width < 700 });

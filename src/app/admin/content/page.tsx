@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/actions/require-admin";
 import { updateSiteContent } from "@/lib/actions/categories";
 import { AdminForm, AdminFieldError, AdminSaveButton } from "@/components/admin/admin-form";
 import { AboutContentFields } from "@/components/admin/about-content-fields";
-import { ABOUT_CONTENT_KEYS } from "@/lib/site-content";
+import { ABOUT_CONTENT_KEYS, ACCOUNT_ILLUSTRATIONS } from "@/lib/site-content";
 import { MediaUrlField } from "@/components/admin/media-url-field";
 import { getT } from "@/lib/i18n-server";
 import { translations } from "@/lib/i18n";
@@ -60,6 +60,14 @@ export default async function AdminContentPage() {
           <legend className="mb-4 text-lg font-semibold">{tc.heroImages}</legend>
           {heroAssets.map((asset, index) => <MediaUrlField key={asset.key} name={asset.key} label={`${tc.heroImage} ${index + 1}`}
             help={t.admin.media.imageHelp} defaultValue={map[asset.key]} fallback={asset.src} uploadEnabled />)}
+        </fieldset>
+        <fieldset className="space-y-5" id="account-illustrations">
+          <legend className="mb-4 text-lg font-semibold">{tc.accountImages.title}</legend>
+          {(["account_auth_image", "account_welcome_image"] as const).map((key) => (
+            <MediaUrlField key={key} name={key} label={tc.accountImages[key].label}
+              help={`${tc.accountImages[key].help} ${t.admin.media.imageHelp}`}
+              defaultValue={map[key]} fallback={ACCOUNT_ILLUSTRATIONS[key]} resetLabel={tc.accountImages.reset} uploadEnabled />
+          ))}
         </fieldset>
         <AboutContentFields content={aboutContent} />
         <fieldset className="space-y-4">

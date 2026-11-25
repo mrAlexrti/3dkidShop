@@ -8,7 +8,7 @@ import { inspectMediaFile, MEDIA_TYPES, uploadErrorCode, type UploadErrorCode } 
 import { mediaUploadsAvailable, uploadProductMedia } from "@/lib/media-upload-client";
 import { AdminFieldError, useAdminForm } from "@/components/admin/admin-form";
 
-export function MediaUrlField({ name, label, help, defaultValue = "", value: controlledValue, onValueChange, fallback, animated = false, required = false, disabled = false, uploadEnabled = false, onUploadStateChange }: {
+export function MediaUrlField({ name, label, help, defaultValue = "", value: controlledValue, onValueChange, fallback, resetLabel, animated = false, required = false, disabled = false, uploadEnabled = false, onUploadStateChange }: {
   name: string;
   label: string;
   help: string;
@@ -16,6 +16,7 @@ export function MediaUrlField({ name, label, help, defaultValue = "", value: con
   value?: string;
   onValueChange?: (value: string) => void;
   fallback?: string;
+  resetLabel?: string;
   animated?: boolean;
   required?: boolean;
   disabled?: boolean;
@@ -110,11 +111,11 @@ export function MediaUrlField({ name, label, help, defaultValue = "", value: con
         {error && <p role="alert">{text.uploadErrors[error]}</p>}
         {uploaded && <p>{text.uploaded}</p>}
       </div></>}
-      {value && <button type="button" aria-label={`${text.clear}: ${label}`} disabled={locked || busy} className="mt-2 min-h-11 text-sm underline disabled:opacity-50" onClick={() => {
+      {value && <button type="button" aria-label={`${resetLabel ?? text.clear}: ${label}`} disabled={locked || busy} className="mt-2 min-h-11 text-sm underline disabled:opacity-50" onClick={() => {
         setValue("");
         setUploaded(false); setFailedUrl("");
         urlInput.current?.setCustomValidity("");
-      }}>{t.admin.media.clear}</button>}
+      }}>{resetLabel ?? text.clear}</button>}
       {preview && preview !== failedUrl && <Image key={preview} src={preview} width={200} height={200} unoptimized
         className={`mt-3 aspect-square rounded-xl object-cover${animated ? " motion-reduce:hidden" : ""}`} alt={`${t.admin.common.preview}: ${label}`} onError={() => setFailedUrl(preview)} />}
       {preview && preview === failedUrl && <p role="status" className="mt-2 text-xs text-ink/60">{t.admin.media.previewError}</p>}

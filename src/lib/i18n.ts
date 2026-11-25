@@ -364,6 +364,12 @@ export const translations = {
         thImage:     "Фото",
       },
       content: {
+        accountImages: {
+          title: "Особистий кабінет",
+          reset: "Відновити стандартне зображення",
+          account_auth_image: { label: "Ілюстрація для входу", help: "Для входу, реєстрації, відновлення пароля й підтверджень. Рекомендовано 800 × 800 пікселів, 1:1, до 200 КБ." },
+          account_welcome_image: { label: "Ілюстрація привітання", help: "Для вітального банера в особистому кабінеті. Рекомендовано 400 × 400 пікселів, 1:1, до 80 КБ." },
+        },
         title:        "Контент сайту",
         subtitle:     "Тексти й зображення головної та посилання на соцмережі",
         heroText: "Тексти головної",
@@ -797,6 +803,12 @@ export const translations = {
         thImage:     "Image",
       },
       content: {
+        accountImages: {
+          title: "Customer account",
+          reset: "Reset to default illustration",
+          account_auth_image: { label: "Authentication illustration", help: "For sign-in, registration, password recovery and confirmation. Recommended 800 × 800 pixels, 1:1, up to 200 KB." },
+          account_welcome_image: { label: "Welcome illustration", help: "For the welcome banner on the account overview. Recommended 400 × 400 pixels, 1:1, up to 80 KB." },
+        },
         title:        "Site content",
         subtitle:     "Homepage copy, images, and social links",
         heroText: "Homepage copy",

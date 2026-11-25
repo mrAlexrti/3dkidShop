@@ -153,6 +153,23 @@ async function verify() {
   assert.equal(state.get("hero_title_ua"), unrelated.find(([key]) => key === "hero_title_ua")![1]);
   pass("combined About/hero Save changes only submitted values and keeps the shared transactional media protocol");
 
+  const beforeIllustrations = [...state];
+  const auth = "https://fixture.public.blob.vercel-storage.com/auth.webp";
+  const welcome = "https://fixture.public.blob.vercel-storage.com/welcome.webp";
+  revalidated.length = 0;
+  await actions.updateSiteContent(formData({ account_auth_image: auth, account_welcome_image: welcome }));
+  assert.deepEqual(revalidated, [["/", "layout"], ["/admin/content"], ["/about"]]);
+  assert.equal(state.get("account_auth_image"), auth);
+  assert.equal(state.get("account_welcome_image"), welcome);
+  await actions.updateSiteContent(formData({ account_auth_image: "" }));
+  assert.equal(state.get("account_auth_image"), "");
+  assert.equal(state.get("account_welcome_image"), welcome);
+  assert.deepEqual((await actions.updateSiteContent(formData({ account_welcome_image: "https://user:password@example.test/image.webp" })))?.fieldErrors,
+    { account_welcome_image: "invalid" });
+  assert.equal(state.get("account_welcome_image"), welcome);
+  for (const [key, value] of beforeIllustrations) assert.equal(state.get(key), value);
+  pass("account illustration Save and reset preserve unrelated settings and invalidate the storefront layout");
+
   for (const locale of ["ua", "en"] as const) {
     const fields = sourceModule<typeof import("../src/components/admin/about-content-fields")>("src/components/admin/about-content-fields.tsx", {
       "react/jsx-runtime": jsxRuntime, "@/lib/site-content": content, "@/store/lang-store": { useLangStore: () => ({ t: translations[locale] }) },
@@ -189,9 +206,17 @@ async function verify() {
   const adminElements = elements(await adminPage.default());
   const aboutEditor = adminElements.find((element) => element.type === AboutProbe)!;
   assert.deepEqual(aboutEditor.props.content, aboutValues, "Client editor must receive only the eight About keys");
-  const heroFields = adminElements.filter((element) => element.type === "media-field");
+  const mediaFields = adminElements.filter((element) => element.type === "media-field");
+  const heroFields = mediaFields.filter((field) => typeof field.props.name === "string" && field.props.name.startsWith("hero_image_"));
   assert.equal(heroFields.length, 3); assert.ok(heroFields.every((field) => field.props.uploadEnabled));
   assert.equal(heroFields[0].props.defaultValue, state.get("hero_image_1"));
+  for (const [key, fallback] of Object.entries(content.ACCOUNT_ILLUSTRATIONS)) {
+    const field = mediaFields.find((field) => field.props.name === key)!;
+    assert.equal(field.props.fallback, fallback);
+    assert.equal(field.props.defaultValue, state.get(key));
+    assert.equal(field.props.uploadEnabled, true);
+    assert.ok(field.props.resetLabel);
+  }
   pass("actual Site Content page passes only public About keys to the client editor, preserves all three hero upload fields and never serializes private ledger rows");
 
   for (const selected of ["ua", "en"] as const) {

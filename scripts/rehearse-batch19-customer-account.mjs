@@ -16,11 +16,13 @@ const data = join(directory, "data");
 const marker = randomBytes(16).toString("hex");
 const database = `batch18_review_${marker}`;
 const owner = "batch18a_qa";
+const ux07 = process.argv.includes("--ux07");
 writeFileSync(join(directory, "qa-marker"), marker);
 const pgBin = process.env.BATCH19_PG_BIN || "C:/Program Files/PostgreSQL/18/bin";
 const pg = (name) => join(pgBin, name + (process.platform === "win32" ? ".exe" : ""));
 const env = { ...process.env, DATABASE_URL: "postgresql://unused@127.0.0.1:1/unused",
   NEXT_TELEMETRY_DISABLED: "1", PRODUCT_MEDIA_CLEANUP_ENABLED: "false", PRODUCT_VARIANTS_ENABLED: "true",
+  BLOB_READ_WRITE_TOKEN: ux07 ? "vercel_blob_rw_ux07fixture_LOCAL_ONLY" : "", BATCH19_UX07: ux07 ? "1" : "",
   ONLINE_PAYMENT_MODE: "disabled", TELEGRAM_BOT_TOKEN: "", TELEGRAM_ADMIN_CHAT_ID: "", NP_API_KEY: "", AUTH_DEBUG: "0",
   AUTH_SECRET: randomBytes(32).toString("hex"), CUSTOMER_AUTH_SECRET: randomBytes(32).toString("hex"),
   RESEND_API_KEY: "local-mock", EMAIL_FROM: "QA <qa@example.test>", CUSTOMER_GOOGLE_CLIENT_ID: "local-google-id",
@@ -76,6 +78,8 @@ try {
     GRANT UPDATE (name) ON public."Product" TO app_3dkid;
     GRANT SELECT, INSERT ON public."Order",public."OrderItem" TO app_3dkid;
     INSERT INTO public."User" (id,email,role) VALUES ('qa_existing_admin','admin@example.test','ADMIN');`]);
+  // Match the existing Site Content permissions for the isolated admin editor test.
+  if (ux07) await sql(["-c", 'GRANT INSERT, UPDATE, DELETE ON public."SiteContent" TO app_3dkid']);
   await file("docs/release/batch-1.8.1-filaments.sql", ["-c", "SET batch181.reviewed_execution='filaments-reviewed'"]);
   await sql(["-c", `
     INSERT INTO public."Account" (id,"userId",provider,"providerAccountId",type) VALUES ('legacy_account','qa_existing_admin','legacy','admin-id','oidc');
@@ -121,7 +125,9 @@ try {
   env.BATCH19_OWNER_DATABASE_URL = ownerUrl;
 
   const appPort = await freePort();
-  const origin = `http://127.0.0.1:${appPort}`;
+  // Next normalizes 127.0.0.1 to localhost in Route Handler request URLs.
+  // Use the same spelling in the browser Origin for the real media CSRF check.
+  const origin = `http://${ux07 ? "localhost" : "127.0.0.1"}:${appPort}`;
   Object.assign(env, { CUSTOMER_AUTH_ORIGIN: origin, AUTH_URL: origin, NEXTAUTH_URL: origin, NEXT_PUBLIC_SITE_URL: origin, BATCH19_APP_ORIGIN: origin });
   console.log(await run(process.execPath, [resolve("node_modules/tsx/dist/cli.mjs"), resolve("scripts/verify-batch19-concurrency.ts")]));
 
