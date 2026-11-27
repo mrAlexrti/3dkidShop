@@ -1,6 +1,6 @@
 # BRAND-01 — Global Brand Identity Consistency
 
-The work starts at Production `05f0bb0870ee18d109ab92b84b73b327520aca0b` on `redesign-3dkid-v2`. The exact approved `Logo_Actual.jpg` is archived at `assets/brand/Logo_Actual.jpg` (409 × 369 px, SHA-256 `7168b7e5b6a50f213481a145b4462da4b1564a6943053fb099ad58cf0a937785`). Run `node scripts/generate-favicons.mjs` at the repository root to rebuild its public derivatives.
+The work starts at Production `05f0bb0870ee18d109ab92b84b73b327520aca0b` on `redesign-3dkid-v2`. The exact approved `Logo_Actual.jpg` is archived at `assets/brand/Logo_Actual.jpg` (409 × 369 px, SHA-256 `7168b7e5b6a50f213481a145b4462da4b1564a6943053fb099ad58cf0a937785`). The current `node scripts/generate-favicons.mjs` command rebuilds the default favicons. See [BRAND-01B](brand-01b-storefront-favicon.md) for the storefront asset separation.
 
 ## Audit and changes
 

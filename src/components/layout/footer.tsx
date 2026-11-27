@@ -21,7 +21,7 @@ export function Footer({ categories, content }: { categories: CategoryTreeNode[]
     <footer className="sf-shell sf-footer">
       <div className="sf-footer-brand">
         <Link href="/" className="sf-brand" aria-label={t.nav.home}>
-          <Image {...storefrontLogo} sizes="(max-width: 680px) 64px, 110px" alt={brandName} />
+          <Image {...storefrontLogo} sizes="(max-width: 680px) 38px, 110px" alt={brandName} />
         </Link>
         <p>{t.footer.description}</p>
       </div>

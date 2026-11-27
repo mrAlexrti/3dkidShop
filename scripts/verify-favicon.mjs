@@ -14,14 +14,18 @@ const logo = readFileSync("public/hero/logo.png");
 const defaults = "assets/brand/favicon";
 const source = readFileSync("assets/brand/Logo_Actual.jpg");
 assert.equal(createHash("sha256").update(source).digest("hex"), "7168b7e5b6a50f213481a145b4462da4b1564a6943053fb099ad58cf0a937785");
+const storefront = readFileSync("public/hero/storefront-logo.png");
+assert.equal(createHash("sha256").update(storefront).digest("hex"), "e74e671bb71e8aeb9722f32f5141c9c9913833d68e84676402047082c2353361");
+const restoredLogo = await sharp(storefront).metadata();
+assert.deepEqual([restoredLogo.width, restoredLogo.height, restoredLogo.hasAlpha], [282, 314, true]);
 const sourceImage = sharp(source);
 const { width, height } = await sourceImage.metadata();
-const storefrontPixels = await sharp(logo).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-assert.deepEqual([storefrontPixels.info.width, storefrontPixels.info.height], [width, height]);
+const emailPixels = await sharp(logo).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+assert.deepEqual([emailPixels.info.width, emailPixels.info.height], [width, height]);
 const sourcePixels = await sourceImage.clone().raw().toBuffer();
 const averageError = (actual, expected) =>
   actual.reduce((sum, value, index) => sum + Math.abs(value - expected[index]), 0) / actual.length;
-assert.ok(averageError(storefrontPixels.data, sourcePixels) < 3, "Storefront and email retain the complete master artwork");
+assert.ok(averageError(emailPixels.data, sourcePixels) < 3, "Email retains the complete master artwork");
 const mark = "public/seo/brand-mark.png";
 const markPixels = await sharp(mark).ensureAlpha().raw().toBuffer();
 const padded = await sourceImage.clone().extend({ top: 20, bottom: 20, left: 0, right: 0, extendWith: "copy" }).png().toBuffer();
@@ -66,7 +70,7 @@ const pixels = await sharp(`${defaults}/favicon-96.png`).ensureAlpha().raw().toB
 assert.equal(pixels[3], 0, "Transparent top-left corner");
 assert.equal(pixels[4 * (48 * 96 + 48) + 3], 255, "Opaque mark center");
 assert.ok(ico.length < 20000 && readFileSync(`${defaults}/favicon-96.png`).length < 20000 && readFileSync("public/apple-touch-icon.png").length < 30000);
-console.log("PASS approved master, storefront and SEO artwork, transparent ICO/PNG frames at 16/32/48/96 and 180 px Apple icon.");
+console.log("PASS historical storefront logo, approved email and SEO artwork, transparent ICO/PNG frames at 16/32/48/96 and 180 px Apple icon.");
 const reuseIndex = process.argv.indexOf("--output");
 if (!process.argv.includes("--build") && reuseIndex < 0) process.exit(0);
 

@@ -12,14 +12,18 @@
 | SEO-01 — Search appearance, brand identity and indexing | Deployed at `80af0d512f2f8a7c2a6c2e8889b9690e78bd4e84`. Google Search Console accepted the homepage reindexing request. Search appearance refresh is pending. |
 | OPS-01 — Database Release Manager | Implemented and used successfully for the UX-09 / UX-10 Production migration. Follow-up pending to integrate the reusable tooling into a permanent repository location. |
 | UX-09 / UX-10 — Account cart and sign-in form corrections | Deployed at `05f0bb0870ee18d109ab92b84b73b327520aca0b`. Manual Production acceptance is pending. Real payment acceptance and verification of reconciliation scheduling remain launch gates. |
-| BRAND-01 — Global Brand Identity Consistency | Current pre-launch review. Aligns storefront, search and email brand artwork with the approved master. |
+| BRAND-01 / BRAND-01A — Brand identity and administrator-managed favicon | Deployed at `3f2ad0986effca473740c2ba90585e9cd6029060`. The operator verified live upload and reset and found that the approved upload rendered smaller than the default. Google refresh remains unverified. |
+| BRAND-01B — Storefront logo and favicon consistency | Isolated candidate for release approval. Restores the historical transparent storefront logo and makes the approved uploaded JPEG match the packaged favicon. |
+| OPS-02 — Isolated Development Environment | Available on the separate development branch at `2d1c49e10ec9e63cd711d92456c3e2568289dd7b`. Guarded Neon DEV and loopback PostgreSQL workflows support development and tests. |
+| OPS-02A — Production Runtime Compatibility and Environment Isolation | Launch priority. Resolve the build fallback, datasource override and `npm start` blockers before bringing OPS-02 runtime changes into a Production release. [Gate evidence and reconciliation plan](ops-02a-production-runtime-compatibility.md). |
+| QA-AUTO-01 — Automated QA | Planned after the isolated branding release. |
 | Manual Production QA | Operator results: QA-01 5/5 PASS. QA-02 9/9 PASS. QA-03 7/8 PASS. QA-04 4 PASS, 1 FAIL, 2 PENDING. QA-05 Favorites 12/12 PASS with no defects. QA-06 12/13 PASS. QA-04.06 Google account linking is pending manual verification. |
 | BUG-04 — Nova Poshta parcel lockers | Parcel locker search reports that the service is unavailable. Include it in the existing Nova Poshta API audit. |
 | UX-11 / BUG-06 — Localized Form Validation | P2, pending. Show localized, context-specific validation and preserve editable values. An invalid profile phone currently restores the previous value and displays an unrelated expired-link error. |
 | UX-12 — Purchasable Variants Warning | Pending. Prominent admin warning for products without a purchasable variant combination. |
 | UX-13 — Customer Password Change | Pending. Audit and implement a visible password-change action in the account. |
 | UX-14 — Customer Email Change | Pending workflow investigation and manual verification. |
-| PERF-01 — Storefront Performance & Navigation Optimization | Next major P1 development batch after BRAND-01. Storefront navigation and search latency predate SEO-01. Profile category switching, product navigation, filtering, autocomplete, authenticated cart SQL, database workload, caching, prefetching, browser performance, and Vercel/Neon infrastructure. |
+| PERF-01 — Storefront Performance & Navigation Optimization | P1, after QA-AUTO-01. Storefront navigation and search latency predate SEO-01. Profile category switching, product navigation, filtering, autocomplete, authenticated cart SQL, database workload, caching, prefetching, browser performance, and Vercel/Neon infrastructure. |
 | Batch 2.0 — Promo Codes | Pending. |
 | Launch Fixes | Legal pages, Google OAuth publication, Telegram customer comment and cancelled-order revenue analytics. |
 | Final QA | November 29–30, 2026. Comprehensive end-to-end QA and launch-blocking fixes. |

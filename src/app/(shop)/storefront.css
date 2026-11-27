@@ -38,7 +38,7 @@ body:has(.storefront) [data-sonner-toaster], body:has(.storefront) [data-sonner-
 .sf-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 22px; border: 3px solid rgb(255 255 255 / 75%); border-radius: 40px; background: rgb(255 253 251 / 92%); box-shadow: var(--sf-shadow); }
 .sf-home-controls { display: flex; justify-content: flex-end; padding: 0 24px; margin-bottom: 12px; }
 .sf-brand { display: inline-flex; flex: 0 0 auto; align-items: center; border-radius: 12px; }
-.sf-brand img { width: 50px; height: auto; border-radius: 12%; }
+.sf-brand img { width: 50px; height: auto; }
 .sf-header-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; color: var(--sf-muted); font-weight: 700; }
 .sf-controls { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .sf-language button[aria-pressed="true"] { background: var(--sf-brand-pink); color: var(--sf-ink); }
@@ -141,7 +141,7 @@ body:has(.storefront) [data-sonner-toaster], body:has(.storefront) [data-sonner-
 .sf-footer { display: grid; grid-template-columns: 1.2fr 1fr 1fr .9fr; align-items: start; gap: 30px; margin-top: 44px; padding: 38px 44px; border-radius: 42px; background: var(--sf-brand-pink); color: white; box-shadow: var(--sf-shadow); }
 .sf-footer > * { min-width: 0; }
 .sf-footer-brand { display: grid; justify-items: start; gap: 20px; }
-.sf-footer-brand img { width: 110px; height: auto; box-shadow: 0 0 0 1px #fff5ea; }
+.sf-footer-brand img { width: 110px; height: auto; }
 .sf-footer p { font-size: 14px; line-height: 1.7; }
 .sf-footer nav { display: grid; gap: 2px; }
 .sf-footer h2 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
@@ -195,8 +195,7 @@ body:has(.storefront) [data-sonner-toaster], body:has(.storefront) [data-sonner-
   .sf-shell { width: calc(100% - 20px); }
   .sf-header { gap: 6px; padding: 8px; border-radius: 28px; flex-wrap: wrap; }
   .sf-home-controls { padding: 0 8px; margin-bottom: 0; }
-  .sf-header .sf-brand img { width: 38px; }
-  .sf-footer-brand img { width: 64px; }
+  .sf-brand img { width: 38px; }
   .sf-header .sf-brand { min-width: 44px; min-height: 44px; justify-content: center; }
   .sf-header-link { display: none; }
   .sf-header--account .sf-header-link { display: inline-flex; padding-inline: 4px; font-size: .78rem; }

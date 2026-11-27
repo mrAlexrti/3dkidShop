@@ -26,6 +26,10 @@ async function main() {
   }
   assert.deepEqual(rendered[0], rendered[1]);
   assert.deepEqual(rendered[0], rendered[2]);
+  assert.deepEqual(rendered[0], readFileSync("assets/brand/favicon/favicon.ico"));
+  for (const [size, frame] of faviconFrames(rendered[0])) {
+    assert.deepEqual(frame, readFileSync(`assets/brand/favicon/favicon-${size}.png`));
+  }
 
   // Keep markers at all four corners on a rectangular source. The exterior
   // remains transparent and the source aspect ratio survives normalization.
@@ -66,7 +70,7 @@ async function main() {
   assert.equal(faviconRevision("https://test.public.blob.vercel-storage.com" + path), revision);
   assert.equal(faviconRevision("https://wrong.invalid" + path), null);
   assert.equal(faviconRevision("https://test.public.blob.vercel-storage.com" + path + "?x=1"), null);
-  console.log("PASS BRAND-01A JPEG/PNG/WebP decode, approved 409 × 369 source, square/transparent frames, retained corner markers, aspect ratio and invalid input");
+  console.log("PASS JPEG/PNG/WebP, exact packaged and uploaded PNG/ICO bytes, transparent corners, retained corner markers, aspect ratio and invalid input");
 }
 
 void main().catch(error => { console.error(error); process.exitCode = 1; });

@@ -488,6 +488,14 @@ try {
     await viewport(1280, "en");
     await go("/admin/content");
     await activeIcon(icon + "?v=default");
+    const brandUrls = ["/apple-touch-icon.png", "/hero/logo.png", "/hero/storefront-logo.png", "/seo/brand-mark.png", "/seo/store-share.jpg"];
+    const verifyBrandAssets = async () => {
+      for (const url of brandUrls) assert.deepEqual((await readIcon(url)).bytes, readFileSync("public" + url));
+    };
+    const evidence = resolve("coverage", "brand-01b", "after");
+    mkdirSync(evidence, { recursive: true });
+    writeFileSync(join(evidence, "favicon-default-96.png"), defaultPng.bytes);
+    await capture("brand-01b/after", "admin-default-favicon", editor);
     const unrelatedBefore = await db.siteContent.findMany({ where: { key: { not: "seo_favicon_ico" } }, orderBy: { key: "asc" } });
     const inputTitle = await evaluate("document.querySelector('#seo_home_title_en').value");
     await fill("#seo_home_title_en", "Unsaved unrelated title");
@@ -497,10 +505,14 @@ try {
     assert.match(jpeg, /\/3dkid\/favicon\/[a-f0-9]{32}\.ico$/);
     const previewFor = value => icon + "?v=" + basename(value, ".ico");
     await activeIcon(previewFor(jpeg));
-    await capture("brand-01a", "admin-en-desktop-uploaded", editor);
-    const customPng = await readIcon(icon, defaultPng.tag);
+    await capture("brand-01b/after", "admin-uploaded-favicon", editor);
+    const customPng = await readIcon(icon);
     assert.equal(customPng.response.status, 200);
-    assert.notDeepEqual(customPng.bytes, defaultPng.bytes);
+    assert.deepEqual(customPng.bytes, defaultPng.bytes);
+    assert.equal(customPng.tag, defaultPng.tag);
+    assert.deepEqual((await readIcon("/favicon.ico")).bytes, readFileSync(join(defaults, "favicon.ico")));
+    for (const size of [16, 32, 48]) assert.deepEqual((await readIcon(`/favicon-${size}.png`)).bytes, readFileSync(join(defaults, `favicon-${size}.png`)));
+    writeFileSync(join(evidence, "favicon-upload-96.png"), customPng.bytes);
     assert.match(customPng.response.headers.get("cache-control"), /must-revalidate/);
     assert.equal((await readIcon(icon, customPng.tag)).response.status, 304);
     await go("/admin/content");
@@ -536,6 +548,7 @@ try {
     assert.notEqual(webp, jpeg);
     await activeIcon(previewFor(webp));
     await capture("brand-01a", "admin-ua-mobile-replacement", editor);
+    await verifyBrandAssets();
 
     const routes = [16, 32, 48, 96];
     const ico = await readIcon("/favicon.ico");
@@ -574,12 +587,12 @@ try {
     await go("/admin/content");
     await activeIcon(icon + "?v=default");
     assert.equal(await saved(), "");
-    await capture("brand-01a", "admin-ua-mobile-default", editor);
-    assert.deepEqual((await readIcon(icon)).bytes, defaultPng.bytes);
+    await capture("brand-01b/after", "admin-restored-favicon", editor);
+    const restoredPng = await readIcon(icon);
+    assert.deepEqual(restoredPng.bytes, defaultPng.bytes);
+    writeFileSync(join(evidence, "favicon-restored-96.png"), restoredPng.bytes);
     assert.deepEqual((await readIcon("/favicon.ico")).bytes, readFileSync(join(defaults, "favicon.ico")));
-    for (const url of ["/apple-touch-icon.png", "/hero/logo.png", "/seo/brand-mark.png", "/seo/store-share.jpg"]) {
-      assert.deepEqual((await readIcon(url)).bytes, readFileSync("public" + url));
-    }
+    await verifyBrandAssets();
     assert.deepEqual(await db.siteContent.findMany({ where: { key: { not: "seo_favicon_ico" } }, orderBy: { key: "asc" } }), unrelatedBefore);
     passes("BRAND-01A upload, preview, persist, replace, failed upload preservation, cache invalidation, reset, admin authorization and public PNG/ICO routes");
   }
@@ -1088,14 +1101,16 @@ try {
             alt: logo.alt, original: logo.getAttribute('width') + 'x' + logo.getAttribute('height'),
             src: new URL(logo.currentSrc).searchParams.get('url'), home: logo.closest('a').getAttribute('href'),
             width: logo.getBoundingClientRect().width,
+            shadow: getComputedStyle(logo).boxShadow,
+            radius: getComputedStyle(logo).borderRadius,
           }));
         })()`);
-        const logo = { alt: "3D kid", original: "409x369", src: "/hero/logo.png", home: "/" };
-        assert.deepEqual(brand, [{ ...logo, width: width === 390 ? 38 : 50 }, { ...logo, width: width === 390 ? 64 : 110 }]);
-        await capture("brand-01", device + "-header", "header.sf-header");
-        await capture("brand-01", device + "-footer", "footer.sf-footer");
+        const logo = { alt: "3D kid", original: "282x314", src: "/hero/storefront-logo.png", home: "/", shadow: "none", radius: "0px" };
+        assert.deepEqual(brand, [{ ...logo, width: width === 390 ? 38 : 50 }, { ...logo, width: width === 390 ? 38 : 110 }]);
+        await capture("brand-01b/after", device + "-header", "header.sf-header");
+        await capture("brand-01b/after", device + "-footer", "footer.sf-footer");
       }
-      passes("BRAND-01 decoded header and footer logo, intrinsic proportions and home links on desktop EN and mobile UA");
+      passes("BRAND-01B historical transparent logos, proportions, no outline and home links on desktop EN and mobile UA");
       passes("SEO-01 desktop/mobile editor, localized counters and preview, mocked image upload and reset, saved metadata and favicon decode");
     }
     console.log("UX-07 rendered illustration widths (CSS pixels)", { authDesktop: 300, authTablet: tablet, authMobile: 0, welcomeDesktop: 144, welcomeMobile: 78 });

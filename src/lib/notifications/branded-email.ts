@@ -1,11 +1,11 @@
 import type { Locale } from "@/lib/i18n";
-import { brandName, siteOrigin, storefrontLogo } from "@/lib/seo-config";
+import { brandName, emailBrandArtwork, siteOrigin } from "@/lib/seo-config";
 
 const storeUrl = siteOrigin + "/";
 // Start a new image-proxy cache entry while keeping the public asset path stable.
-export const emailLogo = new URL(storefrontLogo.src + "?v=brand-01", siteOrigin).href;
+export const emailLogo = new URL(emailBrandArtwork.src + "?v=brand-01", siteOrigin).href;
 const logoHeight = 70;
-const logoWidth = Math.round(storefrontLogo.width * logoHeight / storefrontLogo.height);
+const logoWidth = Math.round(emailBrandArtwork.width * logoHeight / emailBrandArtwork.height);
 const copy = {
   ua: { fallback: "Якщо кнопка не працює, скопіюйте це посилання у браузер.", footer: "Інтернет-магазин іграшок" },
   en: { fallback: "If the button doesn’t work, copy this link into your browser.", footer: "Online toy shop" },
