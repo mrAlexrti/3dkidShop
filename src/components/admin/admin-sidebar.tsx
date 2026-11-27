@@ -8,6 +8,7 @@ import { LayoutDashboard, Package, FolderTree, ShoppingCart, CreditCard, FileTex
 import { cn } from "@/lib/utils";
 import { useLangStore } from "@/store/lang-store";
 import { LangSwitcher } from "@/components/layout/lang-switcher";
+import { brandName } from "@/lib/seo-config";
 
 export function AdminSidebar() {
   const pathname = usePathname();
@@ -77,7 +78,7 @@ export function AdminSidebar() {
       </button>
     </header>
     {open && <div aria-hidden="true" onClick={() => setOpen(false)} className="fixed inset-0 z-40 bg-ink/40 lg:hidden" />}
-    <aside ref={sidebarRef} id="admin-navigation" role={open ? "dialog" : undefined} aria-modal={open ? true : undefined} aria-label="3D Kid Admin"
+    <aside ref={sidebarRef} id="admin-navigation" role={open ? "dialog" : undefined} aria-modal={open ? true : undefined} aria-label={brandName + " Admin"}
       className={cn("fixed inset-y-0 left-0 z-50 h-[100dvh] w-[min(18rem,calc(100vw-2rem))] shrink-0 flex-col overflow-y-auto overscroll-contain border-r border-pink-100 bg-cream p-5 lg:static lg:flex lg:h-screen lg:w-64 lg:overflow-y-visible lg:bg-white/70", open ? "flex" : "hidden")}>
       <button ref={closeRef} type="button" aria-label={t.nav.closeMenu} onClick={() => setOpen(false)}
         className="mb-2 flex h-11 w-11 shrink-0 items-center justify-center self-end rounded-xl hover:bg-pink-50 lg:hidden">
@@ -91,7 +92,7 @@ export function AdminSidebar() {
         <LangSwitcher />
       </div>
 
-      <nav aria-label="3D Kid Admin" className="mt-6 flex flex-1 flex-col gap-1">
+      <nav aria-label={brandName + " Admin"} className="mt-6 flex flex-1 flex-col gap-1">
         {links.map((l) => {
           const active = l.href === "/admin" ? pathname === "/admin" : pathname.startsWith(l.href);
           return (

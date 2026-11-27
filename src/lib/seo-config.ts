@@ -1,5 +1,6 @@
 export const siteOrigin = "https://www.3dkid.shop";
 export const brandName = "3D kid";
+export const storefrontLogo = { src: "/hero/logo.png", width: 409, height: 369 } as const;
 export const brandMark = "/seo/brand-mark.png";
 export const defaultSocialImage = "/seo/store-share.jpg";
 export const faviconPath = "/favicon-96.png";

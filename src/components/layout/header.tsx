@@ -12,6 +12,7 @@ import { CategoryNav } from "@/components/layout/category-nav";
 import type { CategoryTreeNode } from "@/lib/categories";
 import { getCategoryName } from "@/lib/category-name";
 import { useCustomerPresence, useInitialCartPending } from "@/components/product/favorite-button";
+import { brandName, storefrontLogo } from "@/lib/seo-config";
 
 export function Header({ categories }: { categories: CategoryTreeNode[] }) {
   const pathname = usePathname();
@@ -39,7 +40,7 @@ export function Header({ categories }: { categories: CategoryTreeNode[] }) {
         }
       }}>
         {!isHome && <><Link href="/" className="sf-brand" aria-label={t.nav.home}>
-          <Image src="/hero/logo.png" width={282} height={314} sizes="50px" alt="3D kid" />
+          <Image {...storefrontLogo} sizes="(max-width: 680px) 38px, 50px" alt={brandName} />
         </Link>
         <Link href="/catalog" className="sf-header-link">{t.nav.catalog}</Link></>}
         <div className="sf-controls">

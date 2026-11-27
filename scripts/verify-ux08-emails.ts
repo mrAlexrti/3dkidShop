@@ -13,6 +13,7 @@ import { renderNotification, type OrderForNotification } from "../src/lib/notifi
 import { validOrderResultToken } from "../src/lib/payments/order-result";
 import { translations } from "../src/lib/i18n";
 
+assert.equal(emailLogo, "https://www.3dkid.shop/hero/logo.png?v=brand-01");
 const output = resolve("coverage/ux-08/emails");
 const previewOrigin = "https://example.invalid";
 process.env.NEXT_PUBLIC_SITE_URL = previewOrigin;
@@ -27,7 +28,7 @@ mkdirSync(output, { recursive: true });
 
 function preview(key: string, html: string, text: string, detail: boolean) {
   assert.deepEqual([...html.matchAll(/<img src="([^"]+)"/g)].map(match => match[1]), [emailLogo]);
-  assert.ok(html.includes('alt="3D kid" width="63" height="70"') && html.includes("<!--[if mso]>"));
+  assert.ok(html.includes('alt="3D kid" width="78" height="70"') && html.includes("<!--[if mso]>"));
   assert.ok(html.includes('href="https://www.3dkid.shop/">3D kid</a>') && text.includes("https://www.3dkid.shop/"));
   assert.ok(!html.includes("data:image") && !text.includes("token="), "Only previews embed the logo and their links are inert");
   assert.ok(!/<script\b|\bonclick=/.test(html), "Email is usable without JavaScript");

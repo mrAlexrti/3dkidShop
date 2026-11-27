@@ -6,7 +6,11 @@ const nextConfig: NextConfig = {
   async headers() {
     const privateHeaders = [{ key: "Cache-Control", value: "private, no-store, max-age=0" }];
     const noindex = { key: "X-Robots-Tag", value: "noindex, nofollow" };
+    const decorativeImageHeaders = [{ key: "X-Robots-Tag", value: "noindex" }];
     return [
+      // Keep decorative fallbacks usable while keeping their original and optimized URLs out of image results.
+      { source: "/hero/:asset(dragon|robot)-v1.webp", headers: decorativeImageHeaders },
+      { source: "/_next/image", has: [{ type: "query", key: "url", value: "/hero/(?:dragon|robot)-v1[.]webp" }], headers: decorativeImageHeaders },
       { source: "/account/:path*", headers: [...privateHeaders, noindex, { key: "Referrer-Policy", value: "no-referrer" }] },
       { source: "/checkout/:path*", headers: [...privateHeaders, noindex] },
       { source: "/cart", headers: [noindex] },

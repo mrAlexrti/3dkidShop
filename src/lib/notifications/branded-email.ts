@@ -1,7 +1,11 @@
 import type { Locale } from "@/lib/i18n";
+import { brandName, siteOrigin, storefrontLogo } from "@/lib/seo-config";
 
-const storeUrl = "https://www.3dkid.shop/";
-export const emailLogo = storeUrl + "hero/logo.png";
+const storeUrl = siteOrigin + "/";
+// Start a new image-proxy cache entry while keeping the public asset path stable.
+export const emailLogo = new URL(storefrontLogo.src + "?v=brand-01", siteOrigin).href;
+const logoHeight = 70;
+const logoWidth = Math.round(storefrontLogo.width * logoHeight / storefrontLogo.height);
 const copy = {
   ua: { fallback: "Якщо кнопка не працює, скопіюйте це посилання у браузер.", footer: "Інтернет-магазин іграшок" },
   en: { fallback: "If the button doesn’t work, copy this link into your browser.", footer: "Online toy shop" },
@@ -71,7 +75,7 @@ export function renderBrandedEmail({ locale, title, intro, summary, statuses = [
 <!--[if mso]><table role="presentation" width="600" align="center" cellspacing="0" cellpadding="0" border="0"><tr><td><![endif]-->
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="table-layout:fixed;max-width:600px;font-family:Arial,sans-serif;color:#31222a">
 <tr><td align="center" bgcolor="#fbdce8" style="padding:20px;background:#fbdce8;border-radius:20px 20px 0 0">
-<img src="${emailLogo}" alt="3D kid" width="63" height="70" style="display:block;width:63px;height:70px;margin:0 auto 8px;border:0;color:#81244a"><strong style="color:#81244a">3D kid</strong>
+<img src="${emailLogo}" alt="${brandName}" width="${logoWidth}" height="${logoHeight}" style="display:block;width:${logoWidth}px;height:${logoHeight}px;margin:0 auto 8px;border:0;color:#81244a"><strong style="color:#81244a">${brandName}</strong>
 </td></tr>
 <tr><td bgcolor="#ffffff" style="padding:26px 22px;background:#ffffff;font-size:16px;line-height:1.55;${wrap}">
 <h1 style="font-size:26px;line-height:1.26;margin:0 0 14px;color:#421e32">${escape(title)}</h1>
@@ -89,7 +93,7 @@ ${action.fallback ? `<p style="margin:0 0 6px;color:#584551;font-size:14px">${es
 ${note ? `<p style="margin:16px 0 0;color:#584551;font-size:14px">${escape(note)}</p>` : ""}
 </td></tr>
 <tr><td align="center" bgcolor="#fbdce8" style="padding:16px;background:#fbdce8;border-radius:0 0 20px 20px;color:#59243f;font-size:13px">
-<a style="color:#59243f;text-decoration:underline;font-weight:bold" href="${storeUrl}">3D kid</a> · ${escape(labels.footer)}
+<a style="color:#59243f;text-decoration:underline;font-weight:bold" href="${storeUrl}">${brandName}</a> · ${escape(labels.footer)}
 </td></tr></table>
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table></body></html>`;

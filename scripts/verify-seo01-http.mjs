@@ -133,9 +133,11 @@ try {
     ...[16, 32, 48, 96].map(size => [`/favicon-${size}.png`, "image/png", [size, size]]),
     ["/favicon.ico", "image/", null], ["/apple-touch-icon.png", "image/png", [180, 180]],
     ["/seo/brand-mark.png", "image/png", [256, 256]], ["/seo/store-share.jpg", "image/jpeg", [1200, 630]],
+    ["/hero/logo.png?v=brand-01", "image/png", [409, 369]],
   ]) {
     const response = await read(path, "ua", "Googlebot-Image/1.0");
     assert.equal(response.status, 200, path);
+    assert.equal(response.headers.get("x-robots-tag"), null, path + " stays indexable");
     assert.ok(response.headers.get("content-type").startsWith(type), path);
     const bytes = Buffer.from(await response.arrayBuffer());
     assert.ok(bytes.length < 70000, path + " optimized file size");
@@ -143,8 +145,19 @@ try {
       const info = await sharp(bytes).metadata();
       assert.deepEqual([info.width, info.height], size);
     }
+    assert.deepEqual(bytes, readFileSync("public" + new URL(path, site).pathname));
   }
-  console.log("PASS SEO-01 rendered UA/EN browser and Googlebot HTML, canonical/social/JSON-LD, real 404 and case redirects, live sitemap visibility, private noindex and public optimized assets");
+  const optimizer = file => "/_next/image?url=" + encodeURIComponent(file) + "&w=384&q=75";
+  for (const image of ["/hero/dragon-v1.webp", "/hero/robot-v1.webp", "/hero/bunny-v1.webp"]) {
+    for (const path of [image, optimizer(image)]) {
+      const response = await read(path, "ua", "Googlebot-Image/1.0");
+      assert.equal(response.status, 200, path);
+      assert.match(response.headers.get("content-type"), /^image\//);
+      assert.equal(response.headers.get("x-robots-tag"), image.includes("bunny") ? null : "noindex", path);
+      await response.arrayBuffer();
+    }
+  }
+  console.log("PASS SEO-01 rendered UA/EN browser and Googlebot HTML, canonical/social/JSON-LD, real 404 and case redirects, sitemap, public brand assets and scoped legacy image noindex");
 } finally {
   await db.product.deleteMany({ where: { id: productId } });
   await db.category.deleteMany({ where: { id: { in: [nodeId, emptyId] } } });

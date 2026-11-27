@@ -4,14 +4,44 @@ import sharp from "sharp";
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
-import { spawn, execFileSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { setTimeout as pause } from "node:timers/promises";
 
 const directory = resolve(".next/cache/batch18-favicon");
 mkdirSync(directory, { recursive: true });
 const logo = readFileSync("public/hero/logo.png");
-assert.deepEqual(logo, execFileSync("git", ["show", "HEAD:public/hero/logo.png"]));
+const source = readFileSync("assets/brand/Logo_Actual.jpg");
+assert.equal(createHash("sha256").update(source).digest("hex"), "7168b7e5b6a50f213481a145b4462da4b1564a6943053fb099ad58cf0a937785");
+const sourceImage = sharp(source);
+const { width, height } = await sourceImage.metadata();
+const storefrontPixels = await sharp(logo).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+assert.deepEqual([storefrontPixels.info.width, storefrontPixels.info.height], [width, height]);
+const sourcePixels = await sourceImage.clone().raw().toBuffer();
+const averageError = (actual, expected) =>
+  actual.reduce((sum, value, index) => sum + Math.abs(value - expected[index]), 0) / actual.length;
+assert.ok(averageError(storefrontPixels.data, sourcePixels) < 3, "Storefront and email retain the complete master artwork");
+const mark = "public/seo/brand-mark.png";
+const markPixels = await sharp(mark).ensureAlpha().raw().toBuffer();
+const padded = await sourceImage.clone().extend({ top: 20, bottom: 20, left: 0, right: 0, extendWith: "copy" }).png().toBuffer();
+const circularMaster = await sharp(padded).resize(256).raw().toBuffer();
+const markInterior = [], masterInterior = [];
+for (let y = 0; y < 256; y++) {
+  for (let x = 0; x < 256; x++) {
+    if (Math.hypot(x - 128, y - 128) > 120) continue;
+    const offset = y * 256 + x;
+    assert.equal(markPixels[offset * 4 + 3], 255);
+    markInterior.push(...markPixels.subarray(offset * 4, offset * 4 + 3));
+    masterInterior.push(...circularMaster.subarray(offset * 3, offset * 3 + 3));
+  }
+}
+assert.ok(averageError(markInterior, masterInterior) < 4, "The circular mark retains the approved colors and artwork");
+for (const [file, size] of [["public/favicon-16.png", 16], ["public/favicon-32.png", 32], ["public/favicon-48.png", 48],
+  ["public/favicon-96.png", 96], ["public/apple-touch-icon.png", 180], [mark, 256]]) {
+  const actual = await sharp(file).flatten({ background: "#fff5ea" }).raw().toBuffer();
+  const expected = await sharp(mark).resize(size).flatten({ background: "#fff5ea" }).raw().toBuffer();
+  assert.ok(averageError(actual, expected) < 18, file + " contains the same circular artwork");
+}
 const ico = readFileSync("public/favicon.ico");
 assert.equal(ico.readUInt16LE(0), 0); assert.equal(ico.readUInt16LE(2), 1);
 assert.equal(ico.readUInt16LE(4), 4);
@@ -35,7 +65,7 @@ const pixels = await sharp("public/favicon-96.png").ensureAlpha().raw().toBuffer
 assert.equal(pixels[3], 0, "Transparent top-left corner");
 assert.equal(pixels[4 * (48 * 96 + 48) + 3], 255, "Opaque mark center");
 assert.ok(ico.length < 20000 && readFileSync("public/favicon-96.png").length < 20000 && readFileSync("public/apple-touch-icon.png").length < 30000);
-console.log("PASS favicon assets: unchanged storefront artwork, transparent ICO/PNG frames at 16/32/48/96 and 180 px Apple icon.");
+console.log("PASS approved master, storefront and SEO artwork, transparent ICO/PNG frames at 16/32/48/96 and 180 px Apple icon.");
 const reuseIndex = process.argv.indexOf("--output");
 if (!process.argv.includes("--build") && reuseIndex < 0) process.exit(0);
 
@@ -84,7 +114,7 @@ try {
   assert.ok(ready, "Isolated Next server failed to become ready");
   const robot = await (await fetch(`${origin}/robots.txt`)).text();
   assert.match(robot, /Allow: \/\s/); assert.match(robot, /Disallow: \/admin/);
-  assert.ok(!/Disallow:.*(?:favicon|icon\.png|\/$)/m.test(robot));
+  assert.doesNotMatch(robot, /^Disallow:\s*(?:\/\s*$|[^\r\n]*(?:favicon|icon\.png))/m);
   let sharedLinks;
   for (const locale of ["ua", "en"]) for (const route of ["/", "/catalog"]) {
     const response = await fetch(`${origin}${route}`, { headers: { cookie: `locale=${locale}`, "user-agent": "Googlebot" }, redirect: "manual" });
@@ -97,7 +127,7 @@ try {
     const links = [...html.matchAll(/<link\b[^>]*>/g)].map(([tag]) => Object.fromEntries([...tag.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, key, value]) => [key, value])))
       .filter(({ rel }) => rel === "icon" || rel === "apple-touch-icon");
     assert.equal(links.length, 6, "One ICO, four PNG sizes, and one Apple icon");
-    assert.ok(links.some((l) => l.href.startsWith("/favicon.ico")));
+    assert.ok(links.some((l) => l.href === "/favicon.ico"));
     assert.ok(links.some((l) => l.href === "/favicon-96.png" && l.sizes === "96x96"));
     assert.ok(links.some((l) => l.href === "/apple-touch-icon.png" && l.sizes === "180x180"));
     assert.ok(head.includes('rel="icon"') || html.includes("document.head.appendChild"), "Streamed icons must be hoisted into head");
@@ -107,9 +137,9 @@ try {
       const asset = await fetch(new URL(link.href, origin), { headers: { "user-agent": "Googlebot-Image" }, redirect: "manual" });
       assert.equal(asset.status, 200); assert.match(asset.headers.get("content-type"), /image\//);
       const pathname = new URL(link.href, origin).pathname;
-      assert.deepEqual(Buffer.from(await asset.arrayBuffer()), readFileSync(`src/app${pathname}`));
+      assert.deepEqual(Buffer.from(await asset.arrayBuffer()), readFileSync(`public${pathname}`));
       assert.equal((await fetch(new URL(link.href, origin), { method: "HEAD", redirect: "manual" })).status, 200);
-      results.assets[pathname] = { type: asset.headers.get("content-type"), bytes: readFileSync(`src/app${pathname}`).length };
+      results.assets[pathname] = { type: asset.headers.get("content-type"), bytes: readFileSync(`public${pathname}`).length };
     }
     results.http.push({ locale, route, status: 200, links });
   }
@@ -141,7 +171,7 @@ try {
     for (let i = 0; i < 100; i++) { loaded = await evaluate('Boolean(location.pathname==="/catalog" && document.querySelector("header a.sf-brand img") && document.querySelectorAll(\'head link[rel="icon"]\').length===5)'); if (loaded) break; await pause(100); }
     assert.ok(loaded, "Catalog icon metadata/header missing");
     const info = await evaluate(`(async()=>{const links=[...document.querySelectorAll('head link[rel="icon"],head link[rel="apple-touch-icon"]')].map(l=>l.getAttribute('href'));for(const href of links){const i=new Image();i.src=href;await i.decode();if(!i.naturalWidth)throw Error('decode');}const a=document.querySelector('a.sf-brand');if(a.getAttribute('href')!=='/'||a.querySelector('img').alt!=='3D kid')throw Error('brand');a.focus();return {lang:document.documentElement.lang,links,focused:document.activeElement===a};})()`);
-    assert.equal(info.lang, locale === "en" ? "en" : "uk"); assert.equal(info.links.length, 3); assert.ok(info.focused);
+    assert.equal(info.lang, locale === "en" ? "en" : "uk"); assert.equal(info.links.length, 6); assert.ok(info.focused);
     await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
     await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
     let navigated = false;
@@ -150,7 +180,7 @@ try {
     results.browser.push({ locale, width: mobile ? 390 : 1280, theme, imageDecode: true, headerKeyboardNavigation: true });
     console.log(`PASS Chrome ${locale} ${mobile ? 390 : 1280}px ${theme}: icon decoding/metadata and header logo home link.`);
   }
-  results.sourceSha256 = createHash("sha256").update(logo).digest("hex");
+  results.sourceSha256 = createHash("sha256").update(source).digest("hex");
   writeFileSync(resolve(directory, "results.json"), JSON.stringify(results, null, 2));
   console.log("PASS favicon integration. Physical mobile/Safari, native tab/bookmark UI and deployed Google recrawl remain NOT TESTED.");
 } finally {

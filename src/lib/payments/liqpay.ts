@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { brandName } from "@/lib/seo-config";
 
 const LIQPAY_CHECKOUT_URL = "https://www.liqpay.ua/api/3/checkout";
 
@@ -139,7 +140,7 @@ export function createLiqPayCheckout({
     action: "pay",
     amount: Number(amount.toFixed(2)),
     currency: "UAH",
-    description: `3D Kid order ${orderNumber}`,
+    description: `${brandName} order ${orderNumber}`,
     order_id: orderNumber,
     server_url: `${siteUrl}/api/payments/liqpay/callback`,
     result_url: `${siteUrl}${resultPath}`,

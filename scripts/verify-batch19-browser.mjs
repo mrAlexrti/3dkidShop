@@ -922,6 +922,24 @@ try {
       })()`);
       await capture("seo-01", "simulated-browser-tab", "#seo-favicon-samples");
       await evaluate("document.getElementById('seo-favicon-samples').remove()");
+      for (const [width, locale, device] of [[1280, "en", "desktop"], [390, "ua", "mobile"]]) {
+        await viewport(width, locale);
+        await go("/catalog");
+        const brand = await evaluate(`(async () => {
+          const logos = [...document.querySelectorAll('header .sf-brand img, footer .sf-brand img')];
+          for (const logo of logos) { logo.loading = 'eager'; await logo.decode(); }
+          return logos.map(logo => ({
+            alt: logo.alt, original: logo.getAttribute('width') + 'x' + logo.getAttribute('height'),
+            src: new URL(logo.currentSrc).searchParams.get('url'), home: logo.closest('a').getAttribute('href'),
+            width: logo.getBoundingClientRect().width,
+          }));
+        })()`);
+        const logo = { alt: "3D kid", original: "409x369", src: "/hero/logo.png", home: "/" };
+        assert.deepEqual(brand, [{ ...logo, width: width === 390 ? 38 : 50 }, { ...logo, width: width === 390 ? 64 : 110 }]);
+        await capture("brand-01", device + "-header", "header.sf-header");
+        await capture("brand-01", device + "-footer", "footer.sf-footer");
+      }
+      passes("BRAND-01 decoded header and footer logo, intrinsic proportions and home links on desktop EN and mobile UA");
       passes("SEO-01 desktop/mobile editor, localized counters and preview, mocked image upload and reset, saved metadata and favicon decode");
     }
     console.log("UX-07 rendered illustration widths (CSS pixels)", { authDesktop: 300, authTablet: tablet, authMobile: 0, welcomeDesktop: 144, welcomeMobile: 78 });
