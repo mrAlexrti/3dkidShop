@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { AdminFieldError } from "@/components/admin/admin-form";
 import { MediaUrlField } from "@/components/admin/media-url-field";
+import { FaviconField } from "@/components/admin/favicon-field";
 import { translations, type Locale } from "@/lib/i18n";
 import { brandName, defaultSocialImage, faviconPath, seoLimits, siteOrigin } from "@/lib/seo-config";
 import type { StorefrontContent } from "@/lib/site-content";
@@ -12,10 +13,14 @@ import { useLangStore } from "@/store/lang-store";
 const languages = ["ua", "en"] as const;
 const inputClass = "w-full rounded-xl border border-ink/10 bg-white px-4 py-2.5 text-sm outline-none focus:border-pink-400";
 
-export function SeoContentFields({ content }: { content: StorefrontContent }) {
+export function SeoContentFields({ content, favicon, faviconUploadsAvailable }: {
+  content: StorefrontContent; favicon: string | null; faviconUploadsAvailable: boolean;
+}) {
   const { t, locale } = useLangStore();
   const copy = t.seo.admin;
   const [previewLocale, setPreviewLocale] = useState<Locale>(locale);
+  const [faviconRevision, setFaviconRevision] = useState(favicon);
+  const faviconPreview = faviconPath + (faviconRevision ? "?v=" + faviconRevision : "?v=default");
   const [name, setName] = useState(content.seo_site_name ?? "");
   const [titles, setTitles] = useState({ ua: content.seo_home_title_ua ?? "", en: content.seo_home_title_en ?? "" });
   const [descriptions, setDescriptions] = useState({
@@ -58,10 +63,7 @@ export function SeoContentFields({ content }: { content: StorefrontContent }) {
     })}
     <MediaUrlField name="seo_social_image" label={copy.image} help={copy.imageHelp} defaultValue={content.seo_social_image}
       fallback={defaultSocialImage} resetLabel={copy.reset} uploadEnabled widePreview />
-    <div className="flex items-center gap-3">
-      <Image src={faviconPath} alt="" width={48} height={48} unoptimized />
-      <div><p className="text-sm font-medium">{copy.favicon}</p><p className="text-xs text-ink/60">{copy.faviconHelp}</p></div>
-    </div>
+    <FaviconField revision={faviconRevision} src={faviconPreview} available={faviconUploadsAvailable} onPublish={setFaviconRevision} />
     <div className="space-y-3 rounded-xl border border-ink/10 bg-white p-4" id="seo-search-preview">
       <p className="text-sm font-semibold">{copy.preview}</p>
       <p className="text-xs text-ink/60">{copy.previewNote}</p>
@@ -74,7 +76,7 @@ export function SeoContentFields({ content }: { content: StorefrontContent }) {
       </label>
       <div className="break-words rounded-xl border border-ink/10 bg-[#fffafb] p-4">
         <div className="flex items-center gap-2 text-sm">
-          <Image src={faviconPath} alt="" width={24} height={24} unoptimized />
+          <Image src={faviconPreview} alt="" width={24} height={24} unoptimized />
           <div className="min-w-0"><p>{name.trim() || brandName}</p><p className="text-xs text-ink/60">{siteOrigin}</p></div>
         </div>
         <p className="mt-2 line-clamp-2 text-xl text-blue-800">{titles[previewLocale].trim() || previewCopy.homeTitle}</p>

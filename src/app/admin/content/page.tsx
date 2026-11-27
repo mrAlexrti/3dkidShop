@@ -16,6 +16,8 @@ import { heroAssets } from "@/lib/hero-assets";
 import { updateNotificationSettings } from "@/lib/actions/notification-settings";
 import { getNotificationSettings } from "@/lib/notifications/settings";
 import { CONFIGURABLE_EVENTS } from "@/lib/notifications/events";
+import { FAVICON_KEY, faviconRevision } from "@/lib/favicon-config";
+import { blobUploadsConfigured } from "@/lib/media-upload-server";
 
 export default async function AdminContentPage() {
   await requireAdmin();
@@ -38,7 +40,7 @@ export default async function AdminContentPage() {
       <p className="mt-2 text-ink/60">{tc.subtitle}</p>
 
       <AdminForm action={updateSiteContent} className="glass mt-6 max-w-3xl space-y-8 rounded-xl2 p-4 shadow-soft sm:p-6">
-        <SeoContentFields content={{
+        <SeoContentFields favicon={faviconRevision(map[FAVICON_KEY])} faviconUploadsAvailable={blobUploadsConfigured()} content={{
           seo_home_title_ua: map.seo_home_title_ua, seo_home_title_en: map.seo_home_title_en,
           seo_home_description_ua: map.seo_home_description_ua, seo_home_description_en: map.seo_home_description_en,
           seo_site_name: map.seo_site_name, seo_social_image: map.seo_social_image,

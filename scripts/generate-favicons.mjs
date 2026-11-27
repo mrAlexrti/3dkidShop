@@ -3,6 +3,8 @@ import sharp from "sharp";
 import { mkdirSync, writeFileSync } from "node:fs";
 
 const source = "assets/brand/Logo_Actual.jpg";
+const defaultFolder = "assets/brand/favicon";
+mkdirSync(defaultFolder, { recursive: true });
 const { width, height } = await sharp(source).metadata();
 
 // Keep the complete rectangular artwork for storefront and email. Extend the
@@ -32,9 +34,9 @@ frames.forEach((frame, index) => {
   header.writeUInt32LE(frame.length, entry + 8);
   header.writeUInt32LE(offset, entry + 12);
   offset += frame.length;
-  writeFileSync(`public/favicon-${sizes[index]}.png`, frame);
+  writeFileSync(`${defaultFolder}/favicon-${sizes[index]}.png`, frame);
 });
-writeFileSync("public/favicon.ico", Buffer.concat([header, ...frames]));
+writeFileSync(`${defaultFolder}/favicon.ico`, Buffer.concat([header, ...frames]));
 writeFileSync("public/apple-touch-icon.png", await png(180));
 mkdirSync("public/seo", { recursive: true });
 writeFileSync("public/seo/brand-mark.png", await png(256));

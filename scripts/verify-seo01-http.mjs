@@ -145,7 +145,8 @@ try {
       const info = await sharp(bytes).metadata();
       assert.deepEqual([info.width, info.height], size);
     }
-    assert.deepEqual(bytes, readFileSync("public" + new URL(path, site).pathname));
+    const folder = path.startsWith("/favicon") ? "assets/brand/favicon" : "public";
+    assert.deepEqual(bytes, readFileSync(folder + new URL(path, site).pathname));
   }
   const optimizer = file => "/_next/image?url=" + encodeURIComponent(file) + "&w=384&q=75";
   for (const image of ["/hero/dragon-v1.webp", "/hero/robot-v1.webp", "/hero/bunny-v1.webp"]) {

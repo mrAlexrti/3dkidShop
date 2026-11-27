@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHmac, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
 import { PrismaClient } from "@prisma/client";
@@ -426,6 +426,162 @@ try {
     const folder = resolve("coverage", suite);
     mkdirSync(folder, { recursive: true });
     writeFileSync(join(folder, `${name}.png`), Buffer.from(data, "base64"));
+  }
+
+  async function verifyManagedFavicon() {
+    const sharp = (await import("sharp")).default;
+    const icon = "/favicon-96.png";
+    const editor = "#seo-favicon";
+    const api = "/api/admin/favicon";
+    const defaults = resolve("assets/brand/favicon");
+    const master = resolve("assets/brand/Logo_Actual.jpg");
+    const saved = async () => (await db.siteContent.findUnique({ where: { key: "seo_favicon_ico" } }))?.value;
+    const readIcon = async (route, tag) => {
+      const response = await fetch(origin + route, { headers: { "user-agent": "Googlebot-Image/1.0", ...(tag ? { "If-None-Match": tag } : {}) } });
+      const bytes = Buffer.from(await response.arrayBuffer());
+      return { response, bytes, tag: response.headers.get("etag") };
+    };
+    const activeIcon = async (url) => {
+      await until(() => evaluate(`(() => {
+        const image = document.querySelector('#seo-favicon-preview');
+        const search = document.querySelector('#seo-search-preview img');
+        return image?.complete && image.naturalWidth === 96 && image.currentSrc === ${JSON.stringify(origin + url)}
+          && search?.currentSrc === image.currentSrc;
+      })()`), "active favicon preview and search preview");
+      assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true);
+    };
+    async function pick(file) {
+      const { root } = await send("DOM.getDocument");
+      const { nodeId } = await send("DOM.querySelector", { nodeId: root.nodeId, selector: "#seo-favicon-file" });
+      assert.ok(nodeId);
+      await send("DOM.setFileInputFiles", { files: [file], nodeId });
+      await until(() => evaluate("!!document.querySelector('#seo-favicon-save:enabled')"), "favicon file ready");
+    }
+    async function save(file, feedback) {
+      await pick(file);
+      await evaluate(`(() => {
+        window.faviconTestResponse = null;
+        const send = window.fetch;
+        window.fetch = async (...args) => {
+          const response = await send(...args);
+          if (args[0] === '/api/admin/favicon') window.faviconTestResponse = { status: response.status, body: await response.clone().json() };
+          return response;
+        };
+      })()`);
+      await evaluate("document.querySelector('#seo-favicon-save').click()");
+      try { await textIncludes(feedback, editor); }
+      catch (error) { throw new Error(error.message + ": " + JSON.stringify(await evaluate("({ response: window.faviconTestResponse, editor: document.querySelector('#seo-favicon')?.innerText })"))); }
+    }
+    const defaultPng = await readIcon(icon);
+    assert.equal(defaultPng.response.status, 200);
+    assert.deepEqual(defaultPng.bytes, readFileSync(join(defaults, "favicon-96.png")));
+    assert.equal((await readIcon(icon, defaultPng.tag)).response.status, 304);
+    assert.equal((await fetch(origin + api, { method: "DELETE", headers: { origin } })).status, 403);
+    const { cookies } = await send("Network.getCookies", { urls: [origin] });
+    const signedIn = cookies.map(({ name, value }) => name + "=" + value).join("; ");
+    assert.equal((await fetch(origin + api, { method: "DELETE", headers: { origin: "https://other.example.test", cookie: signedIn } })).status, 403);
+    assert.equal(await evaluate(`(async () => {
+      // A same-origin browser request is authorized only with its admin session.
+      const response = await fetch('${api}', { method: 'DELETE', credentials: 'omit' });
+      return response.status;
+    })()`), 403);
+    await viewport(1280, "en");
+    await go("/admin/content");
+    await activeIcon(icon + "?v=default");
+    const unrelatedBefore = await db.siteContent.findMany({ where: { key: { not: "seo_favicon_ico" } }, orderBy: { key: "asc" } });
+    const inputTitle = await evaluate("document.querySelector('#seo_home_title_en').value");
+    await fill("#seo_home_title_en", "Unsaved unrelated title");
+    await save(master, "Favicon updated.");
+    assert.equal(await evaluate("document.querySelector('#seo_home_title_en').value"), "Unsaved unrelated title");
+    const jpeg = await saved();
+    assert.match(jpeg, /\/3dkid\/favicon\/[a-f0-9]{32}\.ico$/);
+    const previewFor = value => icon + "?v=" + basename(value, ".ico");
+    await activeIcon(previewFor(jpeg));
+    await capture("brand-01a", "admin-en-desktop-uploaded", editor);
+    const customPng = await readIcon(icon, defaultPng.tag);
+    assert.equal(customPng.response.status, 200);
+    assert.notDeepEqual(customPng.bytes, defaultPng.bytes);
+    assert.match(customPng.response.headers.get("cache-control"), /must-revalidate/);
+    assert.equal((await readIcon(icon, customPng.tag)).response.status, 304);
+    await go("/admin/content");
+    await activeIcon(previewFor(jpeg));
+    assert.equal(await evaluate("document.querySelector('#seo_home_title_en').value"), inputTitle);
+
+    const broken = join(directory, "broken-favicon.jpg");
+    writeFileSync(broken, readFileSync(master).subarray(0, 128));
+    await save(broken, "Choose a valid, still image");
+    assert.equal(await saved(), jpeg);
+    assert.deepEqual((await readIcon(icon)).bytes, customPng.bytes);
+
+    const replacement = join(directory, "replacement-favicon.webp");
+    await sharp({ create: { width: 320, height: 190, channels: 3, background: "#168155" } }).webp().toFile(replacement);
+    const fail = join(directory, "favicon-write-fails");
+    writeFileSync(fail, "");
+    try {
+      await pick(replacement);
+      assert.equal(await evaluate(`(async () => {
+        const file = new Blob([], { type: 'image/png' });
+        const response = await fetch('${api}', { method: 'POST', body: file, credentials: 'omit' });
+        return response.status;
+      })()`), 403);
+      await evaluate("document.querySelector('#seo-favicon-save').click()");
+      await until(() => evaluate("!!document.querySelector('#seo-favicon [role=alert]') && !document.querySelector('#seo-favicon-save').disabled"), "failed Blob upload feedback");
+      assert.equal(await saved(), jpeg);
+      assert.deepEqual((await readIcon(icon)).bytes, customPng.bytes);
+    } finally { unlinkSync(fail); }
+    await viewport(390, "ua");
+    await go("/admin/content");
+    await save(replacement, "Значок оновлено.");
+    const webp = await saved();
+    assert.notEqual(webp, jpeg);
+    await activeIcon(previewFor(webp));
+    await capture("brand-01a", "admin-ua-mobile-replacement", editor);
+
+    const routes = [16, 32, 48, 96];
+    const ico = await readIcon("/favicon.ico");
+    assert.equal(ico.response.status, 200);
+    assert.equal(ico.response.headers.get("content-type"), "image/x-icon");
+    assert.equal(ico.bytes.readUInt16LE(4), routes.length);
+    for (const [index, size] of routes.entries()) {
+      const path = `/favicon-${size}.png`;
+      const result = await readIcon(path);
+      assert.equal(result.response.status, 200);
+      assert.equal(result.response.headers.get("content-type"), "image/png");
+      assert.equal(result.response.headers.get("x-robots-tag"), null);
+      const { width, height, hasAlpha } = await sharp(result.bytes).metadata();
+      assert.deepEqual([width, height, hasAlpha], [size, size, true]);
+      assert.equal((await sharp(result.bytes).raw().toBuffer())[3], 0);
+      const entry = 6 + index * 16, offset = ico.bytes.readUInt32LE(entry + 12);
+      assert.deepEqual(ico.bytes.subarray(offset, offset + ico.bytes.readUInt32LE(entry + 8)), result.bytes);
+      const head = await fetch(origin + path, { method: "HEAD" });
+      assert.equal(head.status, 200);
+      assert.equal(head.headers.get("etag"), result.tag);
+      assert.equal(head.headers.get("content-type"), "image/png");
+      assert.equal((await head.arrayBuffer()).byteLength, 0);
+    }
+    const home = await (await request("/", "locale=ua")).text();
+    assert.match(home, /rel="icon" href="\/favicon-96\.png"/);
+    assert.doesNotMatch(home, /rel="icon" href="[^"]+\?v=/);
+    const replacedPng = await readIcon(icon);
+    await save(resolve("public/seo/brand-mark.png"), "Значок оновлено.");
+    const publishedPng = await saved();
+    assert.notEqual(publishedPng, webp);
+    await activeIcon(previewFor(publishedPng));
+    assert.notDeepEqual((await readIcon(icon)).bytes, replacedPng.bytes);
+    await evaluate("document.querySelector('#seo-favicon-reset').click()");
+    await textIncludes("Стандартний значок відновлено.", editor);
+    await activeIcon(icon + "?v=default");
+    await go("/admin/content");
+    await activeIcon(icon + "?v=default");
+    assert.equal(await saved(), "");
+    await capture("brand-01a", "admin-ua-mobile-default", editor);
+    assert.deepEqual((await readIcon(icon)).bytes, defaultPng.bytes);
+    assert.deepEqual((await readIcon("/favicon.ico")).bytes, readFileSync(join(defaults, "favicon.ico")));
+    for (const url of ["/apple-touch-icon.png", "/hero/logo.png", "/seo/brand-mark.png", "/seo/store-share.jpg"]) {
+      assert.deepEqual((await readIcon(url)).bytes, readFileSync("public" + url));
+    }
+    assert.deepEqual(await db.siteContent.findMany({ where: { key: { not: "seo_favicon_ico" } }, orderBy: { key: "asc" } }), unrelatedBefore);
+    passes("BRAND-01A upload, preview, persist, replace, failed upload preservation, cache invalidation, reset, admin authorization and public PNG/ICO routes");
   }
 
   async function verifyCustomerCartAndLogin() {
@@ -1480,6 +1636,7 @@ try {
   })()`), true, "existing administrator credentials and session");
   await go("/admin");
   if (ux07) await verifyAccountIllustrations();
+  if (process.env.BATCH19_BRAND01A === "1") await verifyManagedFavicon();
   await db.product.update({ where: { id: "qa_native" }, data: { isActive: false } });
   for (const width of [390, 1280]) for (const locale of ["ua", "en"]) {
     await send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: width < 700 });

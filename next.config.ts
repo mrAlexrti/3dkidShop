@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Resolve metadata before streaming so public notFound/redirect outcomes keep their HTTP status.
   htmlLimitedBots: /.*/,
+  outputFileTracingIncludes: {
+    "/favicon*": ["./assets/brand/favicon/*"],
+  },
   async headers() {
     const privateHeaders = [{ key: "Cache-Control", value: "private, no-store, max-age=0" }];
     const noindex = { key: "X-Robots-Tag", value: "noindex, nofollow" };

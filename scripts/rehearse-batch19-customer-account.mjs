@@ -2,11 +2,11 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { request as httpRequest } from "node:http";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { createServer as createHttpServer, request as httpRequest } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
 import bcrypt from "bcryptjs";
 
@@ -17,12 +17,14 @@ const marker = randomBytes(16).toString("hex");
 const database = `batch18_review_${marker}`;
 const owner = "batch18a_qa";
 const ux07 = process.argv.includes("--ux07");
+const favicon = process.argv.includes("--brand01a");
 writeFileSync(join(directory, "qa-marker"), marker);
 const pgBin = process.env.BATCH19_PG_BIN || "C:/Program Files/PostgreSQL/18/bin";
 const pg = (name) => join(pgBin, name + (process.platform === "win32" ? ".exe" : ""));
 const env = { ...process.env, DATABASE_URL: "postgresql://unused@127.0.0.1:1/unused",
   NEXT_TELEMETRY_DISABLED: "1", PRODUCT_MEDIA_CLEANUP_ENABLED: "false", PRODUCT_VARIANTS_ENABLED: "true",
-  BLOB_READ_WRITE_TOKEN: ux07 ? "vercel_blob_rw_ux07fixture_LOCAL_ONLY" : "", BATCH19_UX07: ux07 ? "1" : "",
+  BLOB_READ_WRITE_TOKEN: ux07 || favicon ? "vercel_blob_rw_ux07fixture_LOCAL_ONLY" : "", BATCH19_UX07: ux07 ? "1" : "",
+  BATCH19_BRAND01A: favicon ? "1" : "", VERCEL_BLOB_API_URL: "", NEXT_PUBLIC_VERCEL_BLOB_API_URL: "",
   ONLINE_PAYMENT_MODE: "disabled", MONO_ACQUIRING_TOKEN: "local-mock-only", TELEGRAM_BOT_TOKEN: "", TELEGRAM_ADMIN_CHAT_ID: "", NP_API_KEY: "", AUTH_DEBUG: "0",
   AUTH_SECRET: randomBytes(32).toString("hex"), CUSTOMER_AUTH_SECRET: randomBytes(32).toString("hex"),
   RESEND_API_KEY: "local-mock", EMAIL_FROM: "QA <qa@example.test>", CUSTOMER_GOOGLE_CLIENT_ID: "local-google-id",
@@ -58,6 +60,49 @@ const release = "docs/release/batch-1.9-customer-account";
 const approved = ["-c", "SET batch19.reviewed_execution='customer-account-reviewed'"];
 const cartProfile = process.argv.includes("--cart-profile");
 let app;
+let blobMock;
+function clearMockFaviconCache() {
+  const cache = resolve(".next", "cache", "fetch-cache");
+  if (!existsSync(cache)) return;
+  for (const file of readdirSync(cache, { withFileTypes: true })) {
+    if (!file.isFile() || !/^[a-f0-9]{64}$/.test(file.name)) continue;
+    const path = join(cache, file.name);
+    // Next preserves the Data Cache across builds. A terminated rehearsal may
+    // leave a pointer to its mock upload. Only remove our synthetic entry.
+    let record;
+    try { record = JSON.parse(readFileSync(path, "utf8")); } catch { continue; }
+    if (record.kind === "FETCH" && record.tags?.includes("storefront-favicon") &&
+        (record.data?.body === '""' || record.data?.body?.startsWith('"https://ux07fixture.public.blob.vercel-storage.com/3dkid/favicon/'))) {
+      unlinkSync(path);
+    }
+  }
+}
+async function startFaviconStorageMock() {
+  clearMockFaviconCache();
+  blobMock = createHttpServer(async (request, response) => {
+    const target = new URL(request.url, "http://127.0.0.1");
+    const pathname = target.searchParams.get("pathname");
+    const reply = (status, payload) => response.writeHead(status, { "Content-Type": "application/json" }).end(JSON.stringify(payload));
+    if (request.method !== "PUT" || target.pathname !== "/api/blob/" ||
+        request.headers["x-content-type"] !== "image/x-icon" || !/^3dkid\/favicon\/[a-f0-9]{32}\.ico$/.test(pathname ?? "") ||
+        existsSync(join(directory, "favicon-write-fails"))) {
+      request.resume();
+      return reply(400, { error: { code: "not_allowed" } });
+    }
+    try {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      writeFileSync(join(directory, basename(pathname)), Buffer.concat(chunks), { flag: "wx" });
+      const url = "https://ux07fixture.public.blob.vercel-storage.com/" + pathname;
+      return reply(200, { url, downloadUrl: url, pathname, contentType: "image/x-icon", contentDisposition: "inline" });
+    } catch {
+      return reply(400, { error: { code: "not_allowed" } });
+    }
+  });
+  await new Promise((resolve, reject) => { blobMock.once("error", reject); blobMock.listen(0, "127.0.0.1", resolve); });
+  env.VERCEL_BLOB_API_URL = `http://127.0.0.1:${blobMock.address().port}/api/blob`;
+  env.VERCEL_BLOB_RETRIES = "0";
+}
 try {
   const port = await freePort();
   await run(pg("initdb"), ["-D", data, "-U", owner, "--auth=trust", "--locale=C", "--encoding=UTF8"], { cwd: directory });
@@ -84,7 +129,7 @@ try {
     GRANT SELECT, INSERT ON public."OrderNotification" TO app_3dkid;
     INSERT INTO public."User" (id,email,role) VALUES ('qa_existing_admin','admin@example.test','ADMIN');`]);
   // Match the existing Site Content permissions for the isolated admin editor test.
-  if (ux07) await sql(["-c", 'GRANT INSERT, UPDATE, DELETE ON public."SiteContent" TO app_3dkid']);
+  if (ux07 || favicon) await sql(["-c", 'GRANT INSERT, UPDATE, DELETE ON public."SiteContent" TO app_3dkid']);
   await file("docs/release/batch-1.8.1-filaments.sql", ["-c", "SET batch181.reviewed_execution='filaments-reviewed'"]);
   await sql(["-c", `
     INSERT INTO public."Account" (id,"userId",provider,"providerAccountId",type) VALUES ('legacy_account','qa_existing_admin','legacy','admin-id','oidc');
@@ -163,6 +208,7 @@ try {
   await assert.rejects(file(cartRelease + "-rollback.sql", cartApproval), /UX0910_ROLLBACK_REFUSED_AFTER_USE/);
 
   if (!process.argv.includes("--database-only")) {
+  if (favicon) await startFaviconStorageMock();
   const externalMock = resolve("scripts/fixtures/batch19-mock-providers.cjs").replaceAll("\\", "/");
   env.NODE_OPTIONS = `--require "${externalMock}" --use-system-ca`;
   if (!process.argv.includes("--reuse-build")) console.log(await run(process.execPath, [next, "build"]));
@@ -214,6 +260,10 @@ try {
   console.log(await run(process.execPath, [resolve("node_modules/tsx/dist/cli.mjs"), resolve("scripts/verify-batch19-workload.ts")]));
 } finally {
   if (app && app.exitCode === null) { const stopped = new Promise((done) => app.once("exit", done)); app.kill(); await stopped; }
+  if (blobMock) {
+    await new Promise((done) => blobMock.close(done));
+    clearMockFaviconCache();
+  }
   if (existsSync(join(data, "postmaster.pid")) && readFileSync(join(directory,"qa-marker"),"utf8") === marker)
     await run(pg("pg_ctl"), ["-D", data, "-m", "fast", "-w", "stop"], { cwd: directory, stdio: "ignore" });
 }

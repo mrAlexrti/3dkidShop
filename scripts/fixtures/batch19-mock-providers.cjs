@@ -11,12 +11,28 @@ const tokenUrl = "https://oauth2.googleapis.com/token";
 const jwks = "https://www.googleapis.com/oauth2/v3/certs";
 const original = globalThis.fetch;
 const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+// The Blob SDK has its own Undici fetch. Restrict that transport too.
+if (process.env.BATCH19_BRAND01A === "1") {
+  const { MockAgent, setGlobalDispatcher } = require("undici");
+  const agent = new MockAgent();
+  agent.disableNetConnect();
+  agent.enableNetConnect(/^(?:127\.0\.0\.1|localhost):\d+$/);
+  setGlobalDispatcher(agent);
+}
 globalThis.fetch = async (input, init) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   const target = new URL(url);
   if (target.protocol === "http:" && ["127.0.0.1", "localhost"].includes(target.hostname)) return original(input, init);
   if (target.origin === "https://res.cloudinary.com" && target.pathname.startsWith("/fixture/")) {
-    return new Response(readFileSync("public/favicon-96.png"), { headers: { "Content-Type": "image/png" } });
+    return new Response(readFileSync("assets/brand/favicon/favicon-96.png"), { headers: { "Content-Type": "image/png" } });
+  }
+  if (process.env.BATCH19_BRAND01A === "1") {
+    const faviconOrigin = "https://ux07fixture.public.blob.vercel-storage.com";
+    if (target.origin === faviconOrigin && /^\/3dkid\/favicon\/[a-f0-9]{32}\.ico$/.test(target.pathname)) {
+      return new Response(readFileSync(join(process.env.BATCH19_QA_DIRECTORY, basename(target.pathname))), {
+        headers: { "Content-Type": "image/x-icon" },
+      });
+    }
   }
   if (process.env.BATCH19_UX07 === "1" && target.origin === "https://ux07fixture.public.blob.vercel-storage.com" &&
       /^\/3dkid\/product-media\/image\/[0-9a-f-]{36}\.webp$/.test(target.pathname)) {

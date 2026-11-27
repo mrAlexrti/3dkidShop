@@ -11,6 +11,7 @@ import { setTimeout as pause } from "node:timers/promises";
 const directory = resolve(".next/cache/batch18-favicon");
 mkdirSync(directory, { recursive: true });
 const logo = readFileSync("public/hero/logo.png");
+const defaults = "assets/brand/favicon";
 const source = readFileSync("assets/brand/Logo_Actual.jpg");
 assert.equal(createHash("sha256").update(source).digest("hex"), "7168b7e5b6a50f213481a145b4462da4b1564a6943053fb099ad58cf0a937785");
 const sourceImage = sharp(source);
@@ -36,13 +37,13 @@ for (let y = 0; y < 256; y++) {
   }
 }
 assert.ok(averageError(markInterior, masterInterior) < 4, "The circular mark retains the approved colors and artwork");
-for (const [file, size] of [["public/favicon-16.png", 16], ["public/favicon-32.png", 32], ["public/favicon-48.png", 48],
-  ["public/favicon-96.png", 96], ["public/apple-touch-icon.png", 180], [mark, 256]]) {
+for (const [file, size] of [[`${defaults}/favicon-16.png`, 16], [`${defaults}/favicon-32.png`, 32], [`${defaults}/favicon-48.png`, 48],
+  [`${defaults}/favicon-96.png`, 96], ["public/apple-touch-icon.png", 180], [mark, 256]]) {
   const actual = await sharp(file).flatten({ background: "#fff5ea" }).raw().toBuffer();
   const expected = await sharp(mark).resize(size).flatten({ background: "#fff5ea" }).raw().toBuffer();
   assert.ok(averageError(actual, expected) < 18, file + " contains the same circular artwork");
 }
-const ico = readFileSync("public/favicon.ico");
+const ico = readFileSync(`${defaults}/favicon.ico`);
 assert.equal(ico.readUInt16LE(0), 0); assert.equal(ico.readUInt16LE(2), 1);
 assert.equal(ico.readUInt16LE(4), 4);
 let offset = 70;
@@ -54,17 +55,17 @@ for (const [index, size] of [16, 32, 48, 96].entries()) {
   const frame = ico.subarray(offset, offset + length), meta = await sharp(frame).metadata();
   assert.equal(meta.width, size); assert.equal(meta.height, size);
   assert.ok(meta.hasAlpha);
-  assert.deepEqual(frame, readFileSync(`public/favicon-${size}.png`));
+  assert.deepEqual(frame, readFileSync(`${defaults}/favicon-${size}.png`));
   offset += length;
 }
 assert.equal(offset, ico.length);
-const icon = await sharp("public/favicon-96.png").metadata(), apple = await sharp("public/apple-touch-icon.png").metadata();
+const icon = await sharp(`${defaults}/favicon-96.png`).metadata(), apple = await sharp("public/apple-touch-icon.png").metadata();
 assert.equal(icon.width, 96); assert.equal(icon.height, 96); assert.ok(icon.hasAlpha);
 assert.equal(apple.width, 180); assert.equal(apple.height, 180); assert.ok(apple.hasAlpha);
-const pixels = await sharp("public/favicon-96.png").ensureAlpha().raw().toBuffer();
+const pixels = await sharp(`${defaults}/favicon-96.png`).ensureAlpha().raw().toBuffer();
 assert.equal(pixels[3], 0, "Transparent top-left corner");
 assert.equal(pixels[4 * (48 * 96 + 48) + 3], 255, "Opaque mark center");
-assert.ok(ico.length < 20000 && readFileSync("public/favicon-96.png").length < 20000 && readFileSync("public/apple-touch-icon.png").length < 30000);
+assert.ok(ico.length < 20000 && readFileSync(`${defaults}/favicon-96.png`).length < 20000 && readFileSync("public/apple-touch-icon.png").length < 30000);
 console.log("PASS approved master, storefront and SEO artwork, transparent ICO/PNG frames at 16/32/48/96 and 180 px Apple icon.");
 const reuseIndex = process.argv.indexOf("--output");
 if (!process.argv.includes("--build") && reuseIndex < 0) process.exit(0);
@@ -137,9 +138,10 @@ try {
       const asset = await fetch(new URL(link.href, origin), { headers: { "user-agent": "Googlebot-Image" }, redirect: "manual" });
       assert.equal(asset.status, 200); assert.match(asset.headers.get("content-type"), /image\//);
       const pathname = new URL(link.href, origin).pathname;
-      assert.deepEqual(Buffer.from(await asset.arrayBuffer()), readFileSync(`public${pathname}`));
+      const expected = readFileSync(`${pathname.startsWith("/favicon") ? defaults : "public"}${pathname}`);
+      assert.deepEqual(Buffer.from(await asset.arrayBuffer()), expected);
       assert.equal((await fetch(new URL(link.href, origin), { method: "HEAD", redirect: "manual" })).status, 200);
-      results.assets[pathname] = { type: asset.headers.get("content-type"), bytes: readFileSync(`public${pathname}`).length };
+      results.assets[pathname] = { type: asset.headers.get("content-type"), bytes: expected.length };
     }
     results.http.push({ locale, route, status: 200, links });
   }

@@ -1,0 +1,13 @@
+# BRAND-01A — Administrator-managed favicon
+
+Open **Admin → Site Content → SEO → Favicon**. The current icon appears here and in the approximate Google preview. Choose a JPEG, PNG or WebP and select **Upload and save**. The favicon saves independently of the other Site Content fields. **Restore default favicon** immediately switches the favicon to the approved BRAND-01 artwork.
+
+Uploads accept up to 2 MiB and 64–2048 pixels per side, including the approved 409 × 369 JPEG. The server checks the image signature and fully decodes the source before scaling it proportionally into a circle. Transparent corners remain on all four output sizes. The original upload is never published.
+
+The four PNGs are packaged together in one immutable ICO object in the existing public Vercel Blob store. The active reference is one SiteContent value, `seo_favicon_ico`. The application publishes that reference only after the complete set has been rendered and stored. A failed write leaves the previous reference in place. Restoring defaults clears the reference and retains past Blob objects. This feature does not require a migration or additional environment variables. If the existing Blob credential is unavailable, the admin can still restore the default.
+
+The stable public URLs are `/favicon-16.png`, `/favicon-32.png`, `/favicon-48.png`, `/favicon-96.png` and `/favicon.ico`. Each returns image bytes directly on the storefront domain. The server caches the SiteContent reference separately from the immutable object and invalidates it on both updates and resets. Image responses support ETag revalidation. The version query is used only for the admin preview. If the setting or its Blob cannot be read, the packaged BRAND-01 bytes keep the public routes serving an icon.
+
+The Apple Touch Icon, header/footer and email logos, Open Graph and Twitter images, structured-data mark, and hero and product imagery are outside this setting. The canonical URL, sitemap, robots directives and public favicon declarations are unchanged. Search engines and open browser tabs can keep displaying an earlier icon until they check the stable URLs again. [Google favicon guidelines](https://developers.google.com/search/docs/appearance/favicon-in-search)
+
+Local verification uses a disposable PostgreSQL cluster and a loopback-only Blob mock. Run `node scripts/rehearse-batch19-customer-account.mjs --ux07 --seo01 --brand01a` for the optimized browser and SEO checks. Admin screenshots are under `coverage/brand-01a`. After an approved deployment, the operator can confirm an authenticated upload, replacement and reset, inspect the favicon bytes and MIME types on HTTPS, and request a homepage recrawl when ready.
