@@ -1,0 +1,2 @@
+# Preserve the byte-for-byte checksum of the reviewed bootstrap migration on Windows.
+/docs/release/ux-09-10-customer-cart.sql text eol=lf

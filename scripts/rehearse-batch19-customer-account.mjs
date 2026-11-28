@@ -9,7 +9,10 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
 import bcrypt from "bcryptjs";
+import { assertLocalTooling } from "../src/lib/environment.mjs";
+import { localMarker } from "../src/lib/dev-target.mjs";
 
+assertLocalTooling(process.env);
 const root = process.cwd();
 const directory = mkdtempSync(join(tmpdir(), "batch19-qa-"));
 const data = join(directory, "data");
@@ -21,7 +24,9 @@ const favicon = process.argv.includes("--brand01a");
 writeFileSync(join(directory, "qa-marker"), marker);
 const pgBin = process.env.BATCH19_PG_BIN || "C:/Program Files/PostgreSQL/18/bin";
 const pg = (name) => join(pgBin, name + (process.platform === "win32" ? ".exe" : ""));
-const env = { ...process.env, DATABASE_URL: "postgresql://unused@127.0.0.1:1/unused",
+const safeEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+  /^(SystemRoot|WINDIR|COMSPEC|PATH|PATHEXT|TEMP|TMP|USERPROFILE|APPDATA|LOCALAPPDATA|LANG|NODE_OPTIONS)$/i.test(key)));
+const env = { ...safeEnv, DATABASE_URL: "postgresql://unused@127.0.0.1:1/unused",
   NEXT_TELEMETRY_DISABLED: "1", PRODUCT_MEDIA_CLEANUP_ENABLED: "false", PRODUCT_VARIANTS_ENABLED: "true",
   BLOB_READ_WRITE_TOKEN: ux07 || favicon ? "vercel_blob_rw_ux07fixture_LOCAL_ONLY" : "", BATCH19_UX07: ux07 ? "1" : "",
   BATCH19_BRAND01A: favicon ? "1" : "", VERCEL_BLOB_API_URL: "", NEXT_PUBLIC_VERCEL_BLOB_API_URL: "",
@@ -32,7 +37,6 @@ const env = { ...process.env, DATABASE_URL: "postgresql://unused@127.0.0.1:1/unu
   // A fixture salt starting with "." keeps dotenv-expand from expanding the hash as a variable.
   ADMIN_PASSWORD_HASH: bcrypt.hashSync("isolated-admin-password", "$2a$10$......................"), BATCH19_MAIL_LOG: join(directory, "mail.ndjson"),
   BATCH19_QA_DIRECTORY: directory, BATCH19_QA_MARKER: marker, VERCEL: "", VERCEL_ENV: "" };
-for (const key of Object.keys(env)) if (key.startsWith("PG")) delete env[key];
 env.PGSSLMODE = "disable";
 writeFileSync(env.BATCH19_MAIL_LOG, "");
 
@@ -194,17 +198,28 @@ try {
   await assert.rejects(sql(["-c", `SET ROLE app_3dkid; UPDATE public."User" SET "passwordHash"='fake' WHERE id='qa_existing_admin'`]), /B19_RUNTIME_CUSTOMERS_ONLY/);
   await assert.rejects(sql(["-c", `SET ROLE app_3dkid; UPDATE public."Order" SET "customerId"='qa_existing_admin' WHERE id='claim_order'`]), /B19_ORDER_OWNER_MUST_BE_CUSTOMER/);
   await assert.rejects(sql(["-c", `UPDATE public."OrderItem" SET "productImageUrl"='changed' WHERE id='historic_item'`]), /B19_ORDER_IMAGE_IMMUTABLE/);
+  await sql(["-c", `CREATE SCHEMA ops02_guard;
+    CREATE TABLE ops02_guard.identity (singleton boolean PRIMARY KEY CHECK(singleton), value text NOT NULL);
+    INSERT INTO ops02_guard.identity VALUES (true, '${localMarker}');
+    REVOKE ALL ON SCHEMA ops02_guard FROM PUBLIC;
+    GRANT USAGE ON SCHEMA ops02_guard TO app_3dkid;
+    GRANT SELECT ON ops02_guard.identity TO app_3dkid;`]);
   const runtime = `postgresql://app_3dkid@127.0.0.1:${port}/${database}?schema=public&connection_limit=6`;
   env.DATABASE_URL = runtime;
   env.BATCH19_OWNER_DATABASE_URL = ownerUrl;
+  env.OPS02_MODE = "local";
 
   const appPort = await freePort();
   // Next normalizes 127.0.0.1 to localhost in Route Handler request URLs.
   // Use the same spelling in the browser Origin for the real media CSRF check.
   const origin = `http://${ux07 ? "localhost" : "127.0.0.1"}:${appPort}`;
   Object.assign(env, { CUSTOMER_AUTH_ORIGIN: origin, AUTH_URL: origin, NEXTAUTH_URL: origin, NEXT_PUBLIC_SITE_URL: origin, BATCH19_APP_ORIGIN: origin });
-  console.log(await run(process.execPath, [resolve("node_modules/tsx/dist/cli.mjs"), resolve("scripts/verify-batch19-concurrency.ts")]));
-  console.log(await run(process.execPath, [resolve("node_modules/tsx/dist/cli.mjs"), resolve("scripts/verify-ux0910-cart.ts")]));
+  const sourceTests = { ...env, BATCH19_MAIL_LOG: "", BATCH19_APP_ORIGIN: "", BLOB_READ_WRITE_TOKEN: "",
+    MONO_ACQUIRING_TOKEN: "", RESEND_API_KEY: "", CUSTOMER_GOOGLE_CLIENT_ID: "", CUSTOMER_GOOGLE_CLIENT_SECRET: "" };
+  // Source-module tests stub the provider functions themselves. They still receive a verified local datasource.
+  for (const file of ["scripts/verify-batch19-concurrency.ts", "scripts/verify-ux0910-cart.ts"]) {
+    await run(process.execPath, [resolve("node_modules/tsx/dist/cli.mjs"), resolve(file)], { env: sourceTests }).then(console.log);
+  }
   await assert.rejects(file(cartRelease + "-rollback.sql", cartApproval), /UX0910_ROLLBACK_REFUSED_AFTER_USE/);
 
   if (!process.argv.includes("--database-only")) {

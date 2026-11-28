@@ -5,16 +5,16 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { NextConfig } from "next";
 import { hasRemoteMatch } from "next/dist/shared/lib/match-remote-pattern";
-import config from "../next.config";
+import config from "../next.config.mjs";
 import { sourceModule } from "./source-module";
 
 const directory = resolve(".next/cache/image-hosts-qa"); mkdirSync(directory, { recursive: true });
 const baselineFile = resolve(directory, "next-before.ts");
-writeFileSync(baselineFile, execFileSync("git", ["show", "550b4449c9f5632bf59cb0fde919bfe26fdf92c9:next.config.ts"], { encoding: "utf8" }));
+writeFileSync(baselineFile, execFileSync("git", ["show", "8cd280af5c678d5e7bd38223718aeb9918cfae9c:next.config.ts"], { encoding: "utf8" }));
 const previous = sourceModule<{ default: NextConfig }>(baselineFile, {}).default;
-const publicBlob = { protocol: "https", hostname: "*.public.blob.vercel-storage.com" };
-const cloudinary = { protocol: "https", hostname: "res.cloudinary.com" };
-assert.deepEqual(config, { ...previous, images: { ...previous.images, remotePatterns: [...(previous.images?.remotePatterns ?? []), cloudinary, publicBlob] } }, "Only the Cloudinary and public Blob patterns may be added");
+const { headers: currentHeaders, ...currentSettings } = config;
+const { headers: previousHeaders, ...previousSettings } = previous;
+assert.deepEqual(currentSettings, previousSettings, "Next configuration must retain the deployed BRAND-01B settings");
 const patterns = config.images!.remotePatterns!;
 const allowed = (url: string) => hasRemoteMatch(config.images?.domains ?? [], patterns, new URL(url));
 assert.equal(allowed("https://res.cloudinary.com/w82zyjr9/image/upload/f_auto,q_auto/IMG_7882"), true);
@@ -34,4 +34,7 @@ for (const url of [
 ]) assert.equal(allowed(url), false, "Untrusted image host/protocol must remain rejected");
 assert.ok(patterns.every((pattern) => pattern.hostname !== "**"));
 assert.equal(patterns.filter((pattern) => pattern.hostname === "res.cloudinary.com").length, 1);
-console.log("PASS Next image allowlist: Cloudinary and public Blob URLs accepted by installed Next matcher; existing Unsplash/Supabase preserved; HTTP/private Blob/lookalikes/arbitrary hosts rejected. No network/upload/DB.");
+void Promise.all([currentHeaders?.(), previousHeaders?.()]).then(([current, baseline]) => {
+  assert.deepEqual(current, baseline, "Deployed response headers must be preserved");
+  console.log("PASS deployed Next configuration and headers, with existing allowed and rejected image hosts. No network/upload/DB.");
+}).catch((error) => { console.error(error); process.exitCode = 1; });

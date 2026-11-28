@@ -1,6 +1,10 @@
-import type { NextConfig } from "next";
+import { resolveEnvironment } from "./src/lib/environment.mjs";
 
-const nextConfig: NextConfig = {
+// Validate the target before Next loads application routes or provider modules.
+resolveEnvironment(process.env);
+
+/** @type {import("next").NextConfig} */
+const nextConfig = {
   // Resolve metadata before streaming so public notFound/redirect outcomes keep their HTTP status.
   htmlLimitedBots: /.*/,
   outputFileTracingIncludes: {

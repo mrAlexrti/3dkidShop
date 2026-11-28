@@ -1,9 +1,13 @@
 // Injected only into the privately spawned test server. Denies unknown outbound fetches.
 /* eslint-disable @typescript-eslint/no-require-imports -- Node loads this fixture with --require. */
+const { assertLocalTooling, providerSandbox, resolveEnvironment } = require("../../src/lib/environment.mjs");
+assertLocalTooling(process.env);
+if (!process.env.BATCH19_MAIL_LOG || !/^http:\/\/(?:127\.0\.0\.1|localhost):\d+$/.test(process.env.BATCH19_APP_ORIGIN ?? "") ||
+    resolveEnvironment(process.env, "regression").kind !== "local") throw new Error("B19_MOCK_PRIVATE_ONLY");
+require("../development/no-dotenv.cjs");
 const { appendFileSync, readFileSync } = require("node:fs");
 const { createHash, generateKeyPairSync, sign } = require("node:crypto");
 const { basename, join } = require("node:path");
-if (!process.env.BATCH19_MAIL_LOG || !/^http:\/\/(?:127\.0\.0\.1|localhost):\d+$/.test(process.env.BATCH19_APP_ORIGIN ?? "")) throw new Error("B19_MOCK_PRIVATE_ONLY");
 const google = "https://accounts.google.com";
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const jwk = { ...publicKey.export({ format: "jwk" }), kid: "local", alg: "RS256", use: "sig" };
@@ -12,13 +16,14 @@ const jwks = "https://www.googleapis.com/oauth2/v3/certs";
 const original = globalThis.fetch;
 const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
 // The Blob SDK has its own Undici fetch. Restrict that transport too.
-if (process.env.BATCH19_BRAND01A === "1") {
+{
   const { MockAgent, setGlobalDispatcher } = require("undici");
   const agent = new MockAgent();
   agent.disableNetConnect();
   agent.enableNetConnect(/^(?:127\.0\.0\.1|localhost):\d+$/);
   setGlobalDispatcher(agent);
 }
+globalThis[providerSandbox] = "regression";
 globalThis.fetch = async (input, init) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   const target = new URL(url);
